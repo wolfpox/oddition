@@ -75,7 +75,8 @@
     return !solo || !!tr.solo;
   }
   function audible(key) { return audibleIn(st.seq.tracks, st.solo, key); }
-  function patchOf(tr) { return tr.patch || (tr.channel === 9 ? 'kit-acoustic' : 'keys'); }
+  // same rule as offline renders, so live playback and WAV export always agree
+  function patchOf(tr) { return Odd.synth.resolvePatch(tr); }
 
   function syncBuses() {
     st.solo = soloIn(st.seq.tracks);

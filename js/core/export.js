@@ -125,54 +125,52 @@
   }
 
   /**
-   * zip of rendered audio: one .wav per lane + the full mix.
-   * Needs Odd.audio.renderOffline (browser only). onProgress(done, total, label)
+   * zip of rendered audio: one .wav per lane that has notes, plus the full mix.
+   * Needs the browser audio engine (Odd.audio.renderOfflineMany).
+   * onProgress(done, total, label): called with (0, total, null) first, then
+   * after each file, with label naming the file that just finished (files
+   * finish in any order).
    */
   async function stemsWav(session, onProgress) {
-    if (!Odd.audio || !Odd.audio.renderOffline) throw new Error('Audio rendering is not available here.');
+    const audio = Odd.audio;
+    if (!audio || !audio.renderOfflineMany) throw new Error('Audio rendering is not available here.');
     const song = R.songEvents(session);
-    const lanes = session.lanes.filter((l) => song.events.some((e) => e.track === l.id));
+    const stems = lanesToTracks(session, song.events);
     const folder = safeName(session.name);
 
-    // one sequence per stem (only that lane audible), then the full mix
-    const seqs = lanes.map((lane) => {
-      const seq = R.sequence(session, song.events.filter((e) => e.track === lane.id), song.length, false);
-      for (const k in seq.tracks) { seq.tracks[k].solo = false; seq.tracks[k].mute = k !== lane.id; }
+    // one sequence per stem with only that lane audible (including a lane the
+    // mixer has muted: a stem export renders every part), then the full mix.
+    // for-in keys are strings, so compare ids as strings.
+    const seqs = stems.map((st) => {
+      const seq = R.sequence(session, st.notes, song.length, false);
+      const own = String(st.lane.id);
+      for (const k in seq.tracks) {
+        seq.tracks[k].solo = false;
+        seq.tracks[k].mute = k !== own;
+      }
       return seq;
     });
     seqs.push(R.sequence(session, song.events, song.length, false));
-    const labels = lanes.map((l) => l.name).concat(['Full mix']);
+    const labels = stems.map((st) => st.lane.name).concat(['Full mix']);
     const total = seqs.length;
     let done = 0;
-    if (onProgress) onProgress(0, total, labels[0]);
+    if (onProgress) onProgress(0, total, null);
 
-    const opts = { tailSec: 2.5 };
-    // phones have less memory: render one at a time there
-    const small = typeof navigator !== 'undefined' && ((navigator.deviceMemory && navigator.deviceMemory <= 4) ||
-      (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches));
-    if (small) opts.concurrency = 1;
-
-    let wavs;
-    const encode = (buf, i) => {
-      const bytes = Odd.audio.encodeWav(buf);
+    const encode = audio.encodeWavAsync || audio.encodeWav;
+    const wavs = await audio.renderOfflineMany(seqs, { tailSec: 2.5 }, async (buf, i) => {
+      const bytes = await encode(buf);
       done++;
-      if (onProgress) onProgress(done, total, done < total ? 'stems' : labels[i]);
+      if (onProgress) onProgress(done, total, labels[i]);
       return bytes;
-    };
-    if (Odd.audio.renderOfflineMany) {
-      wavs = await Odd.audio.renderOfflineMany(seqs, opts, encode);
-    } else {
-      wavs = [];
-      for (let i = 0; i < seqs.length; i++) wavs.push(encode(await Odd.audio.renderOffline(seqs[i], opts), i));
-    }
+    });
 
-    const files = lanes.map((lane, i) => ({
-      name: folder + '/' + String(i + 1).padStart(2, '0') + ' ' + safeName(lane.name) + '.wav',
+    const files = stems.map((st, i) => ({
+      name: folder + '/' + String(i + 1).padStart(2, '0') + ' ' + safeName(st.lane.name) + '.wav',
       data: wavs[i],
     }));
-    files.push({ name: folder + '/' + folder + ' (mix).wav', data: wavs[wavs.length - 1] });
+    files.push({ name: folder + '/' + folder + ' (mix).wav', data: wavs[stems.length] });
     files.push({ name: folder + '/README.txt', data: readme(session, 'Audio rendered with Oddition\'s built-in synth at 44.1 kHz / 16-bit.') });
-    return { bytes: Odd.zip.create(files), count: lanes.length };
+    return { bytes: Odd.zip.create(files), count: stems.length };
   }
 
   // ---------------- projects ----------------

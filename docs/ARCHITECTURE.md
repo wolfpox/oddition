@@ -125,6 +125,14 @@ Odd.transport.stop()
 Odd.transport.position()    // current tick
 ```
 
+Offline rendering (WAV export) uses the same patches and effects:
+`Odd.audio.renderOfflineMany(seqs, opts, onEach)` renders several sequences
+in parallel, as many at once as a memory budget allows (one at a time on
+phones), and stops cleanly if one fails. `Odd.audio.encodeWavAsync` encodes
+in slices so the other renders and the UI keep moving. Live playback and
+offline renders pick a track's sound with the same rule,
+`Odd.synth.resolvePatch`.
+
 ## Booth playback
 
 The booth plays the current take on a temporary track (`__take`) that uses the

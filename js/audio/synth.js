@@ -70,6 +70,13 @@
   function relT(base, dur) { return Math.min(base, 0.04 + dur * 0.8); }
   function attT(base, dur) { return Math.min(base, Math.max(0.003, dur * 0.45)); }
   function nyq(f) { return clamp(f, 20, 18000); }
+  /** the patch a track plays: its own if known, else the GM-drums kit on channel 10, else keys */
+  function resolvePatch(tr) {
+    const id = tr && tr.patch;
+    if (id && PATCHES[id]) return id;
+    return tr && tr.channel === 9 ? 'kit-acoustic' : 'keys';
+  }
+
   function kRate(param) {
     try { if (param && 'automationRate' in param) param.automationRate = 'k-rate'; } catch (e) { /* fixed-rate param */ }
   }
@@ -115,10 +122,9 @@
   function sweep(param, when, dur, base, peak, a, d, s, r) {
     a = Math.max(0.001, a);
     const hold = when + Math.max(dur, a + 0.004);
-    if (a <= 0.006) {
-      // filter params run at control rate (one value per 128 samples), so a
-      // ramp this short would be skipped: open instantly, covering the start
-      // of the first block too
+    if (a <= 0.006 && param.automationRate === 'k-rate') {
+      // a control-rate param takes one value per 128 samples, so a ramp this
+      // short would be skipped: open instantly, covering the first block too
       param.value = peak;
       param.setValueAtTime(peak, when);
     } else {
@@ -173,24 +179,26 @@
     const sr = ctx.sampleRate;
     const len = Math.max(1, Math.floor(sr * sec));
     const shapeLen = sr * (shapeSec || sec);
-    const b = ctx.createBuffer(1, len, sr);
-    const d = b.getChannelData(0);
-    const r = lcg(777);
-    let lp = 0;
+    const b = ctx.createBuffer(2, len, sr);
     const fadeIn = Math.floor(sr * 0.004);
     const fadeOut = Math.floor(sr * 0.06);
-    for (let i = 0; i < len; i++) {
-      const t = Math.min(1, i / shapeLen);
-      const env = Math.exp(-6.4 * t) * (1 - t) * (i < fadeIn ? i / fadeIn : 1) * Math.min(1, (len - i) / fadeOut);
-      const alpha = 0.82 - 0.68 * t; // darker as it decays
-      lp += alpha * (r() - lp);
-      d[i] = lp * env;
+    for (let ch = 0; ch < 2; ch++) {
+      const d = b.getChannelData(ch);
+      const r = lcg(777 + ch * 31); // different noise per side keeps the tail wide
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = Math.min(1, i / shapeLen);
+        const env = Math.exp(-6.4 * t) * (1 - t) * (i < fadeIn ? i / fadeIn : 1) * Math.min(1, (len - i) / fadeOut);
+        const alpha = 0.82 - 0.68 * t; // darker as it decays
+        lp += alpha * (r() - lp);
+        d[i] = lp * env;
+      }
+      const taps = [0.009, 0.015, 0.023, 0.031, 0.043, 0.057];
+      taps.forEach((tt, j) => {
+        const idx = Math.floor((tt + ch * 0.0037) * sr);
+        if (idx < len) d[idx] += (j % 2 ? -1 : 1) * (0.42 - j * 0.05);
+      });
     }
-    const taps = [0.009, 0.015, 0.023, 0.031, 0.043, 0.057];
-    taps.forEach((tt, j) => {
-      const idx = Math.floor(tt * sr);
-      if (idx < len) d[idx] += (j % 2 ? -1 : 1) * (0.42 - j * 0.05);
-    });
     return b;
   }
 
@@ -205,20 +213,42 @@
     return env.waves[key];
   }
 
+  // drawbars 8', 4', 2 2/3', 2', 1 1/3' as [ratio, weight]; the 16' sub is its own oscillator
+  const ORGAN_PARTIALS = [[1, 1], [2, 0.55], [3, 0.3], [4, 0.22], [6, 0.1]];
+  const ORGAN_TOP = 12000; // partials above this are left out, as on a real drawbar organ's top end
+
+  /**
+   * One wave per pitch band, holding only the partials below ORGAN_TOP.
+   * Browsers scale a PeriodicWave to peak 1 (and some ignore
+   * disableNormalization), so the true peak of the weighted sum is measured
+   * here and applied as gain: the level is then the same in every browser.
+   * Returns { wave, peak }.
+   */
+  function organWave(env, f) {
+    const n = Math.max(1, ORGAN_PARTIALS.filter(([r]) => f * r <= ORGAN_TOP).length);
+    const key = 'organ' + n;
+    if (env.waves[key]) return env.waves[key];
+    const used = ORGAN_PARTIALS.slice(0, n);
+    const size = used[used.length - 1][0] + 1;
+    const re = new Float32Array(size);
+    const im = new Float32Array(size);
+    for (const [r, wt] of used) im[r] = wt;
+    let peak = 0;
+    for (let i = 0; i < 4096; i++) {
+      const th = (i / 4096) * 2 * Math.PI;
+      let x = 0;
+      for (const [r, wt] of used) x += wt * Math.sin(r * th);
+      peak = Math.max(peak, Math.abs(x));
+    }
+    env.waves[key] = { wave: env.ctx.createPeriodicWave(re, im), peak };
+    return env.waves[key];
+  }
+
   /**
    * fx: { reverb, delay } (default both on). Offline renders leave out effects
    * no patch sends to: the echo's feedback loop and the convolver keep
    * processing long after the last note, which dominates render time.
    */
-  function organWave(env) {
-    if (env.waves.organ) return env.waves.organ;
-    const re = new Float32Array(8);
-    const im = new Float32Array(8);
-    im[1] = 1; im[2] = 0.55; im[3] = 0.3; im[4] = 0.22; im[6] = 0.1;
-    env.waves.organ = env.ctx.createPeriodicWave(re, im, { disableNormalization: true });
-    return env.waves.organ;
-  }
-
   function buildEnv(ctx, offline, fx) {
     fx = fx || {};
     const env = {
@@ -247,11 +277,11 @@
     clip.connect(analyser);
     analyser.connect(ctx.destination);
 
-    // shared reverb: one mono convolution (stereo would cost twice as much),
-    // widened by sending the right side through a short delay and an allpass
+    // shared stereo reverb: each side is convolved with its own impulse, so
+    // panned tracks keep their reverb level and side, and the tail stays
+    // mono-compatible (no delayed copy of one side). The impulse is cut at
+    // 1.7 s, where its 2.2 s decay is already below -56 dB.
     const revIn = ctx.createGain();
-    revIn.channelCount = 1;
-    revIn.channelCountMode = 'explicit';
     if (fx.reverb !== false) {
       const revHp = ctx.createBiquadFilter();
       revHp.type = 'highpass';
@@ -260,23 +290,12 @@
       preDelay.delayTime.value = 0.02;
       const conv = ctx.createConvolver();
       conv.buffer = impulse(ctx, 1.7, 2.2);
-      const widen = ctx.createDelay(0.05);
-      widen.delayTime.value = 0.011;
-      const ap = ctx.createBiquadFilter();
-      ap.type = 'allpass';
-      ap.frequency.value = 900;
-      ap.Q.value = 0.6;
-      const merge = ctx.createChannelMerger(2);
       const revOut = ctx.createGain();
       revOut.gain.value = 0.7;
       revIn.connect(revHp);
       revHp.connect(preDelay);
       preDelay.connect(conv);
-      conv.connect(merge, 0, 0);
-      conv.connect(widen);
-      widen.connect(ap);
-      ap.connect(merge, 0, 1);
-      merge.connect(revOut);
+      conv.connect(revOut);
       revOut.connect(master);
     }
 
@@ -487,13 +506,18 @@
       filter(type, f, q) {
         const b = ctx.createBiquadFilter();
         b.type = type;
-        // control-rate cutoff: per-sample coefficient updates are the single
-        // biggest per-voice cost, and 128-sample steps are inaudible here
-        kRate(b.frequency);
-        kRate(b.Q);
-        kRate(b.gain);
+        const res = q == null ? 0.7 : q;
+        // Per-sample coefficient updates are the biggest per-voice cost, and on
+        // gentle filters a cutoff that moves once per 128 samples is inaudible.
+        // Resonant filters (Q >= 2) stay per-sample: stepping a swept cutoff
+        // there makes zipper noise.
+        if (res < 2) {
+          kRate(b.frequency);
+          kRate(b.Q);
+          kRate(b.gain);
+        }
         b.frequency.value = nyq(f);
-        b.Q.value = q == null ? 0.7 : q;
+        b.Q.value = res;
         v.nodes.push(b);
         return b;
       },
@@ -503,15 +527,20 @@
         v.nodes.push(s);
         return s;
       },
-      /** LFO into params; depth fades in after `delay` over `ramp` seconds */
-      lfo(rate, depth, targets, when, delay, ramp) {
+      /**
+       * LFO into params; depth fades in after `delay` over `ramp` seconds.
+       * Targets run at control rate, which is cheap and inaudible for vibrato
+       * and slow filter sweeps. Pass `smooth` for amplitude (gain) targets:
+       * stepping a gain every 128 samples buzzes.
+       */
+      lfo(rate, depth, targets, when, delay, ramp, smooth) {
         const o = k.osc('sine', rate, when);
         const g = k.gain(0);
         g.gain.setValueAtTime(0, when);
         g.gain.setValueAtTime(0, when + (delay || 0));
         g.gain.linearRampToValueAtTime(depth, when + (delay || 0) + (ramp || 0.01));
         o.connect(g);
-        targets.forEach((t) => { kRate(t); g.connect(t); });
+        targets.forEach((t) => { if (!smooth) kRate(t); g.connect(t); });
         return o;
       },
     };
@@ -607,10 +636,11 @@
     },
     organ(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
-      // drawbars 8', 4', 2 2/3', 2', 1 1/3' in one wave, plus the 16' sub
-      const bars = k.wave(organWave(v.env), f, w);
+      // drawbars in one wave (see organWave), plus the 16' sub
+      const ow = organWave(v.env, f);
+      const bars = k.wave(ow.wave, f, w);
       const sub = k.osc('sine', f * 0.5, w);
-      bars.connect(k.gain(0.12)).connect(vca);
+      bars.connect(k.gain(0.12 * ow.peak)).connect(vca);
       sub.connect(k.gain(0.42 * 0.12)).connect(vca);
       k.lfo(6.2, 9, [bars.detune, sub.detune], w, 0, 0.2);
       const hp = k.filter('highpass', 3000, 0.7);
@@ -666,7 +696,7 @@
       o3.detune.value = -6;
       o3.connect(k.gain(0.12)).connect(trem);
       k.osc('triangle', f * 3, w).connect(k.gain(0.04)).connect(trem);
-      k.lfo(4.2, 0.1, [trem.gain], w, 0.2, 0.6);
+      k.lfo(4.2, 0.1, [trem.gain], w, 0.2, 0.6, true);
       trem.connect(hp).connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.34 * amp, attT(0.4, dur), 1.5, 0.8, relT(1.6, dur));
     },
@@ -1189,10 +1219,10 @@
     let wantDel = false;
     for (const e of seq.events || []) {
       if (length && e.t >= length) continue;
-      const tr = tracks[e.track] || { patch: 'keys', volume: 1 };
+      const tr = tracks[e.track] || { volume: 1 };
       if (tr.mute || (solo && !tr.solo)) continue;
       if (tr.volume != null && !(tr.volume > 0)) continue;
-      const patch = PATCHES[tr.patch] ? tr.patch : (tr.channel === 9 ? 'kit-acoustic' : 'keys');
+      const patch = resolvePatch(tr);
       const sends = SENDS[patch] || [0, 0];
       if (sends[0] > 0) wantRev = true;
       if (sends[1] > 0) wantDel = true;
@@ -1225,8 +1255,10 @@
     // far slower than this.
     const WINDOW = 1;
     const AHEAD = 0.25;
+    const signal = opts.signal || null; // { aborted }: stop adding voices, finish quickly
     let idx = 0;
     const feed = (until) => {
+      if (signal && signal.aborted) { idx = notes.length; return; }
       while (idx < notes.length && notes[idx].time < until) {
         const n = notes[idx++];
         play(n.patch, n.p, n.v, n.time, n.dur, n.input);
@@ -1259,76 +1291,167 @@
     });
   }
 
+  function seqSeconds(seq) {
+    const ppq = (Odd.theory && Odd.theory.PPQ) || 480;
+    const bpm = clamp(Number(seq.bpm) || 120, 20, 400);
+    return (Number(seq.length) || 0) * 60 / (bpm * ppq);
+  }
+
+  /**
+   * How many offline renders to run at once. Each render holds its whole
+   * output as 32-bit stereo floats until it is encoded, so the count is capped
+   * by a memory budget as well as by cores. Phones and small-memory devices
+   * get one at a time. navigator.deviceMemory is Chromium-only; elsewhere the
+   * smaller budget applies.
+   */
+  function renderConcurrency(seqs, opts) {
+    opts = opts || {};
+    if (opts.concurrency) return Math.max(1, Math.floor(opts.concurrency));
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const mem = nav.deviceMemory;
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    if (coarse || (mem && mem <= 4)) return 1;
+    const cores = nav.hardwareConcurrency || 2;
+    const sr = opts.sampleRate || 44100;
+    const tail = opts.tailSec == null ? 2 : opts.tailSec;
+    let sec = 0;
+    for (const q of seqs || []) sec = Math.max(sec, seqSeconds(q) + tail);
+    const bytes = Math.max(1, sec * sr * 2 * 4);
+    const budget = (mem && mem >= 8 ? 512 : 256) * 1024 * 1024;
+    return clamp(Math.floor(budget / bytes), 1, Math.min(3, Math.max(1, cores - 1)));
+  }
+
   /**
    * Render several sequences a few at a time; each offline render runs on its
    * own audio thread, so this is much faster than one after another.
-   * onEach(buffer, index) runs as each one finishes; when given, its return
-   * value is kept instead of the buffer, so big buffers can be dropped early.
-   * opts: renderOffline options plus { concurrency } (default up to 3).
-   * Jobs start heaviest first; results resolve in input order.
+   * onEach(buffer, index) runs as each one finishes (it may be async); when
+   * given, its return value is kept instead of the buffer, so big buffers can
+   * be dropped early. opts: renderOffline options plus { concurrency }
+   * (default: renderConcurrency). Jobs start heaviest first; results come back
+   * in input order.
+   *
+   * If any job fails, no new jobs start, renders still running stop adding
+   * voices and their results are dropped (onEach is not called for them), and
+   * the promise rejects only once every render has stopped, so a caller can
+   * safely start again right after.
    */
   function renderOfflineMany(seqs, opts, onEach) {
     opts = opts || {};
     const list = Array.from(seqs || []);
-    const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
-    const conc = Math.max(1, Math.min(list.length || 1, opts.concurrency || Math.min(3, Math.max(1, cores - 1))));
+    const conc = Math.max(1, Math.min(list.length || 1, renderConcurrency(list, opts)));
     const results = new Array(list.length);
     // heaviest first, so the longest render (usually the full mix) is not left for last
     const order = list.map((q, i) => i)
       .sort((a, b) => ((list[b].events || []).length - (list[a].events || []).length) || a - b);
+    const signal = { aborted: false };
+    const jobOpts = Object.assign({}, opts, { signal });
+    let error = null;
     let next = 0;
-    let failed = false;
     const worker = async () => {
-      while (next < order.length && !failed) {
+      while (next < order.length && !signal.aborted) {
         const i = order[next++];
         try {
-          const buf = await renderOffline(list[i], opts);
+          // looked up at call time so tests can stand in for the audio engine
+          const buf = await Odd.audio.renderOffline(list[i], jobOpts);
+          if (signal.aborted) break;
           results[i] = onEach ? await onEach(buf, i) : buf;
         } catch (err) {
-          failed = true;
-          throw err;
+          if (!signal.aborted) { signal.aborted = true; error = err; }
         }
       }
     };
     const workers = [];
     for (let i = 0; i < conc; i++) workers.push(worker());
-    return Promise.all(workers).then(() => results);
+    return Promise.all(workers).then(() => {
+      if (error) throw error;
+      return results;
+    });
   }
 
-  function encodeWav(buf) {
-    const chs = 2;
+  // ---------------------------------------------------------------- WAV
+
+  const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+  /** header + output array for a 16-bit stereo WAV of `buf` */
+  function wavStart(buf) {
     const n = buf.length;
     const sr = buf.sampleRate;
     const L = buf.getChannelData(0);
     const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
-    const dataLen = n * chs * 2;
+    const dataLen = n * 4;
     const out = new Uint8Array(44 + dataLen);
     const dv = new DataView(out.buffer);
-    const str = (o, s) => { for (let i = 0; i < s.length; i++) out[o + i] = s.charCodeAt(i); };
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) out[o + i] = t.charCodeAt(i); };
     str(0, 'RIFF');
     dv.setUint32(4, 36 + dataLen, true);
     str(8, 'WAVE');
     str(12, 'fmt ');
     dv.setUint32(16, 16, true);
     dv.setUint16(20, 1, true);
-    dv.setUint16(22, chs, true);
+    dv.setUint16(22, 2, true);
     dv.setUint32(24, sr, true);
-    dv.setUint32(28, sr * chs * 2, true);
-    dv.setUint16(32, chs * 2, true);
+    dv.setUint32(28, sr * 4, true);
+    dv.setUint16(32, 4, true);
     dv.setUint16(34, 16, true);
     str(36, 'data');
     dv.setUint32(40, dataLen, true);
-    let o = 44;
-    for (let i = 0; i < n; i++) {
-      for (let c = 0; c < 2; c++) {
-        let s = c ? R[i] : L[i];
-        if (!(s === s)) s = 0; // NaN guard
-        s = clamp(s, -1, 1);
-        dv.setInt16(o, s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7fff), true);
-        o += 2;
+    // WAV samples are little-endian: write them through a typed array when the
+    // platform matches (much faster than DataView), else byte by byte
+    const pcm = LITTLE_ENDIAN ? new Int16Array(out.buffer, 44, n * 2) : null;
+    return { out, dv, pcm, L, R, n };
+  }
+
+  function toInt16(x) {
+    if (!(x === x)) return 0; // NaN
+    const s = x < -1 ? -1 : x > 1 ? 1 : x;
+    return s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7fff);
+  }
+
+  /** interleave frames [from, to) */
+  function wavFill(w, from, to) {
+    const { pcm, dv, L, R } = w;
+    if (pcm) {
+      for (let i = from; i < to; i++) {
+        pcm[2 * i] = toInt16(L[i]);
+        pcm[2 * i + 1] = toInt16(R[i]);
+      }
+    } else {
+      for (let i = from; i < to; i++) {
+        dv.setInt16(44 + 4 * i, toInt16(L[i]), true);
+        dv.setInt16(46 + 4 * i, toInt16(R[i]), true);
       }
     }
-    return out;
+  }
+
+  function encodeWav(buf) {
+    const w = wavStart(buf);
+    wavFill(w, 0, w.n);
+    return w.out;
+  }
+
+  // yield to the event loop without timer throttling (background tabs clamp setTimeout)
+  function yieldTask() {
+    return new Promise((resolve) => {
+      if (typeof MessageChannel === 'undefined') { setTimeout(resolve, 0); return; }
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => { ch.port1.close(); resolve(); };
+      ch.port2.postMessage(0);
+    });
+  }
+
+  /**
+   * encodeWav in slices, yielding between them, so other offline renders
+   * (which need the main thread at every scheduling window) and the UI keep
+   * moving while a long file is encoded. Same bytes as encodeWav.
+   */
+  async function encodeWavAsync(buf, opts) {
+    const slice = (opts && opts.slice) || 1 << 16;
+    const w = wavStart(buf);
+    for (let i = 0; i < w.n; i += slice) {
+      wavFill(w, i, Math.min(w.n, i + slice));
+      if (i + slice < w.n) await yieldTask();
+    }
+    return w.out;
   }
 
   Odd.audio = {
@@ -1340,7 +1463,9 @@
     getMasterVolume() { return masterVolume; },
     renderOffline,
     renderOfflineMany,
+    renderConcurrency,
     encodeWav,
+    encodeWavAsync,
   };
 
   Odd.synth = {
@@ -1348,6 +1473,7 @@
     SENDS,
     patchList,
     isKit,
+    resolvePatch,
     play,
     bus,
     preview,

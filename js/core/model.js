@@ -359,9 +359,25 @@
     ws.prefs = ws.prefs || {};
     ws.sessions = ws.sessions.filter((s) => s && Array.isArray(s.sections) && s.sections.length);
     if (!ws.sessions.length) return null;
+    // ids are compared with === against DOM data attributes and object keys,
+    // which are always strings: a hand-edited file with numeric ids would
+    // otherwise match nothing
+    const sid = (x) => (x == null ? x : String(x));
+    for (const p of ws.library) p.id = sid(p.id);
+    ws.currentId = sid(ws.currentId);
     for (const s of ws.sessions) {
+      s.id = sid(s.id);
       s.lanes = Array.isArray(s.lanes) ? s.lanes : [];
-      s.arrangement = Array.isArray(s.arrangement) ? s.arrangement : [];
+      for (const l of s.lanes) l.id = sid(l.id);
+      s.arrangement = (Array.isArray(s.arrangement) ? s.arrangement : []).map(sid);
+      for (const sec of s.sections) {
+        sec.id = sid(sec.id);
+        for (const k in sec.slots || {}) {
+          const slot = sec.slots[k];
+          if (slot && slot.sourceId != null) slot.sourceId = sid(slot.sourceId);
+          if (slot && slot.part && slot.part.id != null) slot.part.id = sid(slot.part.id);
+        }
+      }
       s.bpm = Math.max(30, Math.min(300, Number(s.bpm) || 100));
       s.swing = Math.max(0, Math.min(0.6, Number(s.swing) || 0));
       s.tonic = T.mod(Number(s.tonic) || 0, 12);
