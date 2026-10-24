@@ -15,6 +15,7 @@
 
   const W = typeof window !== 'undefined' ? window : null;
   const VOICE_CAP = 96;
+  const VOICE_CAP_LIGHT = 40;
   const KILL_TC = 0.012;
   const DEFAULT_VOLUME = 0.85;
 
@@ -150,6 +151,55 @@
   let masterVolume = DEFAULT_VOLUME;
   let unlocked = false;
 
+  /*
+   * Sound quality for live playback: 'full' or 'light'. Phones can't keep up
+   * with the full graph: their audio thread misses its deadline (crackle) and
+   * some browsers then go silent. Light mode stacks fewer oscillators per
+   * note, uses simpler hi-hats, a mono reverb, fewer voices at once and
+   * control-rate filters, and asks for bigger output buffers. Offline renders
+   * (WAV export) are not real-time, so they always use full quality unless
+   * told otherwise.
+   */
+  let qualitySetting = 'auto';
+  let quality = autoQuality();
+
+  function autoQuality() {
+    try {
+      const nav = typeof navigator !== 'undefined' ? navigator : {};
+      const ua = nav.userAgent || '';
+      const touchMac = nav.platform === 'MacIntel' && nav.maxTouchPoints > 1; // iPadOS reports as a Mac
+      const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+      const small = nav.deviceMemory && nav.deviceMemory <= 4;
+      return coarse || touchMac || small || /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'light' : 'full';
+    } catch (e) {
+      return 'full';
+    }
+  }
+
+  /** 'auto' | 'light' | 'full'. A realtime context built for the other quality is replaced on next ensure(). */
+  function setQuality(q) {
+    qualitySetting = q === 'light' || q === 'full' ? q : 'auto';
+    quality = qualitySetting === 'auto' ? autoQuality() : qualitySetting;
+    if (realtime) {
+      const env = envs.get(realtime);
+      if (env && env.light !== (quality === 'light')) restart();
+    }
+    return quality;
+  }
+
+  /** drop the realtime context; the next ensure() builds a fresh one */
+  function restart() {
+    const old = realtime;
+    realtime = null;
+    unlocked = false;
+    Odd.audio.ctx = null;
+    Odd.audio.analyser = null;
+    if (old) {
+      envs.delete(old);
+      try { const p = old.close(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* already closed */ }
+    }
+  }
+
   function masterGainFor(v) { return 0.95 * v * v; }
 
   function offlineClass() { return W && (W.OfflineAudioContext || W.webkitOfflineAudioContext); }
@@ -175,14 +225,15 @@
    * The decay is shaped for `shapeSec` but the buffer stops at `sec`; what is
    * cut is below -56 dB, and convolution cost grows with buffer length.
    */
-  function impulse(ctx, sec, shapeSec) {
+  function impulse(ctx, sec, shapeSec, channels) {
     const sr = ctx.sampleRate;
     const len = Math.max(1, Math.floor(sr * sec));
     const shapeLen = sr * (shapeSec || sec);
-    const b = ctx.createBuffer(2, len, sr);
+    const chans = channels || 2;
+    const b = ctx.createBuffer(chans, len, sr);
     const fadeIn = Math.floor(sr * 0.004);
     const fadeOut = Math.floor(sr * 0.06);
-    for (let ch = 0; ch < 2; ch++) {
+    for (let ch = 0; ch < chans; ch++) {
       const d = b.getChannelData(ch);
       const r = lcg(777 + ch * 31); // different noise per side keeps the tail wide
       let lp = 0;
@@ -249,10 +300,10 @@
    * no patch sends to: the echo's feedback loop and the convolver keep
    * processing long after the last note, which dominates render time.
    */
-  function buildEnv(ctx, offline, fx) {
+  function buildEnv(ctx, offline, fx, light) {
     fx = fx || {};
     const env = {
-      ctx, offline: !!offline, buses: new Map(), inputs: new WeakMap(), voices: [],
+      ctx, offline: !!offline, light: !!light, buses: new Map(), inputs: new WeakMap(), voices: [],
       chokes: new WeakMap(), noise: null, waves: {}, rand: lcg(99),
     };
     const master = ctx.createGain();
@@ -267,7 +318,7 @@
     pre.gain.value = 0.5;
     const clip = ctx.createWaveShaper();
     clip.curve = curve('softclip', (x) => 0.98 * Math.tanh(2 * x));
-    clip.oversample = '2x';
+    clip.oversample = light ? 'none' : '2x';
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.6;
@@ -280,8 +331,13 @@
     // shared stereo reverb: each side is convolved with its own impulse, so
     // panned tracks keep their reverb level and side, and the tail stays
     // mono-compatible (no delayed copy of one side). The impulse is cut at
-    // 1.7 s, where its 2.2 s decay is already below -56 dB.
+    // 1.7 s, where its 2.2 s decay is already below -56 dB. Light mode uses
+    // one mono convolution (half the work), heard equally on both sides.
     const revIn = ctx.createGain();
+    if (light) {
+      revIn.channelCount = 1;
+      revIn.channelCountMode = 'explicit';
+    }
     if (fx.reverb !== false) {
       const revHp = ctx.createBiquadFilter();
       revHp.type = 'highpass';
@@ -289,7 +345,7 @@
       const preDelay = ctx.createDelay(0.2);
       preDelay.delayTime.value = 0.02;
       const conv = ctx.createConvolver();
-      conv.buffer = impulse(ctx, 1.7, 2.2);
+      conv.buffer = impulse(ctx, 1.7, 2.2, light ? 1 : 2);
       const revOut = ctx.createGain();
       revOut.gain.value = 0.7;
       revIn.connect(revHp);
@@ -339,8 +395,11 @@
     if (realtime) return realtime;
     const C = W && (W.AudioContext || W.webkitAudioContext);
     if (!C) throw new Error('Web Audio is not available in this browser.');
-    try { realtime = new C({ latencyHint: 'interactive' }); } catch (e) { realtime = new C(); }
-    const env = buildEnv(realtime, false);
+    // light mode asks for bigger output buffers: more headroom for the audio
+    // thread on slow devices, at the cost of a little more latency
+    const light = quality === 'light';
+    try { realtime = new C({ latencyHint: light ? 'playback' : 'interactive' }); } catch (e) { realtime = new C(); }
+    const env = buildEnv(realtime, false, null, light);
     Odd.audio.ctx = realtime;
     Odd.audio.analyser = env.analyser;
     return realtime;
@@ -461,7 +520,8 @@
     const pruneT = env.offline ? v.start : env.ctx.currentTime;
     env.voices = env.voices.filter((x) => !x.done && x.end > pruneT);
     const active = env.voices.filter((x) => x.start <= v.start && x.end > v.start);
-    while (active.length >= VOICE_CAP) active.shift().stop(v.start);
+    const cap = env.light ? VOICE_CAP_LIGHT : VOICE_CAP;
+    while (active.length >= cap) active.shift().stop(v.start);
     env.voices.push(v);
   }
 
@@ -469,6 +529,8 @@
   function tools(env, v) {
     const ctx = env.ctx;
     const k = {
+      /** light mode: builders leave out layers that cost more than they add on a phone */
+      light: env.light,
       osc(type, f, when) {
         const o = ctx.createOscillator();
         o.type = type;
@@ -511,7 +573,7 @@
         // gentle filters a cutoff that moves once per 128 samples is inaudible.
         // Resonant filters (Q >= 2) stay per-sample: stepping a swept cutoff
         // there makes zipper noise.
-        if (res < 2) {
+        if (res < 2 || env.light) {
           kRate(b.frequency);
           kRate(b.Q);
           kRate(b.gain);
@@ -557,19 +619,21 @@
       const lp = k.filter('lowpass', Math.min(1200, 300 + f * 6), 0.4);
       k.osc('sine', f, w).connect(k.gain(0.62)).connect(drv);
       k.osc('triangle', f, w).connect(k.gain(0.14)).connect(drv);
-      k.osc('sine', f * 2, w).connect(k.gain(0.07)).connect(drv);
+      if (!k.light) k.osc('sine', f * 2, w).connect(k.gain(0.07)).connect(drv);
       drv.connect(lp).connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.6 * amp, 0.006, 0.4, 0.85, relT(0.09, dur));
     },
     'bass-saw'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 300, 8);
-      const mix = k.gain(0.3);
+      const mix = k.gain(k.light ? 0.52 : 0.3);
       mix.connect(lp);
-      const o2 = k.osc('sawtooth', f, w);
-      o2.detune.value = 8;
       k.osc('sawtooth', f, w).connect(mix);
-      o2.connect(mix);
+      if (!k.light) {
+        const o2 = k.osc('sawtooth', f, w);
+        o2.detune.value = 8;
+        o2.connect(mix);
+      }
       k.osc('square', f / 2, w).connect(k.gain(0.16)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(160 + f * 1.5), nyq(450 + 3200 * vel), 0.004, 0.22, 0.15, 0.08);
       lp.connect(vca).connect(v.kill);
@@ -603,14 +667,17 @@
       mg.gain.setValueAtTime(f * (1.1 + 2.4 * vel), w);
       mg.gain.setTargetAtTime(f * 0.18, w + 0.005, 0.35);
       const tine = k.osc('sine', f * 14, w);
+      tine._end = w + 0.25; // its envelope is silent by then; don't run it for the whole note
       const tg = k.gain(0);
       tine.connect(tg).connect(car.frequency);
       tg.gain.setValueAtTime(f * 0.9 * vel, w);
       tg.gain.setTargetAtTime(0, w + 0.002, 0.025);
-      const body = k.osc('sine', f, w);
-      body.detune.value = 5;
-      car.connect(k.gain(0.75)).connect(vca);
-      body.connect(k.gain(0.3)).connect(vca);
+      car.connect(k.gain(k.light ? 0.82 : 0.75)).connect(vca);
+      if (!k.light) {
+        const body = k.osc('sine', f, w);
+        body.detune.value = 5;
+        body.connect(k.gain(0.3)).connect(vca);
+      }
       vca.connect(v.kill);
       const pf = pitchFactor(p);
       return adsr(vca.gain, w, dur, 0.32 * amp, 0.002, 2.6 * pf, 0.15, relT(0.28, dur));
@@ -618,18 +685,22 @@
     keys(k, v, f, amp, vel, w, dur, p) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 1000, 0.5);
-      k.osc('triangle', f, w).connect(k.gain(0.5)).connect(lp);
-      const o2 = k.osc('triangle', f, w);
-      o2.detune.value = 7;
-      o2.connect(k.gain(0.22)).connect(lp);
+      k.osc('triangle', f, w).connect(k.gain(k.light ? 0.62 : 0.5)).connect(lp);
+      if (!k.light) {
+        const o2 = k.osc('triangle', f, w);
+        o2.detune.value = 7;
+        o2.connect(k.gain(0.22)).connect(lp);
+        k.osc('sine', f * 3, w).connect(k.gain(0.05)).connect(lp);
+      }
       k.osc('sine', f * 2, w).connect(k.gain(0.16)).connect(lp);
-      k.osc('sine', f * 3, w).connect(k.gain(0.05)).connect(lp);
       const pf = pitchFactor(p);
       sweep(lp.frequency, w, dur, nyq(700 + f * 1.5), nyq(1800 + 6500 * vel), 0.002, 0.7 * pf, 0.25, 0.2);
-      const hb = k.filter('bandpass', 2400, 1);
-      const hg = k.gain(0);
-      hit(hg.gain, w, 0.06 * vel, 0.001, 0.006);
-      k.noise(w, 0.06).connect(hb).connect(hg).connect(vca);
+      if (!k.light) {
+        const hb = k.filter('bandpass', 2400, 1);
+        const hg = k.gain(0);
+        hit(hg.gain, w, 0.06 * vel, 0.001, 0.006);
+        k.noise(w, 0.06).connect(hb).connect(hg).connect(vca);
+      }
       lp.connect(vca);
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, 0.4 * amp, 0.002, 3.2 * pf, 0, relT(0.2, dur));
@@ -643,19 +714,21 @@
       bars.connect(k.gain(0.12 * ow.peak)).connect(vca);
       sub.connect(k.gain(0.42 * 0.12)).connect(vca);
       k.lfo(6.2, 9, [bars.detune, sub.detune], w, 0, 0.2);
-      const hp = k.filter('highpass', 3000, 0.7);
-      const cg = k.gain(0);
-      hit(cg.gain, w, 0.05 * vel, 0.001, 0.004);
-      k.noise(w, 0.04).connect(hp).connect(cg).connect(vca);
+      if (!k.light) {
+        const hp = k.filter('highpass', 3000, 0.7);
+        const cg = k.gain(0);
+        hit(cg.gain, w, 0.05 * vel, 0.001, 0.004);
+        k.noise(w, 0.04).connect(hp).connect(cg).connect(vca);
+      }
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, amp, 0.008, 0.1, 1, relT(0.07, dur));
     },
     stab(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 800, 3);
-      const mix = k.gain(0.2);
+      const mix = k.gain(k.light ? 0.28 : 0.2);
       mix.connect(lp);
-      [-14, 0, 13].forEach((dt) => {
+      (k.light ? [-12, 12] : [-14, 0, 13]).forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -668,9 +741,9 @@
     'pad-warm'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 600, 1.2);
-      const mix = k.gain(0.2);
+      const mix = k.gain(k.light ? 0.245 : 0.2);
       mix.connect(lp);
-      [-11, 0, 10].forEach((dt) => {
+      (k.light ? [-10, 10] : [-11, 0, 10]).forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -687,15 +760,17 @@
     'pad-glass'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const hp = k.filter('highpass', 180, 0.5);
-      const trem = k.gain(1);
+      const trem = k.gain(k.light ? 1.1 : 1);
       k.osc('sine', f, w).connect(k.gain(0.32)).connect(trem);
       const o2 = k.osc('triangle', f, w);
       o2.detune.value = 7;
       o2.connect(k.gain(0.22)).connect(trem);
-      const o3 = k.osc('sine', f * 2, w);
-      o3.detune.value = -6;
-      o3.connect(k.gain(0.12)).connect(trem);
-      k.osc('triangle', f * 3, w).connect(k.gain(0.04)).connect(trem);
+      if (!k.light) {
+        const o3 = k.osc('sine', f * 2, w);
+        o3.detune.value = -6;
+        o3.connect(k.gain(0.12)).connect(trem);
+        k.osc('triangle', f * 3, w).connect(k.gain(0.04)).connect(trem);
+      }
       k.lfo(4.2, 0.1, [trem.gain], w, 0.2, 0.6, true);
       trem.connect(hp).connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.34 * amp, attT(0.4, dur), 1.5, 0.8, relT(1.6, dur));
@@ -704,9 +779,9 @@
       const vca = k.gain(0);
       const lp = k.filter('lowpass', Math.min(9000, 1500 + 3000 * vel + f), 0.5);
       const hp = k.filter('highpass', 150, 0.5);
-      const mix = k.gain(0.16);
+      const mix = k.gain(k.light ? 0.226 : 0.16);
       mix.connect(lp);
-      const oscs = [-16, -5, 6, 15].map((dt) => {
+      const oscs = (k.light ? [-12, 11] : [-16, -5, 6, 15]).map((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -747,20 +822,24 @@
       const vca = k.gain(0);
       const o1 = k.osc('sine', f, w);
       const o2 = k.osc('triangle', f, w);
-      const o3 = k.osc('sine', f * 2, w);
       o1.connect(k.gain(0.42)).connect(vca);
       o2.connect(k.gain(0.14)).connect(vca);
-      o3.connect(k.gain(0.05)).connect(vca);
+      const vib = [o1.detune, o2.detune];
       const r = relT(0.16, dur);
-      const hold = w + Math.max(dur, 0.03);
-      const bp = k.filter('bandpass', Math.min(f * 2.2, 12000), 1.4);
-      const bg = k.gain(0);
-      bg.gain.setValueAtTime(0, w);
-      bg.gain.linearRampToValueAtTime(0.16 * vel, w + 0.02);
-      bg.gain.setTargetAtTime(0.035 * vel, w + 0.02, 0.08);
-      bg.gain.setTargetAtTime(0, hold, r / 4);
-      k.noise(w).connect(bp).connect(bg).connect(vca);
-      k.lfo(5, 10, [o1.detune, o2.detune, o3.detune], w, 0.3, 0.4);
+      if (!k.light) {
+        const o3 = k.osc('sine', f * 2, w);
+        o3.connect(k.gain(0.05)).connect(vca);
+        vib.push(o3.detune);
+        const hold = w + Math.max(dur, 0.03);
+        const bp = k.filter('bandpass', Math.min(f * 2.2, 12000), 1.4);
+        const bg = k.gain(0);
+        bg.gain.setValueAtTime(0, w);
+        bg.gain.linearRampToValueAtTime(0.16 * vel, w + 0.02);
+        bg.gain.setTargetAtTime(0.035 * vel, w + 0.02, 0.08);
+        bg.gain.setTargetAtTime(0, hold, r / 4);
+        k.noise(w).connect(bp).connect(bg).connect(vca);
+      }
+      k.lfo(5, 10, vib, w, 0.3, 0.4);
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, 0.55 * amp, attT(0.045, dur), 0.2, 0.85, r);
     },
@@ -789,10 +868,12 @@
       sq.detune.value = -6;
       sq.connect(k.gain(0.12)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(200 + f * 0.6), nyq(900 + 6000 * vel + f * 2), 0.001, 0.14, 0, 0.1);
-      const hp = k.filter('highpass', 4000, 0.7);
-      const ng = k.gain(0);
-      hit(ng.gain, w, 0.05 * vel, 0.0005, 0.004);
-      k.noise(w, 0.03).connect(hp).connect(ng).connect(vca);
+      if (!k.light) {
+        const hp = k.filter('highpass', 4000, 0.7);
+        const ng = k.gain(0);
+        hit(ng.gain, w, 0.05 * vel, 0.0005, 0.004);
+        k.noise(w, 0.03).connect(hp).connect(ng).connect(vca);
+      }
       lp.connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.8 * amp, 0.001, 0.45, 0, relT(0.1, dur));
     },
@@ -832,12 +913,14 @@
   };
 
   const METAL = [2, 3, 4.16, 5.43, 6.79, 8.21];
+  const METAL_LIGHT = [2, 4.16, 6.79];
   const TOMS = { 41: 82, 43: 97, 45: 110, 47: 130, 48: 147, 50: 174 };
   const HAND = { 60: [440, 0.07], 61: [330, 0.09], 62: [290, 0.035], 63: [260, 0.12], 64: [180, 0.16] };
 
   function metal(k, base, w, dest, level) {
-    const g = k.gain(level / 6);
-    METAL.forEach((r) => k.osc('square', base * r, w).connect(g));
+    const ratios = k.light ? METAL_LIGHT : METAL;
+    const g = k.gain(level / Math.sqrt(6 * ratios.length)); // same loudness with fewer squares
+    ratios.forEach((r) => k.osc('square', base * r, w).connect(g));
     g.connect(dest);
     return g;
   }
@@ -929,7 +1012,7 @@
     const g = k.gain(0);
     const end = hit(g.gain, w, amp * 0.8, 0.002, P.dec);
     o.connect(g);
-    if (P.tri) {
+    if (P.tri && !k.light) {
       const t2 = k.osc('triangle', f * 2.4, w);
       t2.frequency.exponentialRampToValueAtTime(f * 1.5, w + 0.06);
       t2.connect(k.gain(P.tri)).connect(g);
@@ -1057,7 +1140,8 @@
     const out = k.gain(1);
     let tail = out;
     if (K.lp) tail = tail.connect(k.filter('lowpass', K.lp, 0.4));
-    if (K.crush) tail = tail.connect(k.shaper(crushCurve()));
+    // light mode skips the per-hit crusher; a plain gain keeps the level it added
+    if (K.crush) tail = tail.connect(k.light ? k.gain(1.3) : k.shaper(crushCurve()));
     tail.connect(v.kill);
     const bright = 0.6 + 0.4 * vel;
 
@@ -1228,7 +1312,7 @@
       if (sends[1] > 0) wantDel = true;
       audible.push({ e, tr, patch });
     }
-    const env = buildEnv(ctx, true, { reverb: wantRev, delay: wantDel });
+    const env = buildEnv(ctx, true, { reverb: wantRev, delay: wantDel }, opts.quality === 'light');
     const buses = {};
     const notes = [];
     for (const { e, tr, patch } of audible) {
@@ -1461,6 +1545,10 @@
     now() { return realtime ? realtime.currentTime : 0; },
     setMasterVolume,
     getMasterVolume() { return masterVolume; },
+    setQuality,
+    get quality() { return quality; },
+    get qualitySetting() { return qualitySetting; },
+    restart,
     renderOffline,
     renderOfflineMany,
     renderConcurrency,

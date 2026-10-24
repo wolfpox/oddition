@@ -11,7 +11,12 @@
   'use strict';
 
   const LOOKAHEAD = 0.12;
+  // phones (light sound mode): schedule further ahead so a busy main thread
+  // (layout, garbage collection) can't make notes late
+  const LOOKAHEAD_LIGHT = 0.3;
   const HIDDEN_LOOKAHEAD = 1.2;
+  // the audio clock may not advance for this long before playback counts as stalled
+  const STALL_SEC = 2.5;
   const INTERVAL = 25;
   const START_DELAY = 0.06;
   const CUT_MARGIN = 0.02;
@@ -23,7 +28,7 @@
   function clampBpm(b) { return Math.max(20, Math.min(400, Number(b) || 120)); }
   function sptOf(bpm) { return 60 / (clampBpm(bpm) * ppq()); }
 
-  const listeners = { start: [], stop: [], end: [], loop: [] };
+  const listeners = { start: [], stop: [], end: [], loop: [], stall: [] };
   function emit(name) {
     (listeners[name] || []).slice().forEach((fn) => {
       try { fn(name); } catch (e) { console.error(e); }
@@ -37,7 +42,10 @@
     scheduled: [], hits: {}, lastHits: {},
     timers: [], endTimer: null, interval: null, worker: null, workerBroken: false,
     token: 0, lastPos: 0, solo: false,
+    clockT: 0, clockWall: 0, resumeTry: 0,
   };
+
+  function lookahead() { return Odd.audio && Odd.audio.quality === 'light' ? LOOKAHEAD_LIGHT : LOOKAHEAD; }
 
   function tickToTime(U) { return st.anchorTime + (U - st.anchorTick) * st.spt; }
   function timeToTick(T) { return st.anchorTick + (T - st.anchorTime) / st.spt; }
@@ -194,12 +202,41 @@
     }, delay);
   }
 
+  /*
+   * Watchdog. A suspended or frozen audio clock means silence while the page
+   * still looks like it's playing: phones do this when the OS takes audio away
+   * or the audio thread can't keep up. Try to resume; if the clock stays stuck
+   * past STALL_SEC, stop and emit 'stall' so the app can say so.
+   */
+  function stalled() {
+    const ctx = st.ctx;
+    const now = nowMs();
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    if (ctx.currentTime !== st.clockT || hidden) {
+      // moving (or the page is in the background, where browsers may pause audio)
+      st.clockT = ctx.currentTime;
+      st.clockWall = now;
+      return false;
+    }
+    if (ctx.state !== 'running' && ctx.resume && now - st.resumeTry > 500) {
+      st.resumeTry = now;
+      try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* closed */ }
+    }
+    return (now - st.clockWall) / 1000 > STALL_SEC;
+  }
+
   function pump() {
     if (!st.playing || !st.ctx) return;
+    if (stalled()) {
+      halt();
+      emit('stall');
+      emit('stop');
+      return;
+    }
     const seq = st.seq;
     const L = seq.length;
     const hidden = typeof document !== 'undefined' && document.hidden;
-    const horizon = timeToTick(st.ctx.currentTime + (hidden ? HIDDEN_LOOKAHEAD : LOOKAHEAD));
+    const horizon = timeToTick(st.ctx.currentTime + (hidden ? HIDDEN_LOOKAHEAD : lookahead()));
     prune();
     if (horizon <= st.nextTick) return;
     if (!seq.loop) {
@@ -326,6 +363,8 @@
       st.scheduled = [];
       st.hits = {};
       st.lastHits = {};
+      st.clockT = ctx.currentTime;
+      st.clockWall = nowMs();
       st.playing = true;
       syncBuses();
       sendPrograms(st.seq.tracks);

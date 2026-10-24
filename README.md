@@ -80,6 +80,16 @@ In Chrome, Edge or Opera, the MIDI button sends notes live to a hardware
 synth or to a DAW through a virtual port (IAC Driver on macOS, loopMIDI on
 Windows). Choose whether you also hear the built-in sounds.
 
+### Sound on phones
+
+Phones have less processing power for audio than computers. Oddition detects
+phones and tablets and plays in **Light** sound: fewer layers per note, simpler
+hi-hats, a mono reverb, and bigger audio buffers. You can switch between Auto,
+Light and Full under **Sound** in the session settings (the gear button on a
+phone). If a device still falls behind or the browser pauses audio, playback
+stops with a message and a **Play again** button rather than going silent.
+WAV export always renders at full quality.
+
 ## Keyboard
 
 | Key | Action |

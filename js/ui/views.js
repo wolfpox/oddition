@@ -96,6 +96,7 @@
         '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
           '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
         '<label class="fld fld-range"><span>Volume</span><input type="range" id="f-master" data-input="master" min="0" max="1" step="0.01" value="' + (app.ws.prefs.master != null ? app.ws.prefs.master : 0.8) + '"></label>' +
+        qualityField(app) +
         '<canvas class="meter" id="meter" aria-hidden="true"></canvas>' +
         '<div class="phone-only fields-extra">' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="midi-setup">' + icon('midi', 'ico-sm') + 'MIDI output</button>' +
@@ -103,6 +104,19 @@
         '</div>' +
       '</div>';
     return { html, rolls: [] };
+  }
+
+  function qualityField(app) {
+    if (!Odd.audio || !Odd.audio.setQuality) return '';
+    const set = app.ws.prefs.quality || 'auto';
+    const now = Odd.audio.quality;
+    const opts = [
+      ['auto', set === 'auto' ? 'Auto (' + (now === 'light' ? 'Light' : 'Full') + ')' : 'Auto'],
+      ['light', 'Light'],
+      ['full', 'Full'],
+    ];
+    return '<label class="fld" title="Light needs less processing: use it if playback crackles or cuts out"><span>Sound</span>' +
+      '<select id="f-quality" data-change="quality">' + opts.map(([v, l]) => '<option value="' + v + '"' + (v === set ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>';
   }
 
   // ======================= booth =======================

@@ -139,6 +139,8 @@
     }
     syncTabs();
     syncPlayState();
+    live = null;
+    idle = false;
   }
 
   function drawRolls(rolls) {
@@ -298,6 +300,34 @@
     }
   }
 
+  /**
+   * The audio clock stopped while we were playing: the browser suspended audio
+   * or the device fell behind. Say so (instead of showing "playing" over
+   * silence) and offer a restart, which needs a tap on phones. On a device
+   * that was on full quality, switch to light first.
+   */
+  function onStall() {
+    const was = app.ui.playing;
+    const at = Odd.transport.position();
+    app.ui.playing = null;
+    currentSeq = null;
+    syncPlayState();
+    if (Odd.audio.restart) Odd.audio.restart();
+    let msg = 'Sound stopped: this device paused the audio or fell behind.';
+    if (Odd.audio.quality === 'full' && Odd.audio.setQuality) {
+      Odd.audio.setQuality('light');
+      app.ws.prefs.quality = 'light';
+      persist();
+      paint(['top']);
+      msg += ' Switched to Light sound, which needs less processing.';
+    }
+    D.toast(msg, {
+      kind: 'warn',
+      duration: 15000,
+      action: was ? { label: 'Play again', run: () => play(was.kind, was.id, { startTick: was.kind === 'song' ? at : 0 }) } : null,
+    });
+  }
+
   function stop() {
     if (Odd.transport) Odd.transport.stop();
     app.ui.playing = null;
@@ -350,22 +380,53 @@
     document.body.classList.toggle('is-playing', !!p);
   }
 
-  // live visuals: playheads, lane lights, meter
+  // live visuals: playheads, lane lights, meter.
+  // Element lists are cached per paint and styles are written only when they
+  // change: on a phone the main thread also has to keep the audio scheduler fed.
   let meterBuf = null;
-  function frame() {
+  let live = null; // cached element lists, rebuilt after each paint
+  let idle = false; // visuals already reset to "stopped"
+  let lastFrame = 0;
+  function liveEls() {
+    if (!live) {
+      live = {
+        arr: $$('[data-arr-progress]'),
+        cols: $$('[data-section-col]'),
+        leds: $$('[data-led]'),
+        head: $('#booth-head'),
+        meter: $('#meter'),
+      };
+    }
+    return live;
+  }
+
+  function setStyle(el, prop, value) {
+    if (el['_' + prop] === value) return;
+    el['_' + prop] = value;
+    el.style.setProperty(prop, value);
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    // 30 fps is plenty for meters and playheads, and halves the work on 60-120 Hz phone screens
+    if (Odd.audio && Odd.audio.quality === 'light' && now - lastFrame < 32) return;
+    lastFrame = now;
     const tr = Odd.transport;
     const p = app.ui.playing;
     const pos = tr && tr.playing && p ? tr.position() : null;
+    const els = liveEls();
+    const busy = pos != null;
+    if (!busy && idle) { meterFrame(els, true); return; }
+    idle = !busy;
 
-    const head = $('#booth-head');
-    if (head) {
+    if (els.head) {
       const take = app.currentTake();
       if (p && p.kind === 'booth' && pos != null && take) {
-        Odd.roll.head(head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: take.role === 'drums' });
-        head.dataset.on = '1';
-      } else if (head.dataset.on) {
-        Odd.roll.head(head, null);
-        delete head.dataset.on;
+        Odd.roll.head(els.head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: take.role === 'drums' });
+        els.head.dataset.on = '1';
+      } else if (els.head.dataset.on) {
+        Odd.roll.head(els.head, null);
+        delete els.head.dataset.on;
       }
     }
 
@@ -379,40 +440,42 @@
     } else if (pos != null && p.kind === 'section') {
       liveSection = p.id;
     }
-    for (const el of $$('[data-arr-progress]')) {
+    for (const el of els.arr) {
       const i = Number(el.dataset.arrProgress);
-      el.style.transform = 'scaleX(' + (i === liveArr ? frac : 0) + ')';
+      setStyle(el, 'transform', 'scaleX(' + (i === liveArr ? frac.toFixed(3) : 0) + ')');
     }
-    for (const el of $$('[data-section-col]')) el.classList.toggle('is-live', el.dataset.sectionCol === liveSection);
+    for (const el of els.cols) el.classList.toggle('is-live', el.dataset.sectionCol === liveSection);
 
     // lane lights
     if (tr && tr.lastHit && Odd.audio && Odd.audio.ctx) {
-      const now = Odd.audio.now();
-      for (const el of $$('[data-led]')) {
-        const hit = p ? tr.lastHit(el.dataset.led) : null;
+      const t = Odd.audio.now();
+      for (const el of els.leds) {
+        const hit = busy ? tr.lastHit(el.dataset.led) : null;
         let level = 0;
         if (hit) {
-          const age = now - hit.time;
+          const age = t - hit.time;
           level = age >= 0 ? Math.max(0, 1 - age / 0.28) * (0.5 + 0.5 * hit.v / 127) : 0;
         }
-        el.style.setProperty('--lit', level.toFixed(3));
+        setStyle(el, '--lit', level.toFixed(2));
       }
     }
+    meterFrame(els, false);
+  }
 
-    // meter
-    const meter = $('#meter');
-    if (meter && Odd.audio && Odd.audio.analyser && meter.clientWidth) {
-      const an = Odd.audio.analyser;
-      if (!meterBuf || meterBuf.length !== an.fftSize) meterBuf = new Float32Array(an.fftSize);
-      an.getFloatTimeDomainData(meterBuf);
-      let peak = 0;
-      for (let i = 0; i < meterBuf.length; i++) peak = Math.max(peak, Math.abs(meterBuf[i]));
-      drawMeter(meter, peak);
-    }
-    requestAnimationFrame(frame);
+  function meterFrame(els, quiet) {
+    const meter = els.meter;
+    if (!meter || !Odd.audio || !Odd.audio.analyser || !meter.clientWidth) return;
+    if (quiet && meterPeak < 0.002) return; // stopped and already drawn empty
+    const an = Odd.audio.analyser;
+    if (!meterBuf || meterBuf.length !== an.fftSize) meterBuf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(meterBuf);
+    let peak = 0;
+    for (let i = 0; i < meterBuf.length; i++) peak = Math.max(peak, Math.abs(meterBuf[i]));
+    drawMeter(meter, peak);
   }
 
   let meterPeak = 0;
+  let meterColors = null;
   function drawMeter(c, peak) {
     meterPeak = Math.max(peak, meterPeak * 0.92);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -421,14 +484,17 @@
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    const cs = getComputedStyle(document.documentElement);
+    if (!meterColors) {
+      const cs = getComputedStyle(document.documentElement);
+      meterColors = { hot: cs.getPropertyValue('--tally'), on: cs.getPropertyValue('--keep'), off: cs.getPropertyValue('--line') };
+    }
     const segs = 16;
     const gap = Math.max(1, dpr);
     const sw = (w - gap * (segs - 1)) / segs;
     const lit = Math.round(Math.min(1, meterPeak * 1.15) * segs);
     for (let i = 0; i < segs; i++) {
       const hot = i >= segs - 2;
-      ctx.fillStyle = i < lit ? (hot ? cs.getPropertyValue('--tally') : cs.getPropertyValue('--keep')) : cs.getPropertyValue('--line');
+      ctx.fillStyle = i < lit ? (hot ? meterColors.hot : meterColors.on) : meterColors.off;
       ctx.fillRect(i * (sw + gap), 0, sw, h);
     }
   }
@@ -1123,6 +1189,17 @@
       D.toast(st.label + ': ' + app.session().bpm + ' BPM, lane sounds updated. New takes use this style.');
     },
     'swing-commit': () => persist(),
+    quality: (el) => {
+      const was = app.ui.playing;
+      const at = was && Odd.transport ? Odd.transport.position() : 0;
+      if (was) stop();
+      app.ws.prefs.quality = el.value;
+      Odd.audio.setQuality(el.value);
+      persist();
+      paint(['top']);
+      D.toast(Odd.audio.quality === 'light' ? 'Light sound: fewer layers per note, for phones and tablets.' : 'Full sound: every layer, for computers.');
+      if (was) play(was.kind, was.id, { startTick: was.kind === 'song' ? at : 0 });
+    },
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
     'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },
@@ -1271,7 +1348,7 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => paint(['booth', 'shelf', 'song']), 150);
     });
-    const themeChange = () => { Odd.roll.resetTokens(); paint(['booth', 'shelf', 'song']); };
+    const themeChange = () => { Odd.roll.resetTokens(); meterColors = null; paint(['booth', 'shelf', 'song']); };
     if (window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
       if (mq.addEventListener) mq.addEventListener('change', themeChange);
@@ -1286,6 +1363,7 @@
     document.addEventListener('visibilitychange', () => { if (document.hidden) flushAll(); });
     if (Odd.transport && Odd.transport.on) {
       Odd.transport.on('end', () => { app.ui.playing = null; currentSeq = null; syncPlayState(); });
+      Odd.transport.on('stall', onStall);
     }
   }
 
@@ -1403,6 +1481,7 @@
   }
 
   function applyPrefs(pr) {
+    if (Odd.audio && Odd.audio.setQuality) Odd.audio.setQuality(pr.quality || 'auto');
     const b = app.ui.booth;
     if (pr.role && Odd.gen.ROLES.includes(pr.role)) b.role = pr.role;
     if ([1, 2, 4, 8, 16].includes(pr.bars)) b.bars = pr.bars;

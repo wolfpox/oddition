@@ -4918,6 +4918,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   const W = typeof window !== 'undefined' ? window : null;
   const VOICE_CAP = 96;
+  const VOICE_CAP_LIGHT = 40;
   const KILL_TC = 0.012;
   const DEFAULT_VOLUME = 0.85;
 
@@ -5053,6 +5054,55 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   let masterVolume = DEFAULT_VOLUME;
   let unlocked = false;
 
+  /*
+   * Sound quality for live playback: 'full' or 'light'. Phones can't keep up
+   * with the full graph: their audio thread misses its deadline (crackle) and
+   * some browsers then go silent. Light mode stacks fewer oscillators per
+   * note, uses simpler hi-hats, a mono reverb, fewer voices at once and
+   * control-rate filters, and asks for bigger output buffers. Offline renders
+   * (WAV export) are not real-time, so they always use full quality unless
+   * told otherwise.
+   */
+  let qualitySetting = 'auto';
+  let quality = autoQuality();
+
+  function autoQuality() {
+    try {
+      const nav = typeof navigator !== 'undefined' ? navigator : {};
+      const ua = nav.userAgent || '';
+      const touchMac = nav.platform === 'MacIntel' && nav.maxTouchPoints > 1; // iPadOS reports as a Mac
+      const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+      const small = nav.deviceMemory && nav.deviceMemory <= 4;
+      return coarse || touchMac || small || /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'light' : 'full';
+    } catch (e) {
+      return 'full';
+    }
+  }
+
+  /** 'auto' | 'light' | 'full'. A realtime context built for the other quality is replaced on next ensure(). */
+  function setQuality(q) {
+    qualitySetting = q === 'light' || q === 'full' ? q : 'auto';
+    quality = qualitySetting === 'auto' ? autoQuality() : qualitySetting;
+    if (realtime) {
+      const env = envs.get(realtime);
+      if (env && env.light !== (quality === 'light')) restart();
+    }
+    return quality;
+  }
+
+  /** drop the realtime context; the next ensure() builds a fresh one */
+  function restart() {
+    const old = realtime;
+    realtime = null;
+    unlocked = false;
+    Odd.audio.ctx = null;
+    Odd.audio.analyser = null;
+    if (old) {
+      envs.delete(old);
+      try { const p = old.close(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* already closed */ }
+    }
+  }
+
   function masterGainFor(v) { return 0.95 * v * v; }
 
   function offlineClass() { return W && (W.OfflineAudioContext || W.webkitOfflineAudioContext); }
@@ -5078,14 +5128,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
    * The decay is shaped for `shapeSec` but the buffer stops at `sec`; what is
    * cut is below -56 dB, and convolution cost grows with buffer length.
    */
-  function impulse(ctx, sec, shapeSec) {
+  function impulse(ctx, sec, shapeSec, channels) {
     const sr = ctx.sampleRate;
     const len = Math.max(1, Math.floor(sr * sec));
     const shapeLen = sr * (shapeSec || sec);
-    const b = ctx.createBuffer(2, len, sr);
+    const chans = channels || 2;
+    const b = ctx.createBuffer(chans, len, sr);
     const fadeIn = Math.floor(sr * 0.004);
     const fadeOut = Math.floor(sr * 0.06);
-    for (let ch = 0; ch < 2; ch++) {
+    for (let ch = 0; ch < chans; ch++) {
       const d = b.getChannelData(ch);
       const r = lcg(777 + ch * 31); // different noise per side keeps the tail wide
       let lp = 0;
@@ -5152,10 +5203,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
    * no patch sends to: the echo's feedback loop and the convolver keep
    * processing long after the last note, which dominates render time.
    */
-  function buildEnv(ctx, offline, fx) {
+  function buildEnv(ctx, offline, fx, light) {
     fx = fx || {};
     const env = {
-      ctx, offline: !!offline, buses: new Map(), inputs: new WeakMap(), voices: [],
+      ctx, offline: !!offline, light: !!light, buses: new Map(), inputs: new WeakMap(), voices: [],
       chokes: new WeakMap(), noise: null, waves: {}, rand: lcg(99),
     };
     const master = ctx.createGain();
@@ -5170,7 +5221,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     pre.gain.value = 0.5;
     const clip = ctx.createWaveShaper();
     clip.curve = curve('softclip', (x) => 0.98 * Math.tanh(2 * x));
-    clip.oversample = '2x';
+    clip.oversample = light ? 'none' : '2x';
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.6;
@@ -5183,8 +5234,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     // shared stereo reverb: each side is convolved with its own impulse, so
     // panned tracks keep their reverb level and side, and the tail stays
     // mono-compatible (no delayed copy of one side). The impulse is cut at
-    // 1.7 s, where its 2.2 s decay is already below -56 dB.
+    // 1.7 s, where its 2.2 s decay is already below -56 dB. Light mode uses
+    // one mono convolution (half the work), heard equally on both sides.
     const revIn = ctx.createGain();
+    if (light) {
+      revIn.channelCount = 1;
+      revIn.channelCountMode = 'explicit';
+    }
     if (fx.reverb !== false) {
       const revHp = ctx.createBiquadFilter();
       revHp.type = 'highpass';
@@ -5192,7 +5248,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const preDelay = ctx.createDelay(0.2);
       preDelay.delayTime.value = 0.02;
       const conv = ctx.createConvolver();
-      conv.buffer = impulse(ctx, 1.7, 2.2);
+      conv.buffer = impulse(ctx, 1.7, 2.2, light ? 1 : 2);
       const revOut = ctx.createGain();
       revOut.gain.value = 0.7;
       revIn.connect(revHp);
@@ -5242,8 +5298,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (realtime) return realtime;
     const C = W && (W.AudioContext || W.webkitAudioContext);
     if (!C) throw new Error('Web Audio is not available in this browser.');
-    try { realtime = new C({ latencyHint: 'interactive' }); } catch (e) { realtime = new C(); }
-    const env = buildEnv(realtime, false);
+    // light mode asks for bigger output buffers: more headroom for the audio
+    // thread on slow devices, at the cost of a little more latency
+    const light = quality === 'light';
+    try { realtime = new C({ latencyHint: light ? 'playback' : 'interactive' }); } catch (e) { realtime = new C(); }
+    const env = buildEnv(realtime, false, null, light);
     Odd.audio.ctx = realtime;
     Odd.audio.analyser = env.analyser;
     return realtime;
@@ -5364,7 +5423,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const pruneT = env.offline ? v.start : env.ctx.currentTime;
     env.voices = env.voices.filter((x) => !x.done && x.end > pruneT);
     const active = env.voices.filter((x) => x.start <= v.start && x.end > v.start);
-    while (active.length >= VOICE_CAP) active.shift().stop(v.start);
+    const cap = env.light ? VOICE_CAP_LIGHT : VOICE_CAP;
+    while (active.length >= cap) active.shift().stop(v.start);
     env.voices.push(v);
   }
 
@@ -5372,6 +5432,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function tools(env, v) {
     const ctx = env.ctx;
     const k = {
+      /** light mode: builders leave out layers that cost more than they add on a phone */
+      light: env.light,
       osc(type, f, when) {
         const o = ctx.createOscillator();
         o.type = type;
@@ -5414,7 +5476,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         // gentle filters a cutoff that moves once per 128 samples is inaudible.
         // Resonant filters (Q >= 2) stay per-sample: stepping a swept cutoff
         // there makes zipper noise.
-        if (res < 2) {
+        if (res < 2 || env.light) {
           kRate(b.frequency);
           kRate(b.Q);
           kRate(b.gain);
@@ -5460,19 +5522,21 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const lp = k.filter('lowpass', Math.min(1200, 300 + f * 6), 0.4);
       k.osc('sine', f, w).connect(k.gain(0.62)).connect(drv);
       k.osc('triangle', f, w).connect(k.gain(0.14)).connect(drv);
-      k.osc('sine', f * 2, w).connect(k.gain(0.07)).connect(drv);
+      if (!k.light) k.osc('sine', f * 2, w).connect(k.gain(0.07)).connect(drv);
       drv.connect(lp).connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.6 * amp, 0.006, 0.4, 0.85, relT(0.09, dur));
     },
     'bass-saw'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 300, 8);
-      const mix = k.gain(0.3);
+      const mix = k.gain(k.light ? 0.52 : 0.3);
       mix.connect(lp);
-      const o2 = k.osc('sawtooth', f, w);
-      o2.detune.value = 8;
       k.osc('sawtooth', f, w).connect(mix);
-      o2.connect(mix);
+      if (!k.light) {
+        const o2 = k.osc('sawtooth', f, w);
+        o2.detune.value = 8;
+        o2.connect(mix);
+      }
       k.osc('square', f / 2, w).connect(k.gain(0.16)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(160 + f * 1.5), nyq(450 + 3200 * vel), 0.004, 0.22, 0.15, 0.08);
       lp.connect(vca).connect(v.kill);
@@ -5506,14 +5570,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       mg.gain.setValueAtTime(f * (1.1 + 2.4 * vel), w);
       mg.gain.setTargetAtTime(f * 0.18, w + 0.005, 0.35);
       const tine = k.osc('sine', f * 14, w);
+      tine._end = w + 0.25; // its envelope is silent by then; don't run it for the whole note
       const tg = k.gain(0);
       tine.connect(tg).connect(car.frequency);
       tg.gain.setValueAtTime(f * 0.9 * vel, w);
       tg.gain.setTargetAtTime(0, w + 0.002, 0.025);
-      const body = k.osc('sine', f, w);
-      body.detune.value = 5;
-      car.connect(k.gain(0.75)).connect(vca);
-      body.connect(k.gain(0.3)).connect(vca);
+      car.connect(k.gain(k.light ? 0.82 : 0.75)).connect(vca);
+      if (!k.light) {
+        const body = k.osc('sine', f, w);
+        body.detune.value = 5;
+        body.connect(k.gain(0.3)).connect(vca);
+      }
       vca.connect(v.kill);
       const pf = pitchFactor(p);
       return adsr(vca.gain, w, dur, 0.32 * amp, 0.002, 2.6 * pf, 0.15, relT(0.28, dur));
@@ -5521,18 +5588,22 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     keys(k, v, f, amp, vel, w, dur, p) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 1000, 0.5);
-      k.osc('triangle', f, w).connect(k.gain(0.5)).connect(lp);
-      const o2 = k.osc('triangle', f, w);
-      o2.detune.value = 7;
-      o2.connect(k.gain(0.22)).connect(lp);
+      k.osc('triangle', f, w).connect(k.gain(k.light ? 0.62 : 0.5)).connect(lp);
+      if (!k.light) {
+        const o2 = k.osc('triangle', f, w);
+        o2.detune.value = 7;
+        o2.connect(k.gain(0.22)).connect(lp);
+        k.osc('sine', f * 3, w).connect(k.gain(0.05)).connect(lp);
+      }
       k.osc('sine', f * 2, w).connect(k.gain(0.16)).connect(lp);
-      k.osc('sine', f * 3, w).connect(k.gain(0.05)).connect(lp);
       const pf = pitchFactor(p);
       sweep(lp.frequency, w, dur, nyq(700 + f * 1.5), nyq(1800 + 6500 * vel), 0.002, 0.7 * pf, 0.25, 0.2);
-      const hb = k.filter('bandpass', 2400, 1);
-      const hg = k.gain(0);
-      hit(hg.gain, w, 0.06 * vel, 0.001, 0.006);
-      k.noise(w, 0.06).connect(hb).connect(hg).connect(vca);
+      if (!k.light) {
+        const hb = k.filter('bandpass', 2400, 1);
+        const hg = k.gain(0);
+        hit(hg.gain, w, 0.06 * vel, 0.001, 0.006);
+        k.noise(w, 0.06).connect(hb).connect(hg).connect(vca);
+      }
       lp.connect(vca);
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, 0.4 * amp, 0.002, 3.2 * pf, 0, relT(0.2, dur));
@@ -5546,19 +5617,21 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       bars.connect(k.gain(0.12 * ow.peak)).connect(vca);
       sub.connect(k.gain(0.42 * 0.12)).connect(vca);
       k.lfo(6.2, 9, [bars.detune, sub.detune], w, 0, 0.2);
-      const hp = k.filter('highpass', 3000, 0.7);
-      const cg = k.gain(0);
-      hit(cg.gain, w, 0.05 * vel, 0.001, 0.004);
-      k.noise(w, 0.04).connect(hp).connect(cg).connect(vca);
+      if (!k.light) {
+        const hp = k.filter('highpass', 3000, 0.7);
+        const cg = k.gain(0);
+        hit(cg.gain, w, 0.05 * vel, 0.001, 0.004);
+        k.noise(w, 0.04).connect(hp).connect(cg).connect(vca);
+      }
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, amp, 0.008, 0.1, 1, relT(0.07, dur));
     },
     stab(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 800, 3);
-      const mix = k.gain(0.2);
+      const mix = k.gain(k.light ? 0.28 : 0.2);
       mix.connect(lp);
-      [-14, 0, 13].forEach((dt) => {
+      (k.light ? [-12, 12] : [-14, 0, 13]).forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -5571,9 +5644,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'pad-warm'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 600, 1.2);
-      const mix = k.gain(0.2);
+      const mix = k.gain(k.light ? 0.245 : 0.2);
       mix.connect(lp);
-      [-11, 0, 10].forEach((dt) => {
+      (k.light ? [-10, 10] : [-11, 0, 10]).forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -5590,15 +5663,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'pad-glass'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const hp = k.filter('highpass', 180, 0.5);
-      const trem = k.gain(1);
+      const trem = k.gain(k.light ? 1.1 : 1);
       k.osc('sine', f, w).connect(k.gain(0.32)).connect(trem);
       const o2 = k.osc('triangle', f, w);
       o2.detune.value = 7;
       o2.connect(k.gain(0.22)).connect(trem);
-      const o3 = k.osc('sine', f * 2, w);
-      o3.detune.value = -6;
-      o3.connect(k.gain(0.12)).connect(trem);
-      k.osc('triangle', f * 3, w).connect(k.gain(0.04)).connect(trem);
+      if (!k.light) {
+        const o3 = k.osc('sine', f * 2, w);
+        o3.detune.value = -6;
+        o3.connect(k.gain(0.12)).connect(trem);
+        k.osc('triangle', f * 3, w).connect(k.gain(0.04)).connect(trem);
+      }
       k.lfo(4.2, 0.1, [trem.gain], w, 0.2, 0.6, true);
       trem.connect(hp).connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.34 * amp, attT(0.4, dur), 1.5, 0.8, relT(1.6, dur));
@@ -5607,9 +5682,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const vca = k.gain(0);
       const lp = k.filter('lowpass', Math.min(9000, 1500 + 3000 * vel + f), 0.5);
       const hp = k.filter('highpass', 150, 0.5);
-      const mix = k.gain(0.16);
+      const mix = k.gain(k.light ? 0.226 : 0.16);
       mix.connect(lp);
-      const oscs = [-16, -5, 6, 15].map((dt) => {
+      const oscs = (k.light ? [-12, 11] : [-16, -5, 6, 15]).map((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
         o.connect(mix);
@@ -5650,20 +5725,24 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const vca = k.gain(0);
       const o1 = k.osc('sine', f, w);
       const o2 = k.osc('triangle', f, w);
-      const o3 = k.osc('sine', f * 2, w);
       o1.connect(k.gain(0.42)).connect(vca);
       o2.connect(k.gain(0.14)).connect(vca);
-      o3.connect(k.gain(0.05)).connect(vca);
+      const vib = [o1.detune, o2.detune];
       const r = relT(0.16, dur);
-      const hold = w + Math.max(dur, 0.03);
-      const bp = k.filter('bandpass', Math.min(f * 2.2, 12000), 1.4);
-      const bg = k.gain(0);
-      bg.gain.setValueAtTime(0, w);
-      bg.gain.linearRampToValueAtTime(0.16 * vel, w + 0.02);
-      bg.gain.setTargetAtTime(0.035 * vel, w + 0.02, 0.08);
-      bg.gain.setTargetAtTime(0, hold, r / 4);
-      k.noise(w).connect(bp).connect(bg).connect(vca);
-      k.lfo(5, 10, [o1.detune, o2.detune, o3.detune], w, 0.3, 0.4);
+      if (!k.light) {
+        const o3 = k.osc('sine', f * 2, w);
+        o3.connect(k.gain(0.05)).connect(vca);
+        vib.push(o3.detune);
+        const hold = w + Math.max(dur, 0.03);
+        const bp = k.filter('bandpass', Math.min(f * 2.2, 12000), 1.4);
+        const bg = k.gain(0);
+        bg.gain.setValueAtTime(0, w);
+        bg.gain.linearRampToValueAtTime(0.16 * vel, w + 0.02);
+        bg.gain.setTargetAtTime(0.035 * vel, w + 0.02, 0.08);
+        bg.gain.setTargetAtTime(0, hold, r / 4);
+        k.noise(w).connect(bp).connect(bg).connect(vca);
+      }
+      k.lfo(5, 10, vib, w, 0.3, 0.4);
       vca.connect(v.kill);
       return adsr(vca.gain, w, dur, 0.55 * amp, attT(0.045, dur), 0.2, 0.85, r);
     },
@@ -5692,10 +5771,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       sq.detune.value = -6;
       sq.connect(k.gain(0.12)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(200 + f * 0.6), nyq(900 + 6000 * vel + f * 2), 0.001, 0.14, 0, 0.1);
-      const hp = k.filter('highpass', 4000, 0.7);
-      const ng = k.gain(0);
-      hit(ng.gain, w, 0.05 * vel, 0.0005, 0.004);
-      k.noise(w, 0.03).connect(hp).connect(ng).connect(vca);
+      if (!k.light) {
+        const hp = k.filter('highpass', 4000, 0.7);
+        const ng = k.gain(0);
+        hit(ng.gain, w, 0.05 * vel, 0.0005, 0.004);
+        k.noise(w, 0.03).connect(hp).connect(ng).connect(vca);
+      }
       lp.connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.8 * amp, 0.001, 0.45, 0, relT(0.1, dur));
     },
@@ -5735,12 +5816,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   };
 
   const METAL = [2, 3, 4.16, 5.43, 6.79, 8.21];
+  const METAL_LIGHT = [2, 4.16, 6.79];
   const TOMS = { 41: 82, 43: 97, 45: 110, 47: 130, 48: 147, 50: 174 };
   const HAND = { 60: [440, 0.07], 61: [330, 0.09], 62: [290, 0.035], 63: [260, 0.12], 64: [180, 0.16] };
 
   function metal(k, base, w, dest, level) {
-    const g = k.gain(level / 6);
-    METAL.forEach((r) => k.osc('square', base * r, w).connect(g));
+    const ratios = k.light ? METAL_LIGHT : METAL;
+    const g = k.gain(level / Math.sqrt(6 * ratios.length)); // same loudness with fewer squares
+    ratios.forEach((r) => k.osc('square', base * r, w).connect(g));
     g.connect(dest);
     return g;
   }
@@ -5832,7 +5915,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const g = k.gain(0);
     const end = hit(g.gain, w, amp * 0.8, 0.002, P.dec);
     o.connect(g);
-    if (P.tri) {
+    if (P.tri && !k.light) {
       const t2 = k.osc('triangle', f * 2.4, w);
       t2.frequency.exponentialRampToValueAtTime(f * 1.5, w + 0.06);
       t2.connect(k.gain(P.tri)).connect(g);
@@ -5960,7 +6043,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const out = k.gain(1);
     let tail = out;
     if (K.lp) tail = tail.connect(k.filter('lowpass', K.lp, 0.4));
-    if (K.crush) tail = tail.connect(k.shaper(crushCurve()));
+    // light mode skips the per-hit crusher; a plain gain keeps the level it added
+    if (K.crush) tail = tail.connect(k.light ? k.gain(1.3) : k.shaper(crushCurve()));
     tail.connect(v.kill);
     const bright = 0.6 + 0.4 * vel;
 
@@ -6131,7 +6215,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       if (sends[1] > 0) wantDel = true;
       audible.push({ e, tr, patch });
     }
-    const env = buildEnv(ctx, true, { reverb: wantRev, delay: wantDel });
+    const env = buildEnv(ctx, true, { reverb: wantRev, delay: wantDel }, opts.quality === 'light');
     const buses = {};
     const notes = [];
     for (const { e, tr, patch } of audible) {
@@ -6364,6 +6448,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     now() { return realtime ? realtime.currentTime : 0; },
     setMasterVolume,
     getMasterVolume() { return masterVolume; },
+    setQuality,
+    get quality() { return quality; },
+    get qualitySetting() { return qualitySetting; },
+    restart,
     renderOffline,
     renderOfflineMany,
     renderConcurrency,
@@ -6521,7 +6609,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   'use strict';
 
   const LOOKAHEAD = 0.12;
+  // phones (light sound mode): schedule further ahead so a busy main thread
+  // (layout, garbage collection) can't make notes late
+  const LOOKAHEAD_LIGHT = 0.3;
   const HIDDEN_LOOKAHEAD = 1.2;
+  // the audio clock may not advance for this long before playback counts as stalled
+  const STALL_SEC = 2.5;
   const INTERVAL = 25;
   const START_DELAY = 0.06;
   const CUT_MARGIN = 0.02;
@@ -6533,7 +6626,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function clampBpm(b) { return Math.max(20, Math.min(400, Number(b) || 120)); }
   function sptOf(bpm) { return 60 / (clampBpm(bpm) * ppq()); }
 
-  const listeners = { start: [], stop: [], end: [], loop: [] };
+  const listeners = { start: [], stop: [], end: [], loop: [], stall: [] };
   function emit(name) {
     (listeners[name] || []).slice().forEach((fn) => {
       try { fn(name); } catch (e) { console.error(e); }
@@ -6547,7 +6640,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     scheduled: [], hits: {}, lastHits: {},
     timers: [], endTimer: null, interval: null, worker: null, workerBroken: false,
     token: 0, lastPos: 0, solo: false,
+    clockT: 0, clockWall: 0, resumeTry: 0,
   };
+
+  function lookahead() { return Odd.audio && Odd.audio.quality === 'light' ? LOOKAHEAD_LIGHT : LOOKAHEAD; }
 
   function tickToTime(U) { return st.anchorTime + (U - st.anchorTick) * st.spt; }
   function timeToTick(T) { return st.anchorTick + (T - st.anchorTime) / st.spt; }
@@ -6704,12 +6800,41 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }, delay);
   }
 
+  /*
+   * Watchdog. A suspended or frozen audio clock means silence while the page
+   * still looks like it's playing: phones do this when the OS takes audio away
+   * or the audio thread can't keep up. Try to resume; if the clock stays stuck
+   * past STALL_SEC, stop and emit 'stall' so the app can say so.
+   */
+  function stalled() {
+    const ctx = st.ctx;
+    const now = nowMs();
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    if (ctx.currentTime !== st.clockT || hidden) {
+      // moving (or the page is in the background, where browsers may pause audio)
+      st.clockT = ctx.currentTime;
+      st.clockWall = now;
+      return false;
+    }
+    if (ctx.state !== 'running' && ctx.resume && now - st.resumeTry > 500) {
+      st.resumeTry = now;
+      try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* closed */ }
+    }
+    return (now - st.clockWall) / 1000 > STALL_SEC;
+  }
+
   function pump() {
     if (!st.playing || !st.ctx) return;
+    if (stalled()) {
+      halt();
+      emit('stall');
+      emit('stop');
+      return;
+    }
     const seq = st.seq;
     const L = seq.length;
     const hidden = typeof document !== 'undefined' && document.hidden;
-    const horizon = timeToTick(st.ctx.currentTime + (hidden ? HIDDEN_LOOKAHEAD : LOOKAHEAD));
+    const horizon = timeToTick(st.ctx.currentTime + (hidden ? HIDDEN_LOOKAHEAD : lookahead()));
     prune();
     if (horizon <= st.nextTick) return;
     if (!seq.loop) {
@@ -6836,6 +6961,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       st.scheduled = [];
       st.hits = {};
       st.lastHits = {};
+      st.clockT = ctx.currentTime;
+      st.clockWall = nowMs();
       st.playing = true;
       syncBuses();
       sendPrograms(st.seq.tracks);
@@ -7596,6 +7723,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
           '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
         '<label class="fld fld-range"><span>Volume</span><input type="range" id="f-master" data-input="master" min="0" max="1" step="0.01" value="' + (app.ws.prefs.master != null ? app.ws.prefs.master : 0.8) + '"></label>' +
+        qualityField(app) +
         '<canvas class="meter" id="meter" aria-hidden="true"></canvas>' +
         '<div class="phone-only fields-extra">' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="midi-setup">' + icon('midi', 'ico-sm') + 'MIDI output</button>' +
@@ -7603,6 +7731,19 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '</div>' +
       '</div>';
     return { html, rolls: [] };
+  }
+
+  function qualityField(app) {
+    if (!Odd.audio || !Odd.audio.setQuality) return '';
+    const set = app.ws.prefs.quality || 'auto';
+    const now = Odd.audio.quality;
+    const opts = [
+      ['auto', set === 'auto' ? 'Auto (' + (now === 'light' ? 'Light' : 'Full') + ')' : 'Auto'],
+      ['light', 'Light'],
+      ['full', 'Full'],
+    ];
+    return '<label class="fld" title="Light needs less processing: use it if playback crackles or cuts out"><span>Sound</span>' +
+      '<select id="f-quality" data-change="quality">' + opts.map(([v, l]) => '<option value="' + v + '"' + (v === set ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>';
   }
 
   // ======================= booth =======================
@@ -8064,6 +8205,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
     syncTabs();
     syncPlayState();
+    live = null;
+    idle = false;
   }
 
   function drawRolls(rolls) {
@@ -8223,6 +8366,34 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
   }
 
+  /**
+   * The audio clock stopped while we were playing: the browser suspended audio
+   * or the device fell behind. Say so (instead of showing "playing" over
+   * silence) and offer a restart, which needs a tap on phones. On a device
+   * that was on full quality, switch to light first.
+   */
+  function onStall() {
+    const was = app.ui.playing;
+    const at = Odd.transport.position();
+    app.ui.playing = null;
+    currentSeq = null;
+    syncPlayState();
+    if (Odd.audio.restart) Odd.audio.restart();
+    let msg = 'Sound stopped: this device paused the audio or fell behind.';
+    if (Odd.audio.quality === 'full' && Odd.audio.setQuality) {
+      Odd.audio.setQuality('light');
+      app.ws.prefs.quality = 'light';
+      persist();
+      paint(['top']);
+      msg += ' Switched to Light sound, which needs less processing.';
+    }
+    D.toast(msg, {
+      kind: 'warn',
+      duration: 15000,
+      action: was ? { label: 'Play again', run: () => play(was.kind, was.id, { startTick: was.kind === 'song' ? at : 0 }) } : null,
+    });
+  }
+
   function stop() {
     if (Odd.transport) Odd.transport.stop();
     app.ui.playing = null;
@@ -8275,22 +8446,53 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     document.body.classList.toggle('is-playing', !!p);
   }
 
-  // live visuals: playheads, lane lights, meter
+  // live visuals: playheads, lane lights, meter.
+  // Element lists are cached per paint and styles are written only when they
+  // change: on a phone the main thread also has to keep the audio scheduler fed.
   let meterBuf = null;
-  function frame() {
+  let live = null; // cached element lists, rebuilt after each paint
+  let idle = false; // visuals already reset to "stopped"
+  let lastFrame = 0;
+  function liveEls() {
+    if (!live) {
+      live = {
+        arr: $$('[data-arr-progress]'),
+        cols: $$('[data-section-col]'),
+        leds: $$('[data-led]'),
+        head: $('#booth-head'),
+        meter: $('#meter'),
+      };
+    }
+    return live;
+  }
+
+  function setStyle(el, prop, value) {
+    if (el['_' + prop] === value) return;
+    el['_' + prop] = value;
+    el.style.setProperty(prop, value);
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    // 30 fps is plenty for meters and playheads, and halves the work on 60-120 Hz phone screens
+    if (Odd.audio && Odd.audio.quality === 'light' && now - lastFrame < 32) return;
+    lastFrame = now;
     const tr = Odd.transport;
     const p = app.ui.playing;
     const pos = tr && tr.playing && p ? tr.position() : null;
+    const els = liveEls();
+    const busy = pos != null;
+    if (!busy && idle) { meterFrame(els, true); return; }
+    idle = !busy;
 
-    const head = $('#booth-head');
-    if (head) {
+    if (els.head) {
       const take = app.currentTake();
       if (p && p.kind === 'booth' && pos != null && take) {
-        Odd.roll.head(head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: take.role === 'drums' });
-        head.dataset.on = '1';
-      } else if (head.dataset.on) {
-        Odd.roll.head(head, null);
-        delete head.dataset.on;
+        Odd.roll.head(els.head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: take.role === 'drums' });
+        els.head.dataset.on = '1';
+      } else if (els.head.dataset.on) {
+        Odd.roll.head(els.head, null);
+        delete els.head.dataset.on;
       }
     }
 
@@ -8304,40 +8506,42 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     } else if (pos != null && p.kind === 'section') {
       liveSection = p.id;
     }
-    for (const el of $$('[data-arr-progress]')) {
+    for (const el of els.arr) {
       const i = Number(el.dataset.arrProgress);
-      el.style.transform = 'scaleX(' + (i === liveArr ? frac : 0) + ')';
+      setStyle(el, 'transform', 'scaleX(' + (i === liveArr ? frac.toFixed(3) : 0) + ')');
     }
-    for (const el of $$('[data-section-col]')) el.classList.toggle('is-live', el.dataset.sectionCol === liveSection);
+    for (const el of els.cols) el.classList.toggle('is-live', el.dataset.sectionCol === liveSection);
 
     // lane lights
     if (tr && tr.lastHit && Odd.audio && Odd.audio.ctx) {
-      const now = Odd.audio.now();
-      for (const el of $$('[data-led]')) {
-        const hit = p ? tr.lastHit(el.dataset.led) : null;
+      const t = Odd.audio.now();
+      for (const el of els.leds) {
+        const hit = busy ? tr.lastHit(el.dataset.led) : null;
         let level = 0;
         if (hit) {
-          const age = now - hit.time;
+          const age = t - hit.time;
           level = age >= 0 ? Math.max(0, 1 - age / 0.28) * (0.5 + 0.5 * hit.v / 127) : 0;
         }
-        el.style.setProperty('--lit', level.toFixed(3));
+        setStyle(el, '--lit', level.toFixed(2));
       }
     }
+    meterFrame(els, false);
+  }
 
-    // meter
-    const meter = $('#meter');
-    if (meter && Odd.audio && Odd.audio.analyser && meter.clientWidth) {
-      const an = Odd.audio.analyser;
-      if (!meterBuf || meterBuf.length !== an.fftSize) meterBuf = new Float32Array(an.fftSize);
-      an.getFloatTimeDomainData(meterBuf);
-      let peak = 0;
-      for (let i = 0; i < meterBuf.length; i++) peak = Math.max(peak, Math.abs(meterBuf[i]));
-      drawMeter(meter, peak);
-    }
-    requestAnimationFrame(frame);
+  function meterFrame(els, quiet) {
+    const meter = els.meter;
+    if (!meter || !Odd.audio || !Odd.audio.analyser || !meter.clientWidth) return;
+    if (quiet && meterPeak < 0.002) return; // stopped and already drawn empty
+    const an = Odd.audio.analyser;
+    if (!meterBuf || meterBuf.length !== an.fftSize) meterBuf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(meterBuf);
+    let peak = 0;
+    for (let i = 0; i < meterBuf.length; i++) peak = Math.max(peak, Math.abs(meterBuf[i]));
+    drawMeter(meter, peak);
   }
 
   let meterPeak = 0;
+  let meterColors = null;
   function drawMeter(c, peak) {
     meterPeak = Math.max(peak, meterPeak * 0.92);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -8346,14 +8550,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    const cs = getComputedStyle(document.documentElement);
+    if (!meterColors) {
+      const cs = getComputedStyle(document.documentElement);
+      meterColors = { hot: cs.getPropertyValue('--tally'), on: cs.getPropertyValue('--keep'), off: cs.getPropertyValue('--line') };
+    }
     const segs = 16;
     const gap = Math.max(1, dpr);
     const sw = (w - gap * (segs - 1)) / segs;
     const lit = Math.round(Math.min(1, meterPeak * 1.15) * segs);
     for (let i = 0; i < segs; i++) {
       const hot = i >= segs - 2;
-      ctx.fillStyle = i < lit ? (hot ? cs.getPropertyValue('--tally') : cs.getPropertyValue('--keep')) : cs.getPropertyValue('--line');
+      ctx.fillStyle = i < lit ? (hot ? meterColors.hot : meterColors.on) : meterColors.off;
       ctx.fillRect(i * (sw + gap), 0, sw, h);
     }
   }
@@ -9048,6 +9255,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       D.toast(st.label + ': ' + app.session().bpm + ' BPM, lane sounds updated. New takes use this style.');
     },
     'swing-commit': () => persist(),
+    quality: (el) => {
+      const was = app.ui.playing;
+      const at = was && Odd.transport ? Odd.transport.position() : 0;
+      if (was) stop();
+      app.ws.prefs.quality = el.value;
+      Odd.audio.setQuality(el.value);
+      persist();
+      paint(['top']);
+      D.toast(Odd.audio.quality === 'light' ? 'Light sound: fewer layers per note, for phones and tablets.' : 'Full sound: every layer, for computers.');
+      if (was) play(was.kind, was.id, { startTick: was.kind === 'song' ? at : 0 });
+    },
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
     'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },
@@ -9196,7 +9414,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => paint(['booth', 'shelf', 'song']), 150);
     });
-    const themeChange = () => { Odd.roll.resetTokens(); paint(['booth', 'shelf', 'song']); };
+    const themeChange = () => { Odd.roll.resetTokens(); meterColors = null; paint(['booth', 'shelf', 'song']); };
     if (window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
       if (mq.addEventListener) mq.addEventListener('change', themeChange);
@@ -9211,6 +9429,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     document.addEventListener('visibilitychange', () => { if (document.hidden) flushAll(); });
     if (Odd.transport && Odd.transport.on) {
       Odd.transport.on('end', () => { app.ui.playing = null; currentSeq = null; syncPlayState(); });
+      Odd.transport.on('stall', onStall);
     }
   }
 
@@ -9328,6 +9547,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   function applyPrefs(pr) {
+    if (Odd.audio && Odd.audio.setQuality) Odd.audio.setQuality(pr.quality || 'auto');
     const b = app.ui.booth;
     if (pr.role && Odd.gen.ROLES.includes(pr.role)) b.role = pr.role;
     if ([1, 2, 4, 8, 16].includes(pr.bars)) b.bars = pr.bars;

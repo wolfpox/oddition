@@ -185,3 +185,16 @@ test('unknown patches resolve the same way everywhere', () => {
   assert.strictEqual(r({ patch: 'pad-glass', channel: 9 }), 'pad-glass');
   assert.strictEqual(r(null), 'keys');
 });
+
+test('sound quality: auto, light and full', () => {
+  const was = Odd.audio.qualitySetting;
+  try {
+    assert.strictEqual(Odd.audio.setQuality('light'), 'light');
+    assert.strictEqual(Odd.audio.quality, 'light');
+    assert.strictEqual(Odd.audio.setQuality('full'), 'full');
+    assert.strictEqual(Odd.audio.setQuality('nonsense'), Odd.audio.quality); // falls back to auto
+    assert.strictEqual(Odd.audio.qualitySetting, 'auto');
+  } finally {
+    Odd.audio.setQuality(was);
+  }
+});

@@ -125,6 +125,14 @@ Odd.transport.stop()
 Odd.transport.position()    // current tick
 ```
 
+Live sound has two qualities (`Odd.audio.setQuality('auto' | 'light' |
+'full')`). Light, the default on phones and tablets, drops the costliest layers
+of each patch, uses a mono reverb, fewer voices, control-rate filters, larger
+output buffers (`latencyHint: 'playback'`) and a 300 ms scheduling lookahead.
+The transport watches the audio clock: if it stops advancing for 2.5 s while
+playing, it stops and emits `stall`, and the app offers a restart on a fresh
+context.
+
 Offline rendering (WAV export) uses the same patches and effects:
 `Odd.audio.renderOfflineMany(seqs, opts, onEach)` renders several sequences
 in parallel, as many at once as a memory budget allows (one at a time on
