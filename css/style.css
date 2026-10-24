@@ -14,7 +14,7 @@
   --roll-black: rgba(0, 0, 0, 0.22);
   --ink: #ecebe6;
   --muted: #9a9ead;
-  --faint: #656b7b;
+  --faint: #8d92a2;
   --tally: #ff5b4e;
   --keep: #4fcb84;
   --focus: #8db6ff;
@@ -56,7 +56,7 @@
     --roll-black: rgba(26, 28, 34, 0.05);
     --ink: #1a1c22;
     --muted: #596070;
-    --faint: #8a909d;
+    --faint: #6a7080;
     --tally: #d93a2e;
     --keep: #1c9655;
     --focus: #2f66d6;
@@ -81,7 +81,7 @@
   --roll-black: rgba(26, 28, 34, 0.05);
   --ink: #1a1c22;
   --muted: #596070;
-  --faint: #8a909d;
+  --faint: #6a7080;
   --tally: #d93a2e;
   --keep: #1c9655;
   --focus: #2f66d6;
