@@ -843,8 +843,8 @@
     el.innerHTML = '<span class="toast-msg">Rendering audio…</span><span class="bar"><span></span></span>';
     host.appendChild(el);
     try {
-      const z = await Odd.exporter.stemsWav(s, (done, total, label) => {
-        $('.toast-msg', el).textContent = 'Rendering ' + label + ' (' + Math.min(done + 1, total) + ' of ' + total + ')';
+      const z = await Odd.exporter.stemsWav(s, (done, total) => {
+        $('.toast-msg', el).textContent = 'Rendering audio: ' + done + ' of ' + total + ' files done';
         $('.bar span', el).style.transform = 'scaleX(' + (done / total) + ')';
       });
       D.download(Odd.exporter.safeName(s.name) + ' - audio stems.zip', z.bytes, 'application/zip');

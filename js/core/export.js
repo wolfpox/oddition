@@ -131,36 +131,48 @@
   async function stemsWav(session, onProgress) {
     if (!Odd.audio || !Odd.audio.renderOffline) throw new Error('Audio rendering is not available here.');
     const song = R.songEvents(session);
-    const lanesWithNotes = session.lanes.filter((l) => song.events.some((e) => e.track === l.id));
+    const lanes = session.lanes.filter((l) => song.events.some((e) => e.track === l.id));
     const folder = safeName(session.name);
-    const files = [];
-    const total = lanesWithNotes.length + 1;
-    let done = 0;
-    const tick = (label) => { if (onProgress) onProgress(done, total, label); };
 
-    for (const lane of lanesWithNotes) {
-      tick(lane.name);
-      const evs = song.events.filter((e) => e.track === lane.id);
-      const tracks = R.tracksFor(session);
-      for (const k in tracks) { tracks[k].solo = false; tracks[k].mute = k !== lane.id; }
-      tracks[lane.id].mute = false;
-      const seq = R.sequence(session, evs, song.length, false);
-      seq.tracks = tracks;
-      const buf = await Odd.audio.renderOffline(seq, { tailSec: 2.5 });
-      files.push({
-        name: folder + '/' + String(files.length + 1).padStart(2, '0') + ' ' + safeName(lane.name) + '.wav',
-        data: Odd.audio.encodeWav(buf),
-      });
+    // one sequence per stem (only that lane audible), then the full mix
+    const seqs = lanes.map((lane) => {
+      const seq = R.sequence(session, song.events.filter((e) => e.track === lane.id), song.length, false);
+      for (const k in seq.tracks) { seq.tracks[k].solo = false; seq.tracks[k].mute = k !== lane.id; }
+      return seq;
+    });
+    seqs.push(R.sequence(session, song.events, song.length, false));
+    const labels = lanes.map((l) => l.name).concat(['Full mix']);
+    const total = seqs.length;
+    let done = 0;
+    if (onProgress) onProgress(0, total, labels[0]);
+
+    const opts = { tailSec: 2.5 };
+    // phones have less memory: render one at a time there
+    const small = typeof navigator !== 'undefined' && ((navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+      (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches));
+    if (small) opts.concurrency = 1;
+
+    let wavs;
+    const encode = (buf, i) => {
+      const bytes = Odd.audio.encodeWav(buf);
       done++;
+      if (onProgress) onProgress(done, total, done < total ? 'stems' : labels[i]);
+      return bytes;
+    };
+    if (Odd.audio.renderOfflineMany) {
+      wavs = await Odd.audio.renderOfflineMany(seqs, opts, encode);
+    } else {
+      wavs = [];
+      for (let i = 0; i < seqs.length; i++) wavs.push(encode(await Odd.audio.renderOffline(seqs[i], opts), i));
     }
-    tick('Full mix');
-    const mixSeq = R.sequence(session, song.events, song.length, false);
-    const mix = await Odd.audio.renderOffline(mixSeq, { tailSec: 2.5 });
-    files.push({ name: folder + '/' + folder + ' (mix).wav', data: Odd.audio.encodeWav(mix) });
+
+    const files = lanes.map((lane, i) => ({
+      name: folder + '/' + String(i + 1).padStart(2, '0') + ' ' + safeName(lane.name) + '.wav',
+      data: wavs[i],
+    }));
+    files.push({ name: folder + '/' + folder + ' (mix).wav', data: wavs[wavs.length - 1] });
     files.push({ name: folder + '/README.txt', data: readme(session, 'Audio rendered with Oddition\'s built-in synth at 44.1 kHz / 16-bit.') });
-    done++;
-    tick('Done');
-    return { bytes: Odd.zip.create(files), count: lanesWithNotes.length };
+    return { bytes: Odd.zip.create(files), count: lanes.length };
   }
 
   // ---------------- projects ----------------

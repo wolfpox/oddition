@@ -4647,36 +4647,48 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   async function stemsWav(session, onProgress) {
     if (!Odd.audio || !Odd.audio.renderOffline) throw new Error('Audio rendering is not available here.');
     const song = R.songEvents(session);
-    const lanesWithNotes = session.lanes.filter((l) => song.events.some((e) => e.track === l.id));
+    const lanes = session.lanes.filter((l) => song.events.some((e) => e.track === l.id));
     const folder = safeName(session.name);
-    const files = [];
-    const total = lanesWithNotes.length + 1;
-    let done = 0;
-    const tick = (label) => { if (onProgress) onProgress(done, total, label); };
 
-    for (const lane of lanesWithNotes) {
-      tick(lane.name);
-      const evs = song.events.filter((e) => e.track === lane.id);
-      const tracks = R.tracksFor(session);
-      for (const k in tracks) { tracks[k].solo = false; tracks[k].mute = k !== lane.id; }
-      tracks[lane.id].mute = false;
-      const seq = R.sequence(session, evs, song.length, false);
-      seq.tracks = tracks;
-      const buf = await Odd.audio.renderOffline(seq, { tailSec: 2.5 });
-      files.push({
-        name: folder + '/' + String(files.length + 1).padStart(2, '0') + ' ' + safeName(lane.name) + '.wav',
-        data: Odd.audio.encodeWav(buf),
-      });
+    // one sequence per stem (only that lane audible), then the full mix
+    const seqs = lanes.map((lane) => {
+      const seq = R.sequence(session, song.events.filter((e) => e.track === lane.id), song.length, false);
+      for (const k in seq.tracks) { seq.tracks[k].solo = false; seq.tracks[k].mute = k !== lane.id; }
+      return seq;
+    });
+    seqs.push(R.sequence(session, song.events, song.length, false));
+    const labels = lanes.map((l) => l.name).concat(['Full mix']);
+    const total = seqs.length;
+    let done = 0;
+    if (onProgress) onProgress(0, total, labels[0]);
+
+    const opts = { tailSec: 2.5 };
+    // phones have less memory: render one at a time there
+    const small = typeof navigator !== 'undefined' && ((navigator.deviceMemory && navigator.deviceMemory <= 4) ||
+      (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches));
+    if (small) opts.concurrency = 1;
+
+    let wavs;
+    const encode = (buf, i) => {
+      const bytes = Odd.audio.encodeWav(buf);
       done++;
+      if (onProgress) onProgress(done, total, done < total ? 'stems' : labels[i]);
+      return bytes;
+    };
+    if (Odd.audio.renderOfflineMany) {
+      wavs = await Odd.audio.renderOfflineMany(seqs, opts, encode);
+    } else {
+      wavs = [];
+      for (let i = 0; i < seqs.length; i++) wavs.push(encode(await Odd.audio.renderOffline(seqs[i], opts), i));
     }
-    tick('Full mix');
-    const mixSeq = R.sequence(session, song.events, song.length, false);
-    const mix = await Odd.audio.renderOffline(mixSeq, { tailSec: 2.5 });
-    files.push({ name: folder + '/' + folder + ' (mix).wav', data: Odd.audio.encodeWav(mix) });
+
+    const files = lanes.map((lane, i) => ({
+      name: folder + '/' + String(i + 1).padStart(2, '0') + ' ' + safeName(lane.name) + '.wav',
+      data: wavs[i],
+    }));
+    files.push({ name: folder + '/' + folder + ' (mix).wav', data: wavs[wavs.length - 1] });
     files.push({ name: folder + '/README.txt', data: readme(session, 'Audio rendered with Oddition\'s built-in synth at 44.1 kHz / 16-bit.') });
-    done++;
-    tick('Done');
-    return { bytes: Odd.zip.create(files), count: lanesWithNotes.length };
+    return { bytes: Odd.zip.create(files), count: lanes.length };
   }
 
   // ---------------- projects ----------------
@@ -4947,6 +4959,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function relT(base, dur) { return Math.min(base, 0.04 + dur * 0.8); }
   function attT(base, dur) { return Math.min(base, Math.max(0.003, dur * 0.45)); }
   function nyq(f) { return clamp(f, 20, 18000); }
+  function kRate(param) {
+    try { if (param && 'automationRate' in param) param.automationRate = 'k-rate'; } catch (e) { /* fixed-rate param */ }
+  }
 
   function lcg(seed) {
     let s = seed >>> 0;
@@ -4989,8 +5004,16 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function sweep(param, when, dur, base, peak, a, d, s, r) {
     a = Math.max(0.001, a);
     const hold = when + Math.max(dur, a + 0.004);
-    param.setValueAtTime(base, when);
-    param.linearRampToValueAtTime(peak, when + a);
+    if (a <= 0.006) {
+      // filter params run at control rate (one value per 128 samples), so a
+      // ramp this short would be skipped: open instantly, covering the start
+      // of the first block too
+      param.value = peak;
+      param.setValueAtTime(peak, when);
+    } else {
+      param.setValueAtTime(base, when);
+      param.linearRampToValueAtTime(peak, when + a);
+    }
     param.setTargetAtTime(base + (peak - base) * s, when + a, Math.max(0.004, d / 3));
     param.setTargetAtTime(base, hold, Math.max(0.004, r / 3));
   }
@@ -5030,28 +5053,33 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return b;
   }
 
-  function impulse(ctx, sec) {
+  /**
+   * mono reverb impulse: decaying, darkening noise plus a few early reflections.
+   * The decay is shaped for `shapeSec` but the buffer stops at `sec`; what is
+   * cut is below -56 dB, and convolution cost grows with buffer length.
+   */
+  function impulse(ctx, sec, shapeSec) {
     const sr = ctx.sampleRate;
     const len = Math.max(1, Math.floor(sr * sec));
-    const b = ctx.createBuffer(2, len, sr);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = b.getChannelData(ch);
-      const r = lcg(777 + ch * 31);
-      let lp = 0;
-      const fadeIn = Math.floor(sr * 0.004);
-      for (let i = 0; i < len; i++) {
-        const t = i / len;
-        const env = Math.exp(-6.4 * t) * (1 - t) * (i < fadeIn ? i / fadeIn : 1);
-        const alpha = 0.82 - 0.68 * t; // darker as it decays
-        lp += alpha * (r() - lp);
-        d[i] = lp * env;
-      }
-      const taps = [0.009, 0.015, 0.023, 0.031, 0.043, 0.057];
-      taps.forEach((tt, j) => {
-        const idx = Math.floor((tt + ch * 0.0027) * sr);
-        if (idx < len) d[idx] += (j % 2 ? -1 : 1) * (0.42 - j * 0.05);
-      });
+    const shapeLen = sr * (shapeSec || sec);
+    const b = ctx.createBuffer(1, len, sr);
+    const d = b.getChannelData(0);
+    const r = lcg(777);
+    let lp = 0;
+    const fadeIn = Math.floor(sr * 0.004);
+    const fadeOut = Math.floor(sr * 0.06);
+    for (let i = 0; i < len; i++) {
+      const t = Math.min(1, i / shapeLen);
+      const env = Math.exp(-6.4 * t) * (1 - t) * (i < fadeIn ? i / fadeIn : 1) * Math.min(1, (len - i) / fadeOut);
+      const alpha = 0.82 - 0.68 * t; // darker as it decays
+      lp += alpha * (r() - lp);
+      d[i] = lp * env;
     }
+    const taps = [0.009, 0.015, 0.023, 0.031, 0.043, 0.057];
+    taps.forEach((tt, j) => {
+      const idx = Math.floor(tt * sr);
+      if (idx < len) d[idx] += (j % 2 ? -1 : 1) * (0.42 - j * 0.05);
+    });
     return b;
   }
 
@@ -5066,7 +5094,22 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return env.waves[key];
   }
 
-  function buildEnv(ctx, offline) {
+  /**
+   * fx: { reverb, delay } (default both on). Offline renders leave out effects
+   * no patch sends to: the echo's feedback loop and the convolver keep
+   * processing long after the last note, which dominates render time.
+   */
+  function organWave(env) {
+    if (env.waves.organ) return env.waves.organ;
+    const re = new Float32Array(8);
+    const im = new Float32Array(8);
+    im[1] = 1; im[2] = 0.55; im[3] = 0.3; im[4] = 0.22; im[6] = 0.1;
+    env.waves.organ = env.ctx.createPeriodicWave(re, im, { disableNormalization: true });
+    return env.waves.organ;
+  }
+
+  function buildEnv(ctx, offline, fx) {
+    fx = fx || {};
     const env = {
       ctx, offline: !!offline, buses: new Map(), inputs: new WeakMap(), voices: [],
       chokes: new WeakMap(), noise: null, waves: {}, rand: lcg(99),
@@ -5093,49 +5136,67 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     clip.connect(analyser);
     analyser.connect(ctx.destination);
 
-    // shared reverb
+    // shared reverb: one mono convolution (stereo would cost twice as much),
+    // widened by sending the right side through a short delay and an allpass
     const revIn = ctx.createGain();
-    const revHp = ctx.createBiquadFilter();
-    revHp.type = 'highpass';
-    revHp.frequency.value = 200;
-    const preDelay = ctx.createDelay(0.2);
-    preDelay.delayTime.value = 0.02;
-    const conv = ctx.createConvolver();
-    conv.buffer = impulse(ctx, 2.2);
-    const revOut = ctx.createGain();
-    revOut.gain.value = 0.7;
-    revIn.connect(revHp);
-    revHp.connect(preDelay);
-    preDelay.connect(conv);
-    conv.connect(revOut);
-    revOut.connect(master);
+    revIn.channelCount = 1;
+    revIn.channelCountMode = 'explicit';
+    if (fx.reverb !== false) {
+      const revHp = ctx.createBiquadFilter();
+      revHp.type = 'highpass';
+      revHp.frequency.value = 200;
+      const preDelay = ctx.createDelay(0.2);
+      preDelay.delayTime.value = 0.02;
+      const conv = ctx.createConvolver();
+      conv.buffer = impulse(ctx, 1.7, 2.2);
+      const widen = ctx.createDelay(0.05);
+      widen.delayTime.value = 0.011;
+      const ap = ctx.createBiquadFilter();
+      ap.type = 'allpass';
+      ap.frequency.value = 900;
+      ap.Q.value = 0.6;
+      const merge = ctx.createChannelMerger(2);
+      const revOut = ctx.createGain();
+      revOut.gain.value = 0.7;
+      revIn.connect(revHp);
+      revHp.connect(preDelay);
+      preDelay.connect(conv);
+      conv.connect(merge, 0, 0);
+      conv.connect(widen);
+      widen.connect(ap);
+      ap.connect(merge, 0, 1);
+      merge.connect(revOut);
+      revOut.connect(master);
+    }
 
     // tempo-free stereo echo
     const delIn = ctx.createGain();
-    const delOut = ctx.createGain();
-    delOut.gain.value = 0.5;
-    [[0.27, -0.55], [0.39, 0.55]].forEach(([time, panv]) => {
-      const d = ctx.createDelay(1.5);
-      d.delayTime.value = time;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 2600;
-      const fb = ctx.createGain();
-      fb.gain.value = 0.34;
-      delIn.connect(d);
-      d.connect(lp);
-      lp.connect(fb);
-      fb.connect(d);
-      if (ctx.createStereoPanner) {
-        const p = ctx.createStereoPanner();
-        p.pan.value = panv;
-        lp.connect(p);
-        p.connect(delOut);
-      } else {
-        lp.connect(delOut);
-      }
-    });
-    delOut.connect(master);
+    if (fx.delay !== false) {
+      const delOut = ctx.createGain();
+      delOut.gain.value = 0.5;
+      [[0.27, -0.55], [0.39, 0.55]].forEach(([time, panv]) => {
+        const d = ctx.createDelay(1.5);
+        d.delayTime.value = time;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 2600;
+        const fb = ctx.createGain();
+        fb.gain.value = 0.34;
+        delIn.connect(d);
+        d.connect(lp);
+        lp.connect(fb);
+        fb.connect(d);
+        if (ctx.createStereoPanner) {
+          const p = ctx.createStereoPanner();
+          p.pan.value = panv;
+          lp.connect(p);
+          p.connect(delOut);
+        } else {
+          lp.connect(delOut);
+        }
+      });
+      delOut.connect(master);
+    }
 
     Object.assign(env, { master, comp, analyser, revIn, delIn });
     envs.set(ctx, env);
@@ -5315,6 +5376,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       filter(type, f, q) {
         const b = ctx.createBiquadFilter();
         b.type = type;
+        // control-rate cutoff: per-sample coefficient updates are the single
+        // biggest per-voice cost, and 128-sample steps are inaudible here
+        kRate(b.frequency);
+        kRate(b.Q);
+        kRate(b.gain);
         b.frequency.value = nyq(f);
         b.Q.value = q == null ? 0.7 : q;
         v.nodes.push(b);
@@ -5334,7 +5400,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         g.gain.setValueAtTime(0, when + (delay || 0));
         g.gain.linearRampToValueAtTime(depth, when + (delay || 0) + (ramp || 0.01));
         o.connect(g);
-        targets.forEach((t) => g.connect(t));
+        targets.forEach((t) => { kRate(t); g.connect(t); });
         return o;
       },
     };
@@ -5358,11 +5424,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'bass-saw'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 300, 8);
-      const o1 = k.osc('sawtooth', f, w);
+      const mix = k.gain(0.3);
+      mix.connect(lp);
       const o2 = k.osc('sawtooth', f, w);
       o2.detune.value = 8;
-      o1.connect(k.gain(0.3)).connect(lp);
-      o2.connect(k.gain(0.3)).connect(lp);
+      k.osc('sawtooth', f, w).connect(mix);
+      o2.connect(mix);
       k.osc('square', f / 2, w).connect(k.gain(0.16)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(160 + f * 1.5), nyq(450 + 3200 * vel), 0.004, 0.22, 0.15, 0.08);
       lp.connect(vca).connect(v.kill);
@@ -5429,18 +5496,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     },
     organ(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
-      const ratios = [0.5, 1, 2, 3, 4, 6];
-      const wts = [0.42, 1, 0.55, 0.3, 0.22, 0.1];
-      const lg = k.gain(0);
-      lg.gain.setValueAtTime(0, w);
-      lg.gain.linearRampToValueAtTime(9, w + 0.2);
-      k.osc('sine', 6.2, w).connect(lg);
-      ratios.forEach((r, i) => {
-        if (f * r > 12000) return;
-        const o = k.osc('sine', f * r, w);
-        lg.connect(o.detune);
-        o.connect(k.gain(wts[i] * 0.12)).connect(vca);
-      });
+      // drawbars 8', 4', 2 2/3', 2', 1 1/3' in one wave, plus the 16' sub
+      const bars = k.wave(organWave(v.env), f, w);
+      const sub = k.osc('sine', f * 0.5, w);
+      bars.connect(k.gain(0.12)).connect(vca);
+      sub.connect(k.gain(0.42 * 0.12)).connect(vca);
+      k.lfo(6.2, 9, [bars.detune, sub.detune], w, 0, 0.2);
       const hp = k.filter('highpass', 3000, 0.7);
       const cg = k.gain(0);
       hit(cg.gain, w, 0.05 * vel, 0.001, 0.004);
@@ -5451,10 +5512,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     stab(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 800, 3);
+      const mix = k.gain(0.2);
+      mix.connect(lp);
       [-14, 0, 13].forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
-        o.connect(k.gain(0.2)).connect(lp);
+        o.connect(mix);
       });
       k.osc('sawtooth', f * 2, w).connect(k.gain(0.08)).connect(lp);
       sweep(lp.frequency, w, dur, nyq(500 + f), nyq(2500 + 7000 * vel), 0.002, 0.16, 0.12, 0.08);
@@ -5464,10 +5527,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'pad-warm'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);
       const lp = k.filter('lowpass', 600, 1.2);
+      const mix = k.gain(0.2);
+      mix.connect(lp);
       [-11, 0, 10].forEach((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
-        o.connect(k.gain(0.2)).connect(lp);
+        o.connect(mix);
       });
       k.osc('triangle', f / 2, w).connect(k.gain(0.16)).connect(lp);
       const cutoff = Math.min(3000, 450 + f * 0.9 + 900 * vel);
@@ -5498,10 +5563,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const vca = k.gain(0);
       const lp = k.filter('lowpass', Math.min(9000, 1500 + 3000 * vel + f), 0.5);
       const hp = k.filter('highpass', 150, 0.5);
+      const mix = k.gain(0.16);
+      mix.connect(lp);
       const oscs = [-16, -5, 6, 15].map((dt) => {
         const o = k.osc('sawtooth', f, w);
         o.detune.value = dt;
-        o.connect(k.gain(0.16)).connect(lp);
+        o.connect(mix);
         return o;
       });
       k.lfo(5.3, 11, oscs.map((o) => o.detune), w, 0.3, 0.5);
@@ -5526,8 +5593,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const o2 = k.osc('sawtooth', f, w);
       o1.detune.value = -6;
       o2.detune.value = 6;
-      o1.connect(k.gain(0.26)).connect(lp);
-      o2.connect(k.gain(0.26)).connect(lp);
+      const mix = k.gain(0.26);
+      mix.connect(lp);
+      o1.connect(mix);
+      o2.connect(mix);
       sweep(lp.frequency, w, dur, nyq(1000 + f), nyq(1800 + 5000 * vel + f * 2), 0.005, 0.3, 0.35, 0.12);
       k.lfo(5.5, 12, [o1.detune, o2.detune], w, 0.25, 0.35);
       lp.connect(vca).connect(v.kill);
@@ -6000,17 +6069,28 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const lenSec = Math.max(0.05, length * spt) + Math.max(0, tail);
     const frames = Math.ceil(lenSec * sr);
     const ctx = new Off(2, frames, sr);
-    const env = buildEnv(ctx, true);
     const tracks = seq.tracks || {};
     const solo = Object.keys(tracks).some((k) => tracks[k] && tracks[k].solo);
 
     // Only audible notes become voices; muted tracks cost nothing.
-    const buses = {};
-    const notes = [];
+    const audible = [];
+    let wantRev = false;
+    let wantDel = false;
     for (const e of seq.events || []) {
       if (length && e.t >= length) continue;
       const tr = tracks[e.track] || { patch: 'keys', volume: 1 };
       if (tr.mute || (solo && !tr.solo)) continue;
+      if (tr.volume != null && !(tr.volume > 0)) continue;
+      const patch = PATCHES[tr.patch] ? tr.patch : (tr.channel === 9 ? 'kit-acoustic' : 'keys');
+      const sends = SENDS[patch] || [0, 0];
+      if (sends[0] > 0) wantRev = true;
+      if (sends[1] > 0) wantDel = true;
+      audible.push({ e, tr, patch });
+    }
+    const env = buildEnv(ctx, true, { reverb: wantRev, delay: wantDel });
+    const buses = {};
+    const notes = [];
+    for (const { e, tr, patch } of audible) {
       let b = buses[e.track];
       if (!b) {
         b = buses[e.track] = makeBus(env, String(e.track));
@@ -6020,7 +6100,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       notes.push({
         time: e.t * spt,
         dur: Math.max(0.01, (e.d || 1) * spt),
-        patch: tr.patch || (tr.channel === 9 ? 'kit-acoustic' : 'keys'),
+        patch,
         p: e.p,
         v: e.v,
         input: b.input,
@@ -6068,6 +6148,42 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     });
   }
 
+  /**
+   * Render several sequences a few at a time; each offline render runs on its
+   * own audio thread, so this is much faster than one after another.
+   * onEach(buffer, index) runs as each one finishes; when given, its return
+   * value is kept instead of the buffer, so big buffers can be dropped early.
+   * opts: renderOffline options plus { concurrency } (default up to 3).
+   * Jobs start heaviest first; results resolve in input order.
+   */
+  function renderOfflineMany(seqs, opts, onEach) {
+    opts = opts || {};
+    const list = Array.from(seqs || []);
+    const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+    const conc = Math.max(1, Math.min(list.length || 1, opts.concurrency || Math.min(3, Math.max(1, cores - 1))));
+    const results = new Array(list.length);
+    // heaviest first, so the longest render (usually the full mix) is not left for last
+    const order = list.map((q, i) => i)
+      .sort((a, b) => ((list[b].events || []).length - (list[a].events || []).length) || a - b);
+    let next = 0;
+    let failed = false;
+    const worker = async () => {
+      while (next < order.length && !failed) {
+        const i = order[next++];
+        try {
+          const buf = await renderOffline(list[i], opts);
+          results[i] = onEach ? await onEach(buf, i) : buf;
+        } catch (err) {
+          failed = true;
+          throw err;
+        }
+      }
+    };
+    const workers = [];
+    for (let i = 0; i < conc; i++) workers.push(worker());
+    return Promise.all(workers).then(() => results);
+  }
+
   function encodeWav(buf) {
     const chs = 2;
     const n = buf.length;
@@ -6112,6 +6228,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     setMasterVolume,
     getMasterVolume() { return masterVolume; },
     renderOffline,
+    renderOfflineMany,
     encodeWav,
   };
 
@@ -8510,8 +8627,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     el.innerHTML = '<span class="toast-msg">Rendering audio…</span><span class="bar"><span></span></span>';
     host.appendChild(el);
     try {
-      const z = await Odd.exporter.stemsWav(s, (done, total, label) => {
-        $('.toast-msg', el).textContent = 'Rendering ' + label + ' (' + Math.min(done + 1, total) + ' of ' + total + ')';
+      const z = await Odd.exporter.stemsWav(s, (done, total) => {
+        $('.toast-msg', el).textContent = 'Rendering audio: ' + done + ' of ' + total + ' files done';
         $('.bar span', el).style.transform = 'scaleX(' + (done / total) + ')';
       });
       D.download(Odd.exporter.safeName(s.name) + ' - audio stems.zip', z.bytes, 'application/zip');
