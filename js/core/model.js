@@ -1,0 +1,391 @@
+/* Oddition — workspace data model.
+ *
+ * workspace = { version, library: [part], sessions: [session], currentId, prefs }
+ * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
+ * lane      = { id, role, name, patch, volume, mute, solo, channel }
+ * section   = { id, name, bars, prog, transpose, slots: { [laneId]: slot } }
+ * slot      = { part (a copy), sourceId, oct, refit }
+ * arrangement = [sectionId, ...] in play order (a section may appear many times)
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+
+  const VERSION = 1;
+  const ROLE_ORDER = ['drums', 'bass', 'chords', 'pad', 'lead', 'arp'];
+  const ROLE_FALLBACK = {
+    drums: { label: 'Drums', short: 'DRM', base: null, defaultPatch: 'kit-808' },
+    bass: { label: 'Bass', short: 'BAS', base: 36, defaultPatch: 'bass-sub' },
+    chords: { label: 'Chords', short: 'CHD', base: 60, defaultPatch: 'epiano' },
+    pad: { label: 'Pad', short: 'PAD', base: 48, defaultPatch: 'pad-warm' },
+    lead: { label: 'Lead', short: 'LEAD', base: 72, defaultPatch: 'lead-square' },
+    arp: { label: 'Arp', short: 'ARP', base: 60, defaultPatch: 'pluck' },
+  };
+
+  const SESSION_NAMES = [
+    'Night Bus', 'Paper Moons', 'Static Garden', 'Low Tide', 'Glass Hours', 'Copper Rain',
+    'Slow Orbit', 'Velvet Signal', 'Late Ferry', 'Brick & Fog', 'Quiet Engine', 'Salt Light',
+    'Second Floor', 'Blue Hum', 'Field Notes', 'Afterimage', 'Rooftop Weather', 'Cold Neon',
+  ];
+
+  let counter = 0;
+  function uid(prefix) {
+    counter = (counter + 1) % 1296;
+    return prefix + '_' + Date.now().toString(36) + counter.toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function roleInfo(role) {
+    const info = Odd.gen && Odd.gen.roleInfo && Odd.gen.roleInfo[role];
+    return info || ROLE_FALLBACK[role] || ROLE_FALLBACK.lead;
+  }
+
+  function styleOf(id) {
+    if (Odd.styles && Odd.styles.get) return Odd.styles.get(id);
+    return {
+      id: 'lofi', label: 'Lo-fi', tempo: [76, 90], swing: 0.2, scales: ['minor', 'dorian'], rate: 1, vamp: false,
+      patches: {},
+    };
+  }
+
+  function patchFor(style, role) {
+    return (style.patches && style.patches[role]) || roleInfo(role).defaultPatch;
+  }
+
+  // ---------------- lanes ----------------
+
+  function nextChannel(session, role) {
+    if (role === 'drums') return 9;
+    const used = new Set(session.lanes.map((l) => l.channel));
+    for (let c = 0; c < 16; c++) {
+      if (c === 9) continue;
+      if (!used.has(c)) return c;
+    }
+    return 0;
+  }
+
+  function createLane(session, role, name) {
+    const style = styleOf(session.style);
+    const sameRole = session.lanes.filter((l) => l.role === role).length;
+    return {
+      id: uid('l'),
+      role,
+      name: name || roleInfo(role).label + (sameRole ? ' ' + (sameRole + 1) : ''),
+      patch: patchFor(style, role),
+      volume: role === 'pad' ? 0.62 : role === 'arp' ? 0.6 : 0.75,
+      mute: false,
+      solo: false,
+      channel: nextChannel(session, role),
+    };
+  }
+
+  function addLane(session, role) {
+    const lane = createLane(session, role);
+    // keep lanes grouped by role
+    let idx = -1;
+    session.lanes.forEach((l, i) => { if (l.role === role) idx = i; });
+    if (idx < 0) {
+      const order = ROLE_ORDER.indexOf(role);
+      idx = session.lanes.findIndex((l) => ROLE_ORDER.indexOf(l.role) > order) - 1;
+      if (idx < -1) idx = session.lanes.length - 1;
+    }
+    session.lanes.splice(idx + 1, 0, lane);
+    return lane;
+  }
+
+  function removeLane(session, laneId) {
+    session.lanes = session.lanes.filter((l) => l.id !== laneId);
+    for (const s of session.sections) delete s.slots[laneId];
+  }
+
+  function findLane(session, id) { return session.lanes.find((l) => l.id === id) || null; }
+
+  function laneForRole(session, role) { return session.lanes.find((l) => l.role === role) || null; }
+
+  // ---------------- sections ----------------
+
+  function newProgression(session, bars, rng) {
+    const style = styleOf(session.style);
+    return T.generateProgression(rng || Odd.rng.create(Odd.rng.newSeed()), {
+      scale: session.scale, bars, rate: style.rate || 1, vamp: !!style.vamp,
+    });
+  }
+
+  function createSection(session, opts) {
+    const o = opts || {};
+    const bars = o.bars || 8;
+    return {
+      id: uid('s'),
+      name: o.name || 'Section',
+      bars,
+      prog: o.prog ? T.fitProg(o.prog, bars) : newProgression(session, bars, o.rng),
+      transpose: 0,
+      slots: {},
+    };
+  }
+
+  function findSection(session, id) { return session.sections.find((s) => s.id === id) || null; }
+
+  const SECTION_NAMES = ['Intro', 'Verse', 'Chorus', 'Bridge', 'Drop', 'Break', 'Hook', 'Outro'];
+
+  function nextSectionName(session) {
+    const used = new Set(session.sections.map((s) => s.name));
+    for (const n of SECTION_NAMES) if (!used.has(n)) return n;
+    let i = 2;
+    while (used.has('Part ' + i)) i++;
+    return 'Part ' + i;
+  }
+
+  function addSection(session, opts) {
+    const section = createSection(session, Object.assign({ name: nextSectionName(session) }, opts));
+    session.sections.push(section);
+    session.arrangement.push(section.id);
+    return section;
+  }
+
+  function duplicateSection(session, id) {
+    const src = findSection(session, id);
+    if (!src) return null;
+    const copy = clone(src);
+    copy.id = uid('s');
+    copy.name = src.name + ' 2';
+    session.sections.splice(session.sections.indexOf(src) + 1, 0, copy);
+    const lastUse = session.arrangement.lastIndexOf(id);
+    session.arrangement.splice(lastUse >= 0 ? lastUse + 1 : session.arrangement.length, 0, copy.id);
+    return copy;
+  }
+
+  function removeSection(session, id) {
+    if (session.sections.length <= 1) return false;
+    session.sections = session.sections.filter((s) => s.id !== id);
+    session.arrangement = session.arrangement.filter((sid) => sid !== id);
+    return true;
+  }
+
+  function setSectionBars(session, section, bars) {
+    section.bars = bars;
+    section.prog = T.fitProg(section.prog, bars);
+  }
+
+  // ---------------- slots ----------------
+
+  function placePart(session, sectionId, laneId, part) {
+    const section = findSection(session, sectionId);
+    if (!section || !findLane(session, laneId)) return null;
+    const prev = section.slots[laneId];
+    const slot = {
+      part: clone(part),
+      sourceId: part.id || null,
+      oct: prev ? prev.oct || 0 : 0,
+      // imported clips already carry their own harmony, so play them as written
+      refit: part.imported ? false : prev ? prev.refit !== false : true,
+    };
+    section.slots[laneId] = slot;
+    return slot;
+  }
+
+  function clearSlot(session, sectionId, laneId) {
+    const section = findSection(session, sectionId);
+    if (section) delete section.slots[laneId];
+  }
+
+  // ---------------- arrangement ----------------
+
+  function moveArrangement(session, index, dir) {
+    const a = session.arrangement;
+    const j = index + dir;
+    if (index < 0 || index >= a.length || j < 0 || j >= a.length) return false;
+    [a[index], a[j]] = [a[j], a[index]];
+    return true;
+  }
+
+  function songBars(session) {
+    let bars = 0;
+    for (const sid of session.arrangement) {
+      const s = findSection(session, sid);
+      if (s) bars += s.bars;
+    }
+    return bars;
+  }
+
+  function songSeconds(session) {
+    return (songBars(session) * 4 * 60) / (session.bpm || 120);
+  }
+
+  // ---------------- sessions ----------------
+
+  function createSession(opts) {
+    const o = opts || {};
+    const rng = Odd.rng.create(o.seed != null ? o.seed : Odd.rng.newSeed());
+    const style = styleOf(o.style || (Odd.styles && Odd.styles.DEFAULT) || 'lofi');
+    const scale = o.scale || rng.pick(style.scales && style.scales.length ? style.scales : ['minor']);
+    const session = {
+      id: uid('ss'),
+      name: o.name || rng.pick(SESSION_NAMES),
+      style: style.id,
+      tonic: o.tonic != null ? o.tonic : rng.int(0, 11),
+      scale,
+      bpm: o.bpm || Math.round(rng.range(style.tempo[0], style.tempo[1])),
+      swing: style.swing || 0,
+      lanes: [],
+      sections: [],
+      arrangement: [],
+      created: Date.now(),
+      updated: Date.now(),
+    };
+    for (const role of ROLE_ORDER) session.lanes.push(createLane(session, role));
+
+    const verse = createSection(session, { name: 'Verse', bars: 8, rng: rng.fork('verse') });
+    let chorus = null;
+    for (let i = 0; i < 6; i++) {
+      chorus = createSection(session, { name: 'Chorus', bars: 8, rng: rng.fork('chorus' + i) });
+      if (T.formatProg(chorus.prog, scale) !== T.formatProg(verse.prog, scale)) break;
+    }
+    const intro = createSection(session, { name: 'Intro', bars: 4, prog: verse.prog });
+    session.sections = [intro, verse, chorus];
+    session.arrangement = [intro.id, verse.id, chorus.id, verse.id, chorus.id];
+    return session;
+  }
+
+  /** apply a style preset to an existing session: tempo, swing and lane sounds */
+  function applyStyle(session, styleId, rng) {
+    const style = styleOf(styleId);
+    const r = rng || Odd.rng.create(Odd.rng.newSeed());
+    session.style = style.id;
+    session.bpm = Math.round(r.range(style.tempo[0], style.tempo[1]));
+    session.swing = style.swing || 0;
+    for (const lane of session.lanes) lane.patch = patchFor(style, lane.role);
+  }
+
+  function duplicateSession(ws, id) {
+    const src = ws.sessions.find((s) => s.id === id);
+    if (!src) return null;
+    const copy = clone(src);
+    copy.id = uid('ss');
+    copy.name = src.name + ' (copy)';
+    copy.created = copy.updated = Date.now();
+    ws.sessions.splice(ws.sessions.indexOf(src) + 1, 0, copy);
+    return copy;
+  }
+
+  function removeSession(ws, id) {
+    if (ws.sessions.length <= 1) return false;
+    ws.sessions = ws.sessions.filter((s) => s.id !== id);
+    if (ws.currentId === id) ws.currentId = ws.sessions[0].id;
+    return true;
+  }
+
+  function currentSession(ws) {
+    return ws.sessions.find((s) => s.id === ws.currentId) || ws.sessions[0];
+  }
+
+  // ---------------- library (the shelf) ----------------
+
+  function stamp(part) {
+    const p = clone(part);
+    if (!p.id) p.id = uid('p');
+    if (!p.created) p.created = Date.now();
+    if (p.starred == null) p.starred = false;
+    if (!p.tags) p.tags = [];
+    return p;
+  }
+
+  function addToLibrary(ws, part) {
+    const existing = part.id && ws.library.find((p) => p.id === part.id);
+    if (existing) return existing;
+    const p = stamp(part);
+    ws.library.unshift(p);
+    return p;
+  }
+
+  function findPart(ws, id) { return ws.library.find((p) => p.id === id) || null; }
+
+  function removeFromLibrary(ws, id) {
+    ws.library = ws.library.filter((p) => p.id !== id);
+  }
+
+  /** how many slots across all sessions came from this shelf part */
+  function usageCount(ws, partId) {
+    let n = 0;
+    for (const s of ws.sessions) {
+      for (const sec of s.sections) {
+        for (const k in sec.slots) if (sec.slots[k].sourceId === partId) n++;
+      }
+    }
+    return n;
+  }
+
+  // ---------------- workspace ----------------
+
+  function createWorkspace(opts) {
+    const session = createSession(opts);
+    // `fresh` marks a workspace nobody has worked in yet; it never wins a sync
+    return { version: VERSION, library: [], sessions: [session], currentId: session.id, prefs: {}, fresh: true };
+  }
+
+  /** fill a session with starter parts so a first visit makes sound right away */
+  function fillStarter(ws, session, seed) {
+    if (!Odd.gen || !Odd.gen.generate) return;
+    const rng = Odd.rng.create(seed != null ? seed : Odd.rng.newSeed());
+    const plan = {
+      Intro: ['pad', 'arp'],
+      Verse: ['drums', 'bass', 'chords'],
+      Chorus: ['drums', 'bass', 'chords', 'pad', 'lead'],
+    };
+    for (const section of session.sections) {
+      for (const role of plan[section.name] || []) {
+        const lane = laneForRole(session, role);
+        if (!lane) continue;
+        const bars = 4;
+        const part = Odd.gen.generate({
+          role, style: session.style, seed: rng.int(1, 4294967295), bars,
+          tonic: session.tonic, scale: session.scale, prog: T.sliceProg(section.prog, 0, bars * T.BAR),
+          params: section.name === 'Chorus' ? { density: 0.62 } : {},
+        });
+        part.tags = ['starter'];
+        const stored = addToLibrary(ws, part);
+        placePart(session, section.id, lane.id, stored);
+      }
+    }
+  }
+
+  /** repair anything missing in loaded data */
+  function migrate(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.sessions) || !raw.sessions.length) return null;
+    const ws = raw;
+    ws.version = VERSION;
+    ws.library = Array.isArray(ws.library) ? ws.library.filter((p) => p && p.role && Array.isArray(p.notes)) : [];
+    ws.prefs = ws.prefs || {};
+    ws.sessions = ws.sessions.filter((s) => s && Array.isArray(s.sections) && s.sections.length);
+    if (!ws.sessions.length) return null;
+    for (const s of ws.sessions) {
+      s.lanes = Array.isArray(s.lanes) ? s.lanes : [];
+      s.arrangement = Array.isArray(s.arrangement) ? s.arrangement : [];
+      s.bpm = Math.max(30, Math.min(300, Number(s.bpm) || 100));
+      s.swing = Math.max(0, Math.min(0.6, Number(s.swing) || 0));
+      s.tonic = T.mod(Number(s.tonic) || 0, 12);
+      if (!T.SCALES[s.scale]) s.scale = 'minor';
+      for (const sec of s.sections) {
+        sec.slots = sec.slots || {};
+        sec.bars = sec.bars || 8;
+        sec.transpose = sec.transpose || 0;
+        sec.prog = T.fitProg(sec.prog || [], sec.bars);
+      }
+      const ids = new Set(s.sections.map((x) => x.id));
+      s.arrangement = s.arrangement.filter((id) => ids.has(id));
+    }
+    if (!ws.sessions.find((s) => s.id === ws.currentId)) ws.currentId = ws.sessions[0].id;
+    return ws;
+  }
+
+  Odd.model = {
+    VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
+    createLane, addLane, removeLane, findLane, laneForRole,
+    newProgression, createSection, findSection, addSection, duplicateSection, removeSection, setSectionBars,
+    placePart, clearSlot, moveArrangement, songBars, songSeconds,
+    createSession, applyStyle, duplicateSession, removeSession, currentSession,
+    stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
+    createWorkspace, fillStarter, migrate,
+  };
+})(globalThis.Odd = globalThis.Odd || {});

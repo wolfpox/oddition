@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oddition</title>
+<meta name="description" content="Procedural MIDI composer: audition generated stems, keep the ones you like, and build songs from them.">
+<meta name="color-scheme" content="dark light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,100..900&family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!--app:start-->
+<header class="topbar" id="topbar"></header>
+<main class="desk" id="desk">
+  <section class="panel booth" id="booth" aria-label="Audition booth"></section>
+  <section class="panel shelf" id="shelf" aria-label="Shelf"></section>
+  <section class="panel song" id="song" aria-label="Song"></section>
+</main>
+<nav class="tabs" id="tabs" aria-label="Views"></nav>
+<div id="overlay" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+<noscript><p style="padding:16px">Oddition needs JavaScript to run.</p></noscript>
+<!--app:end-->
+<!--scripts:start-->
+<script src="js/core/rng.js"></script>
+<script src="js/core/theory.js"></script>
+<script src="js/gen/styles.js"></script>
+<script src="js/gen/names.js"></script>
+<script src="js/gen/drums.js"></script>
+<script src="js/gen/bass.js"></script>
+<script src="js/gen/chords.js"></script>
+<script src="js/gen/pad.js"></script>
+<script src="js/gen/lead.js"></script>
+<script src="js/gen/arp.js"></script>
+<script src="js/gen/index.js"></script>
+<script src="js/core/render.js"></script>
+<script src="js/core/midi-file.js"></script>
+<script src="js/core/zip.js"></script>
+<script src="js/core/model.js"></script>
+<script src="js/core/export.js"></script>
+<script src="js/core/store.js"></script>
+<script src="js/audio/synth.js"></script>
+<script src="js/audio/webmidi.js"></script>
+<script src="js/audio/transport.js"></script>
+<script src="js/ui/dom.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/ui/roll.js"></script>
+<script src="js/ui/views.js"></script>
+<script src="js/app.js"></script>
+<!--scripts:end-->
+</body>
+</html>
