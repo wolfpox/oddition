@@ -20,7 +20,7 @@
       loopSong: false,
       playing: null,
       lastPlay: { kind: 'booth', id: null },
-      booth: { role: 'drums', bars: 4, context: true, takeNo: 0, takes: {} },
+      booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {} },
       shelf: { role: 'all', query: '', starred: false, sort: 'new' },
     },
   };
@@ -40,6 +40,26 @@
     const lane = M.findLane(s, app.ui.laneId);
     if (lane && lane.role === app.ui.booth.role) return lane;
     return M.laneForRole(s, app.ui.booth.role);
+  };
+
+  /**
+   * what the section already plays, for a new take to fit around (null when
+   * listening is off or the section is empty). The lane the take is for is
+   * left out: the take replaces it.
+   */
+  app.boothBand = () => {
+    if (!app.ui.booth.listen || !Odd.band) return null;
+    const s = app.session();
+    const sec = app.selectedSection();
+    const target = app.boothLane();
+    const lanes = [];
+    for (const lane of s.lanes) {
+      if (target && lane.id === target.id) continue;
+      const slot = sec.slots && sec.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      lanes.push({ role: lane.role, events: R.sectionEvents(s, sec, { only: lane.id, shape: false }) });
+    }
+    return Odd.band.hear(lanes, sec.bars * T.BAR, app.ui.booth.bars * T.BAR);
   };
 
   app.selectedSlot = () => ({ section: app.selectedSection(), lane: M.findLane(app.session(), app.ui.laneId) });
@@ -219,7 +239,7 @@
   function savePrefs() {
     const b = app.ui.booth;
     Object.assign(app.ws.prefs, {
-      role: b.role, bars: b.bars, context: b.context,
+      role: b.role, bars: b.bars, context: b.context, listen: b.listen,
       shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred },
       loopSong: app.ui.loopSong,
     });
@@ -514,6 +534,7 @@
       role, style: s.style, seed, bars: b.bars,
       tonic: T.mod(s.tonic + (sec.transpose || 0), 12), scale: s.scale,
       prog: T.sliceProg(sec.prog, 0, b.bars * T.BAR), params,
+      band: app.boothBand(),
     });
     part.id = M.uid('p');
     addTake(part, o.replace);
@@ -543,7 +564,8 @@
   function vary() {
     const cur = app.currentTake();
     if (!cur) return newTake();
-    const v = Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35 });
+    const band = cur.bars === app.ui.booth.bars ? app.boothBand() : null;
+    const v = Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35, band });
     v.id = M.uid('p');
     v.parent = cur.id;
     addTake(v);
@@ -1350,6 +1372,7 @@
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
     'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },
+    'booth-listen': (el) => { app.ui.booth.listen = el.checked; savePrefs(); rerollTake(); },
     'booth-context': (el) => { app.ui.booth.context = el.checked; savePrefs(); refreshIfAudition(); },
     param: (el) => {
       const role = app.ui.booth.role;
@@ -1640,6 +1663,7 @@
     if (pr.role && Odd.gen.ROLES.includes(pr.role)) b.role = pr.role;
     if ([1, 2, 4, 8, 16].includes(pr.bars)) b.bars = pr.bars;
     if (pr.context != null) b.context = !!pr.context;
+    if (pr.listen != null) b.listen = !!pr.listen;
     if (pr.shelf) Object.assign(app.ui.shelf, pr.shelf, { query: '' });
     app.ui.loopSong = !!pr.loopSong;
   }

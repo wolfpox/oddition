@@ -452,6 +452,11 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
   overflow-wrap: anywhere;
 }
 .take-meta { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.take-heard {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.35;
+}
+.take-heard .ico { flex: none; position: relative; top: 2px; }
 .screen {
   position: relative;
   height: 210px;

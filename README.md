@@ -51,6 +51,24 @@ note moves to fit the chord under it. A one-bar bass riff kept over the verse
 will follow the chorus progression on its own. Turn **Fit** off on a slot to
 keep a part exactly as written.
 
+### Takes listen to the section
+
+With **Listen to the section** on (in the booth, next to Play with the
+section), a new take hears the parts already in the section it is
+auditioned over and fits around them:
+
+- The bass puts its notes on the kick drum, or plays between the kicks in
+  house and techno. New drums lean their kick onto the bass.
+- A busy section gets sparser takes; a near-empty one gets slightly busier
+  ones. Ambient stays sparse.
+- Chords, pad, lead and arp move an octave if another part already crowds
+  their register (unless you set the Octave control yourself).
+- The arp and chords leave room while the lead plays and answer in its rests.
+
+The booth says what a take did under its name ("Locks to the kick"). Only
+new takes listen: parts you kept never change. Turn it off to hear takes
+written on their own.
+
 ### Chords from outside the key
 
 Sections can use chords that the key doesn't contain. Type them in the chord

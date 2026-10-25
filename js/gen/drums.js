@@ -48,17 +48,38 @@
     const lanes = S.lanes.map((l) => Object.assign({}, l, { cells: parseGrid(l.grid, u.steps) }));
     const coreBars = lanes.some((l) => l.cells.length > 16) ? 2 : 1;
 
+    // listening: the kick leans onto the bass (or away from it in styles
+    // where the bass plays between the kicks)
+    const B = Odd.band;
+    const lock = ctx.band && B && ctx.band.bassOn.some((x) => x > 0) ? B.lockOf(ctx.styleId) : 0;
+    const bassAt = lock ? B.fold(ctx.band.bassOn, coreBars * 16) : null;
+    let leaned = 0;
+    function kickProb(cell, barIdx, s) {
+      const b = bassAt[(barIdx * 16 + s) % bassAt.length];
+      if (lock > 0) return b > 0 ? Math.min(0.97, cell.prob + lock * 0.5 * b) : cell.prob * (1 - lock * 0.4);
+      return b > 0 ? cell.prob * (1 + lock * b) : cell.prob;
+    }
+
     // --- core groove: per bar, a Map step -> { lane, v } list
     function sampleBar(barIdx, rng, baseBar, mutRate) {
       const hits = [];
       for (const lane of lanes) {
         for (let s = 0; s < 16; s++) {
           const cell = lane.cells[(barIdx * 16 + s) % lane.cells.length];
-          if (cell.prob <= 0) continue;
+          if (cell.prob <= 0) {
+            // a kick under a strong bass note the grid leaves empty
+            if (lock > 0 && lane.kick && !baseBar && s % 2 === 0 && bassAt[(barIdx * 16 + s) % bassAt.length] > 0.5 && rng.chance(lock * 0.3)) {
+              hits.push({ lane, step: s, v: laneVelocity(lane, { accent: false, anchor: false }, s), sub: 0 });
+              leaned++;
+            }
+            continue;
+          }
           let on;
+          const prob = lock && lane.kick && !cell.anchor ? kickProb(cell, barIdx, s) : cell.prob;
           if (cell.anchor) on = true;
           else if (baseBar && !rng.chance(mutRate)) on = baseBar.some((h) => h.lane === lane && h.step === s);
-          else on = rng.chance(Math.min(0.97, cell.prob * mult));
+          else on = rng.chance(Math.min(0.97, prob * mult));
+          if (on && prob > cell.prob) leaned++;
           if (on) hits.push({ lane, step: s, v: laneVelocity(lane, cell, s), sub: 0 });
         }
       }
@@ -202,6 +223,7 @@
     }
     if (bars >= 4 && fillRng.chance(S.crash * (0.6 + fills * 0.6))) push(0, CRASH, 96, BEAT * 2);
 
+    if (leaned) ctx.heard.push(lock > 0 ? 'Kick leans on the bass' : 'Kick keeps clear of the bass');
     return notes;
   }
 

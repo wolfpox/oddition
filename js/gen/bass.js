@@ -115,6 +115,13 @@
       }
     }
 
+    // listening: lock onto the section's kick, or play between the kicks
+    const B = Odd.band;
+    const lock = ctx.band && B ? B.lockOf(ctx.styleId) : 0;
+    const hearKick = !!(lock && ctx.band.kick.some((x) => x > 0.5));
+    const rLock = hearKick ? ctx.rngFor('listen') : null;
+    let locked = 0;
+
     const notes = [];
     let prevPitch = pitch(rootFor(occ[0]));
     for (let b = 0; b < bars; b++) {
@@ -139,7 +146,17 @@
         }
       }
 
-      for (const on of onsets) {
+      let bar = onsets;
+      if (hearKick) {
+        const kick = [];
+        for (let s = 0; s < 16; s++) kick.push(ctx.band.kick[(b * 16 + s) % ctx.band.steps]);
+        const isChange = (step) => occ.some((o) => o.start === barStart + step * STEP);
+        const r = B.lockBass(onsets, kick, lock, rLock, isChange);
+        bar = r.onsets;
+        locked += r.moved;
+      }
+
+      for (const on of bar) {
         const t = barStart + on.step * STEP;
         if (t >= total) continue;
         const o = occAt(t);
@@ -157,6 +174,7 @@
     }
 
     notes.sort((a, b) => a.t - b.t);
+    if (locked) ctx.heard.push(lock > 0 ? 'Locks to the kick' : 'Plays between the kicks');
 
     // 808 slides: a short octave pickup before some long notes
     if (S.glide && complexity > 0.2) {

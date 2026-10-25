@@ -26,6 +26,7 @@ js/core/theory.js     scales, degrees, progressions     Odd.theory
 js/gen/styles.js      genre presets                     Odd.styles
 js/gen/names.js       part names                        Odd.gen (names)
 js/gen/drums.js ...   one file per role                 Odd.gen.roles.<role>
+js/gen/band.js        what a section already plays      Odd.band
 js/gen/index.js       generate / vary entry points      Odd.gen
 js/core/shape.js      energy, transitions, human feel   Odd.shape
 js/core/render.js     part -> playable events (refit)   Odd.render
@@ -129,6 +130,41 @@ accidental is deliberate and kept. Key and mode changes come for free:
 degrees are rendered in the target key and scale (`Odd.model.setScale`
 re-reads chromatic chords so they keep sounding the same). Drums are never
 shifted. A part shorter than its section loops.
+
+## Listening (`Odd.band`)
+
+A take can be generated against what its section already plays.
+`Odd.band.hear(lanes, sectionLength, takeLength)` takes the other lanes'
+rendered events (`[{ role, events }]`, unshaped) and lays them over the
+take's length (a longer section folds onto the take, a shorter one loops
+under it):
+
+```js
+{ total, steps, roles,
+  kick[], bassOn[],   // per 16th step: share of passes with a kick / bass onset
+  lead[],             // per step: share of passes where the lead sounds
+  load,               // how busy the section is (pads and drums excluded)
+  notes }             // pitched events, for register checks
+```
+
+Pass it as `req.band` to `Odd.gen.generate` (or `opts.band` to `vary`); a
+band heard over another length is ignored. With a band:
+
+- `balance` nudges density down when `load` is high, up a little when low
+  (per-style quiet threshold). `part.params` keeps the value asked for.
+- bass runs each bar's onsets through `lockBass` (`Odd.band.LOCK` per style:
+  positive locks to the kick, negative plays between kicks); drums raise the
+  kick's odds where the bass plays.
+- `answer` thins arp and chord hits under a busy lead (never on a chord
+  change or a beat) and lifts those in its rests.
+- `clearRegister` moves chords, pad, lead or arp an octave (via
+  `part.base`) when their notes overlap other parts' in time and pitch,
+  unless the Octave param is set.
+
+Each change adds a line to `part.heard`. Listening uses its own random
+stream (`listen`), so the rest of the take stays what the seed gives.
+The booth builds the band with `app.boothBand()`, leaving out the lane the
+take is for.
 
 ## Song shape (`Odd.shape`)
 

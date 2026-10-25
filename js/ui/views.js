@@ -193,6 +193,7 @@
           '<h3 class="take-name">' + esc(take.name) + '</h3>' +
           '<p class="take-meta">' + esc(roleLabel(take.role)) + ' · ' + take.bars + (take.bars === 1 ? ' bar' : ' bars') + ' · ' +
             esc(Odd.model.styleOf(take.style).label) + ' · ' + esc(keyName(s, sec)) + ' · ' + r.events.length + ' notes</p>' +
+          (take.heard && take.heard.length ? '<p class="take-heard" title="How this take fits the parts already in the section">' + icon('headphones', 'ico-xs') + esc(take.heard.join(' · ')) + '</p>' : '') +
         '</div>' +
         '<div class="screen" draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)">' +
           rollSlot(rolls, { events: r.events, length: r.length, drums: take.role === 'drums', role: take.role, chords: r.chords }, 'roll-base') +
@@ -251,6 +252,7 @@
           '<span class="place-target">in <strong>' + esc(sec.name) + '</strong> › ' + laneSel + '</span>' +
         '</div>' +
         '<label class="toggle"><input type="checkbox" id="b-context" data-change="booth-context"' + (b.context ? ' checked' : '') + '><span>Play with the section</span></label>' +
+        '<label class="toggle" title="New takes hear the parts already in the section: bass locks to the kick, busy sections get sparser takes, crowded octaves are avoided, the arp leaves room for the lead"><input type="checkbox" id="b-listen" data-change="booth-listen"' + (b.listen ? ' checked' : '') + '><span>Listen to the section</span></label>' +
         '<label class="inline-fld"><span class="sr-only">Length</span><select id="b-bars" data-change="booth-bars">' + barsOpts + '</select></label>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-act="take-midi"' + (take ? '' : ' disabled') + ' title="Download this take as a MIDI file">' + icon('download', 'ico-sm') + '<span>.mid</span></button>' +
       '</div>' +

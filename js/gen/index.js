@@ -1,7 +1,10 @@
 /* Oddition — generator entry points.
  *
- *   Odd.gen.generate(req) -> part     req: { role, style, seed, bars, tonic, scale, prog, params, seeds? }
- *   Odd.gen.vary(part, { seed, amount }) -> part
+ *   Odd.gen.generate(req) -> part     req: { role, style, seed, bars, tonic, scale, prog, params, seeds?, band? }
+ *   Odd.gen.vary(part, { seed, amount, band? }) -> part
+ *
+ * `band` (from Odd.band.hear) is what the section already plays; a take
+ * generated with it fits around the other parts (see js/gen/band.js).
  *
  * Each role module (js/gen/<role>.js) registers Odd.gen.roles[role] =
  *   { aspects: [...], params: [...], generate(ctx) -> notes }
@@ -87,16 +90,27 @@
     }
     const seed = (req.seed == null ? R.newSeed() : req.seed) >>> 0;
     const info = roleInfo[role];
+    const total = bars * T.BAR;
+    // the band only counts if it was heard over this take's length
+    const B = Odd.band;
+    const band = B && req.band && req.band.steps === total / T.STEP ? req.band : null;
+    const heard = [];
+    const asked = Object.assign({}, params);
+    if (band) {
+      const b = B.balance(role, params.density, band, Odd.styles.get(req.style).id);
+      params.density = b.density;
+      if (b.note) heard.push(b.note);
+    }
     // generators write at the role's normal register; the octave setting then
     // moves the finished part by whole octaves (they aim at fixed pitch ranges,
     // so a shifted base during generation would be undone)
     const base = info.base;
     const shift = info.base == null ? 0 : 12 * clamp(Math.round(params.octave || 0), -3, 3);
-    const total = bars * T.BAR;
     const seeds = {};
     const given = req.seeds || {};
     const ctx = {
       role, mod, bars, total, styleId, style, tonic, scale, prog, params, seed, base, shift, seeds,
+      band, heard, asked,
       occ: occurrences(prog, total, scale),
       rngFor(aspect) {
         let s = given[aspect];
@@ -241,23 +255,40 @@
 
   function generate(req) {
     const ctx = makeCtx(req);
-    const raw = ctx.mod.generate(ctx);
+    let raw = ctx.mod.generate(ctx);
+    const B = Odd.band;
+    const changesAt = new Set(ctx.occ.map((o) => o.start));
+    if (ctx.band) {
+      const a = B.answer(ctx.role, raw, ctx.band, ctx.rngFor('listen'), (t) => changesAt.has(t));
+      raw = a.notes;
+      if (a.note) ctx.heard.push(a.note);
+    }
     const notes = finalize(raw, ctx);
+    // out of the way of the other parts' register (unless an octave was asked for)
+    let lift = 0;
+    if (ctx.band && ctx.base != null && !ctx.shift) {
+      const evs = notes.map((n) => ({ t: n.t, d: n.d, p: ctx.pitch(n.deg, n.acc) }));
+      const r = B.clearRegister(ctx.role, evs, ctx.band);
+      lift = r.shift;
+      if (r.note) ctx.heard.push(r.note);
+    }
     // make sure every aspect seed is recorded, even ones a generator skipped this time
     for (const a of ctx.mod.aspects) if (ctx.seeds[a] == null) ctx.rngFor(a);
     const nameRng = ctx.rngFor('name');
-    return {
+    const part = {
       role: ctx.role,
       style: ctx.styleId,
       seed: ctx.seed,
       seeds: Object.assign({}, ctx.seeds),
       bars: ctx.bars,
-      params: Object.assign({}, ctx.params),
+      params: Object.assign({}, ctx.asked),
       ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => Object.assign(T.chordOnly(c), { beats: c.beats })) },
-      base: ctx.base == null ? null : ctx.base + ctx.shift,
+      base: ctx.base == null ? null : ctx.base + ctx.shift + lift,
       notes,
       name: gen.name(ctx.role, nameRng, ctx.styleId),
     };
+    if (ctx.heard.length) part.heard = ctx.heard.slice();
+    return part;
   }
 
   function sameNotes(a, b) {
@@ -301,6 +332,7 @@
         prog: part.ctx.prog,
         params: part.params,
         seeds,
+        band: o.band,
       });
       if (!sameNotes(result.notes, part.notes)) break;
       count = Math.min(aspects.length, count + 1);
