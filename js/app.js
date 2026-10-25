@@ -1249,6 +1249,13 @@
       D.toast(Odd.audio.quality === 'light' ? 'Light sound: fewer layers per note, for phones and tablets.' : 'Full sound: every layer, for computers.');
       if (was) play(was.kind, was.id, { startTick: was.kind === 'song' ? at : 0 });
     },
+    'section-bars': (el) => {
+      const s = app.session();
+      const sec = M.findSection(s, el.dataset.section);
+      const bars = Number(el.value);
+      if (!sec || ![1, 2, 4, 8, 16].includes(bars) || bars === sec.bars) return;
+      commit('Change section length', () => { M.setSectionBars(s, sec, bars); }, ['top', 'booth', 'song']);
+    },
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
     'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },

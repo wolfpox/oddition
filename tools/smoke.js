@@ -93,6 +93,12 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   ok(lit, 'lane lights flicker');
   ok(await page.evaluate(() => document.querySelectorAll('.nrg-btn').length === Odd.app.session().sections.length), 'sections show energy');
   ok(await page.evaluate(() => Odd.render.songEvents(Odd.app.session()).markers.every((m) => typeof m.energy === 'number')), 'song plan has energy');
+  const verseBars = await page.evaluate(() => { const v = Odd.app.session().sections.find((x) => x.name === 'Verse'); return { id: v.id, song: Odd.model.songBars(Odd.app.session()) }; });
+  await page.selectOption('#sb-' + verseBars.id, '16');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate((id) => { const v = Odd.app.session().sections.find((x) => x.id === id); return v.bars === 16 && Odd.theory.progBeats(v.prog) === 64; }, verseBars.id), 'bars select changes section length');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(out, 'flow-song-playing.png') });
 
   // select a cell and swap
