@@ -177,3 +177,16 @@ test('variant names count up', () => {
   assert.strictEqual(Odd.gen.variantName('Dusty Pocket'), 'Dusty Pocket II');
   assert.strictEqual(Odd.gen.variantName('Dusty Pocket II'), 'Dusty Pocket III');
 });
+
+test('the octave setting moves every pitched role by whole octaves', () => {
+  const prog = [{ deg: 0, beats: 4 }, { deg: 5, beats: 4 }];
+  for (const role of ['bass', 'chords', 'pad', 'lead', 'arp']) {
+    const at = (octave) => {
+      const p = Odd.gen.generate({ role, style: 'lofi', seed: 42, bars: 2, tonic: 0, scale: 'minor', prog, params: { octave } });
+      return p.notes.map((n) => T.pitchOf(n.deg, n.acc, 0, 'minor', p.base));
+    };
+    const mid = at(0);
+    assert.deepStrictEqual(at(1), mid.map((p) => p + 12), role + ' up');
+    assert.deepStrictEqual(at(-1), mid.map((p) => p - 12), role + ' down');
+  }
+});

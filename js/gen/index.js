@@ -79,12 +79,16 @@
     }
     const seed = (req.seed == null ? R.newSeed() : req.seed) >>> 0;
     const info = roleInfo[role];
-    const base = info.base == null ? null : info.base + 12 * clamp(Math.round(params.octave || 0), -3, 3);
+    // generators write at the role's normal register; the octave setting then
+    // moves the finished part by whole octaves (they aim at fixed pitch ranges,
+    // so a shifted base during generation would be undone)
+    const base = info.base;
+    const shift = info.base == null ? 0 : 12 * clamp(Math.round(params.octave || 0), -3, 3);
     const total = bars * T.BAR;
     const seeds = {};
     const given = req.seeds || {};
     const ctx = {
-      role, mod, bars, total, styleId, style, tonic, scale, prog, params, seed, base, seeds,
+      role, mod, bars, total, styleId, style, tonic, scale, prog, params, seed, base, shift, seeds,
       occ: occurrences(prog, total),
       rngFor(aspect) {
         let s = given[aspect];
@@ -218,7 +222,7 @@
       bars: ctx.bars,
       params: Object.assign({}, ctx.params),
       ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => ({ deg: c.deg, beats: c.beats })) },
-      base: ctx.base,
+      base: ctx.base == null ? null : ctx.base + ctx.shift,
       notes,
       name: gen.name(ctx.role, nameRng, ctx.styleId),
     };
