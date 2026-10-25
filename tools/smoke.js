@@ -46,6 +46,7 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.keyboard.press('k');
   await page.waitForTimeout(300);
   ok((await shelfCount()) === n0 + 1, 'keep adds to shelf');
+  ok(await page.evaluate(() => Odd.app.currentTake().id) === t2, 'keep leaves the take in the booth');
 
   // vary
   const before = await page.evaluate(() => Odd.app.currentTake().id);

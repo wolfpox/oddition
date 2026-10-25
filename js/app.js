@@ -20,7 +20,7 @@
       loopSong: false,
       playing: null,
       lastPlay: { kind: 'booth', id: null },
-      booth: { role: 'drums', bars: 4, context: true, autoNext: true, takeNo: 0, takes: {} },
+      booth: { role: 'drums', bars: 4, context: true, takeNo: 0, takes: {} },
       shelf: { role: 'all', query: '', starred: false, sort: 'new' },
     },
   };
@@ -219,7 +219,7 @@
   function savePrefs() {
     const b = app.ui.booth;
     Object.assign(app.ws.prefs, {
-      role: b.role, bars: b.bars, context: b.context, autoNext: b.autoNext,
+      role: b.role, bars: b.bars, context: b.context,
       shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred },
       loopSong: app.ui.loopSong,
     });
@@ -568,6 +568,7 @@
     const already = M.findPart(app.ws, cur.id);
     if (already && !place) { D.toast('“' + cur.name + '” is already on the shelf.'); return; }
     let laneName = '';
+    const from = snapshotTake();
     commit(place ? 'Keep and place' : 'Keep', () => {
       const stored = M.addToLibrary(app.ws, cur);
       if (place) {
@@ -579,11 +580,93 @@
       }
     });
     flashKeep();
+    // the take stays in the booth; a copy of it flies to where it went
+    flyTake(from, place ? keepTargetCell(sec.id, app.ui.laneId) : keepTargetShelf(cur.id));
     if (place) D.toast('Placed “' + cur.name + '” in ' + sec.name + ' › ' + laneName, { action: { label: 'Undo', run: undo } });
-    else {
-      D.toast('Kept “' + cur.name + '” on the shelf', { action: { label: 'Undo', run: undo } });
-      if (app.ui.booth.autoNext) newTake();
+    else D.toast('Kept “' + cur.name + '” on the shelf', { action: { label: 'Undo', run: undo } });
+  }
+
+  /** the booth's piano roll as an image, with where it sits on screen */
+  function snapshotTake() {
+    const screen = $('.booth .screen');
+    const canvas = screen && $('canvas.roll-base', screen);
+    if (!screen || !canvas) return null;
+    const rect = screen.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    let src = null;
+    try { src = canvas.toDataURL(); } catch (e) { /* draw nothing then */ }
+    return { rect, src, role: app.ui.booth.role };
+  }
+
+  function visible(el) {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+  }
+
+  /** the new shelf card, or the shelf heading, or (phones) the Shelf tab */
+  function keepTargetShelf(partId) {
+    const card = $('.shelf .card[data-part="' + partId + '"]');
+    if (visible(card)) return { el: card, land: card, hide: true }; // the copy becomes the card
+    const title = $('.shelf .panel-title');
+    if (visible(title)) return { el: title, land: card || title };
+    const tab = $('[data-act="tab"][data-tab="shelf"]');
+    return visible(tab) ? { el: tab, land: tab } : null;
+  }
+
+  function keepTargetCell(sectionId, laneId) {
+    const cell = $('.cell[data-section="' + sectionId + '"][data-lane="' + laneId + '"]');
+    if (visible(cell)) return { el: cell, land: cell };
+    const tab = $('[data-act="tab"][data-tab="song"]');
+    return visible(tab) ? { el: tab, land: tab } : null;
+  }
+
+  function landed(el) {
+    if (!el) return;
+    el.classList.remove('just-kept');
+    void el.offsetWidth;
+    el.classList.add('just-kept');
+    setTimeout(() => el.classList.remove('just-kept'), 900);
+  }
+
+  function flyTake(from, to) {
+    if (!to) return;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!from || reduce || !document.body.animate) { landed(to.land); return; }
+    const end = to.el.getBoundingClientRect();
+    const a = from.rect;
+    const fly = document.createElement('div');
+    fly.className = 'take-fly';
+    fly.dataset.role = from.role;
+    fly.setAttribute('aria-hidden', 'true');
+    if (from.src) {
+      const img = document.createElement('img');
+      img.src = from.src;
+      img.alt = '';
+      fly.appendChild(img);
     }
+    Object.assign(fly.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+    document.body.appendChild(fly);
+    // land centred on the target, scaled to its width (or a small chip for tiny targets)
+    const scale = Math.max(0.12, Math.min(1, end.width / a.width));
+    const dx = end.left + end.width / 2 - (a.left + a.width / 2);
+    const dy = end.top + end.height / 2 - (a.top + a.height / 2);
+    const lift = Math.min(80, Math.abs(dx) * 0.15 + 30);
+    const hidden = to.hide ? to.el : null;
+    if (hidden) hidden.style.visibility = 'hidden';
+    const anim = fly.animate([
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: 'translate(0, -6px) scale(0.92)', opacity: 1, offset: 0.18 },
+      { transform: 'translate(' + dx * 0.55 + 'px, ' + (dy * 0.55 - lift) + 'px) scale(' + (0.92 + scale) / 2 + ')', opacity: 1, offset: 0.6 },
+      { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(' + scale + ')', opacity: 0.85 },
+    ], { duration: 620, easing: 'cubic-bezier(0.45, 0, 0.25, 1)' });
+    const done = () => {
+      fly.remove();
+      if (hidden) hidden.style.visibility = '';
+      landed(to.land);
+    };
+    anim.onfinish = done;
+    anim.oncancel = done;
   }
 
   function flashKeep() {
@@ -1549,7 +1632,6 @@
     if (pr.role && Odd.gen.ROLES.includes(pr.role)) b.role = pr.role;
     if ([1, 2, 4, 8, 16].includes(pr.bars)) b.bars = pr.bars;
     if (pr.context != null) b.context = !!pr.context;
-    if (pr.autoNext != null) b.autoNext = !!pr.autoNext;
     if (pr.shelf) Object.assign(app.ui.shelf, pr.shelf, { query: '' });
     app.ui.loopSong = !!pr.loopSong;
   }
