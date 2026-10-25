@@ -3,7 +3,9 @@
  * workspace = { version, library: [part], sessions: [session], currentId, prefs }
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
- * section   = { id, name, bars, prog, transpose, slots: { [laneId]: slot } }
+ * section   = { id, name, bars, prog, transpose, energy, entry, slots: { [laneId]: slot } }
+ *             energy: 0..1 or null (guessed from the name); entry: 'auto' | Odd.shape.ENTRIES
+ * session.shape = { on, humanize, lift } (see Odd.shape)
  * slot      = { part (a copy), sourceId, oct, refit }
  * arrangement = [sectionId, ...] in play order (a section may appear many times)
  */
@@ -121,6 +123,8 @@
       bars,
       prog: o.prog ? T.fitProg(o.prog, bars) : newProgression(session, bars, o.rng),
       transpose: 0,
+      energy: null,
+      entry: 'auto',
       slots: {},
     };
   }
@@ -215,6 +219,10 @@
 
   // ---------------- sessions ----------------
 
+  function defaultShape() {
+    return Object.assign({}, (Odd.shape && Odd.shape.DEFAULTS) || { on: true, humanize: 0.4, lift: true });
+  }
+
   function createSession(opts) {
     const o = opts || {};
     const rng = Odd.rng.create(o.seed != null ? o.seed : Odd.rng.newSeed());
@@ -228,6 +236,7 @@
       scale,
       bpm: o.bpm || Math.round(rng.range(style.tempo[0], style.tempo[1])),
       swing: style.swing || 0,
+      shape: defaultShape(),
       lanes: [],
       sections: [],
       arrangement: [],
@@ -382,10 +391,20 @@
       s.swing = Math.max(0, Math.min(0.6, Number(s.swing) || 0));
       s.tonic = T.mod(Number(s.tonic) || 0, 12);
       if (!T.SCALES[s.scale]) s.scale = 'minor';
+      const shape = Object.assign(defaultShape(), s.shape && typeof s.shape === 'object' ? s.shape : {});
+      s.shape = {
+        on: shape.on !== false,
+        humanize: Math.max(0, Math.min(1, Number(shape.humanize) || 0)),
+        lift: shape.lift !== false,
+      };
+      const entries = (Odd.shape && Odd.shape.ENTRIES) || ['none', 'fill', 'build', 'gap'];
       for (const sec of s.sections) {
         sec.slots = sec.slots || {};
         sec.bars = sec.bars || 8;
         sec.transpose = sec.transpose || 0;
+        const en = Number(sec.energy);
+        sec.energy = sec.energy == null || sec.energy === '' || !isFinite(en) ? null : Math.max(0, Math.min(1, en));
+        if (!entries.includes(sec.entry)) sec.entry = 'auto';
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
       }
       const ids = new Set(s.sections.map((x) => x.id));
@@ -400,7 +419,7 @@
     createLane, addLane, removeLane, findLane, laneForRole,
     newProgression, createSection, findSection, addSection, duplicateSection, removeSection, setSectionBars,
     placePart, clearSlot, moveArrangement, songBars, songSeconds,
-    createSession, applyStyle, duplicateSession, removeSession, currentSession,
+    createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
     createWorkspace, fillStarter, migrate,
   };

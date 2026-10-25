@@ -72,47 +72,80 @@
     };
   }
 
+  /** song shape is on for this session (and the shape module is loaded) */
+  function shaping(session) {
+    return !!(Odd.shape && Odd.shape.settings(session).on);
+  }
+
   /**
    * Events for every filled slot of a section.
-   * opts: { offset, length, exclude (lane id to leave out), only (lane id) }
+   * opts: { offset, length, exclude (lane id to leave out), only (lane id),
+   *         shape (default true: apply the section's energy and dynamics),
+   *         energy, nextEnergy (override; nextEnergy null = no ramp) }
    */
   function sectionEvents(session, section, opts) {
     const o = opts || {};
     const offset = o.offset || 0;
     const tgt = sectionTarget(session, section, o.length);
+    const shape = o.shape !== false && shaping(session);
+    const energy = o.energy != null ? o.energy : shape ? Odd.shape.energyOf(section) : 0.5;
     const out = [];
     for (const lane of session.lanes) {
       if (o.exclude && lane.id === o.exclude) continue;
       if (o.only && lane.id !== o.only) continue;
       const slot = section.slots && section.slots[lane.id];
       if (!slot || !slot.part) continue;
-      const evs = partEvents(slot.part, Object.assign({}, tgt, { oct: slot.oct || 0, refit: slot.refit !== false }));
+      let evs = partEvents(slot.part, Object.assign({}, tgt, { oct: slot.oct || 0, refit: slot.refit !== false }));
       for (const e of evs) {
         e.t += offset;
         e.track = lane.id;
-        out.push(e);
       }
+      if (shape) {
+        evs = Odd.shape.shapeLane(evs, {
+          role: lane.role, energy, start: offset, end: offset + tgt.length,
+          nextEnergy: o.nextEnergy == null ? null : o.nextEnergy,
+        });
+      }
+      for (const e of evs) out.push(e);
     }
     return out;
   }
 
-  /** whole arrangement: { events, length, markers: [{ index, sectionId, name, start, end }] } */
+  /** whole arrangement: { events, length, markers: [{ index, sectionId, name, start, end, energy, entry }] } */
   function songEvents(session, opts) {
     const o = opts || {};
-    const out = [];
+    const shape = shaping(session);
+    let out = [];
     const markers = [];
-    let pos = 0;
-    session.arrangement.forEach((sid, index) => {
-      const section = session.sections.find((s) => s.id === sid);
-      if (!section) return;
-      const len = section.bars * T.BAR;
-      const evs = sectionEvents(session, section, { offset: pos, only: o.only });
+    let entries;
+    if (Odd.shape) {
+      entries = Odd.shape.plan(session);
+    } else {
+      entries = [];
+      let pos = 0;
+      session.arrangement.forEach((sid, index) => {
+        const section = session.sections.find((s) => s.id === sid);
+        if (!section) return;
+        const len = section.bars * T.BAR;
+        entries.push({ index, section, sectionId: sid, start: pos, end: pos + len, energy: 0.5, entry: 'none' });
+        pos += len;
+      });
+    }
+    entries.forEach((en, i) => {
+      const next = entries[i + 1];
+      const evs = sectionEvents(session, en.section, {
+        offset: en.start,
+        energy: en.energy,
+        nextEnergy: next ? next.energy : null,
+      });
       for (const e of evs) out.push(e);
-      markers.push({ index, sectionId: sid, name: section.name, start: pos, end: pos + len });
-      pos += len;
+      markers.push({ index: en.index, sectionId: en.sectionId, name: en.section.name, start: en.start, end: en.end, energy: en.energy, entry: en.entry });
     });
+    if (shape) out = Odd.shape.transitions(session, out, entries);
+    if (o.only) out = out.filter((e) => e.track === o.only);
     out.sort(byTime);
-    return { events: out, length: pos, markers };
+    const length = entries.length ? entries[entries.length - 1].end : 0;
+    return { events: out, length, markers };
   }
 
   /** transport track table from session lanes, plus optional extra tracks */
@@ -130,14 +163,40 @@
     return Object.assign(tracks, extra || {});
   }
 
-  /** build a transport sequence (applies session swing) */
+  /** role of every track: session lanes, plus extra tracks that name one */
+  function roleMap(session, extraTracks) {
+    const roles = {};
+    for (const lane of session.lanes) roles[lane.id] = lane.role;
+    for (const k in extraTracks || {}) if (extraTracks[k] && extraTracks[k].role) roles[k] = extraTracks[k].role;
+    return roles;
+  }
+
+  /**
+   * Performance pass shared by playback and export: swing, then human feel.
+   * opts: { roles ({ track: role }), role (fallback), length }
+   */
+  function perform(session, events, opts) {
+    const o = opts || {};
+    const swung = applySwing(events, session ? session.swing : 0);
+    let out = swung;
+    if (Odd.shape && session) {
+      const roles = o.roles || roleMap(session);
+      out = Odd.shape.humanize(swung, {
+        amount: Odd.shape.settings(session).humanize,
+        roleOf: (track) => roles[track] || o.role || 'lead',
+        length: o.length,
+      });
+    }
+    return out.sort(byTime);
+  }
+
+  /** build a transport sequence (applies session swing and feel) */
   function sequence(session, events, length, loop, extraTracks) {
-    const swung = applySwing(events, session.swing).sort(byTime);
     return {
       bpm: session.bpm,
       length,
       loop: !!loop,
-      events: swung,
+      events: perform(session, events, { roles: roleMap(session, extraTracks), length }),
       tracks: tracksFor(session, extraTracks),
     };
   }
@@ -157,6 +216,6 @@
   }
 
   Odd.render = {
-    partEvents, applySwing, sectionTarget, sectionEvents, songEvents, tracksFor, sequence, chordLabels, byTime,
+    partEvents, applySwing, sectionTarget, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
 })(globalThis.Odd = globalThis.Odd || {});

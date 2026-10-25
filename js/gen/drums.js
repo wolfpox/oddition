@@ -283,5 +283,6 @@
       { key: 'ghosts', label: 'Ghost notes', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5, hint: 'Quiet in-between snare hits' },
     ],
     generate,
+    writeFill, // also used by Odd.shape for fills into a new section
   };
 })(globalThis.Odd = globalThis.Odd || {});

@@ -249,8 +249,10 @@
       const tgt = R.sectionTarget(s, sec, length);
       let events = R.partEvents(part, tgt);
       for (const e of events) e.track = TAKE_TRACK;
-      if (withSection) events = events.concat(R.sectionEvents(s, sec, { length, exclude: lane && lane.id }));
+      // the booth plays parts as written: song shape only applies on the song sheet
+      if (withSection) events = events.concat(R.sectionEvents(s, sec, { length, exclude: lane && lane.id, shape: false }));
       const take = {
+        role: part.role,
         patch: lane ? lane.patch : M.roleInfo(part.role).defaultPatch,
         volume: lane ? lane.volume : 0.75,
         mute: false,
@@ -745,6 +747,47 @@
     if (prog) commit('Edit chords', () => { section.prog = prog; });
   }
 
+  async function shapeDialog(section) {
+    const S = Odd.shape;
+    const s = app.session();
+    const guess = S.autoEnergy(section.name);
+    const auto = S.isAuto(section);
+    const energy = S.energyOf(section);
+    const entry = S.entryOf(section);
+    const pct = (x) => Math.round(x * 100) + '%';
+    const entryOpts = ['auto'].concat(S.ENTRIES).map((k) => '<option value="' + k + '"' + (k === entry ? ' selected' : '') + '>' + esc(S.ENTRY_LABELS[k]) + '</option>').join('');
+    const result = await D.dialog({
+      title: 'Energy and entry for ' + section.name,
+      body:
+        '<label class="field"><span>Energy <output id="dlg-e-out">' + pct(energy) + '</output></span>' +
+        '<input type="range" id="dlg-energy" min="0" max="1" step="0.05" value="' + energy + '"></label>' +
+        '<label class="toggle"><input type="checkbox" id="dlg-e-auto"' + (auto ? ' checked' : '') + '><span>Guess from the name (' + esc(section.name) + ': ' + pct(guess) + ')</span></label>' +
+        '<label class="field"><span>Entry</span><select id="dlg-entry">' + entryOpts + '</select></label>' +
+        '<p class="help">At 50% parts play as written. Lower thins and softens them, higher plays harder, and above 80% the lead doubles an octave up. A section played again later in the song gets a little more energy each time.</p>' +
+        '<p class="help">Entry is how the song gets into this section: straight in, a drum fill, a snare build over the last bars before it, or a build then a beat of silence. Auto picks from the jump in energy.</p>' +
+        (S.settings(s).on ? '' : '<p class="help help-warn">Shape is off for this session (session settings), so these have no effect until you turn it on.</p>'),
+      onOpen: (el) => {
+        const r = $('#dlg-energy', el);
+        const box = $('#dlg-e-auto', el);
+        const out = $('#dlg-e-out', el);
+        r.addEventListener('input', () => { box.checked = false; out.textContent = pct(Number(r.value)); });
+        box.addEventListener('change', () => { if (box.checked) { r.value = guess; out.textContent = pct(guess); } });
+      },
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Apply', primary: true, value: (el) => ({
+          energy: $('#dlg-e-auto', el).checked ? null : Number($('#dlg-energy', el).value),
+          entry: $('#dlg-entry', el).value,
+        }) },
+      ],
+    });
+    if (!result) return;
+    commit('Change section shape', () => {
+      section.energy = result.energy;
+      section.entry = result.entry;
+    }, ['song']);
+  }
+
   function sectionMenu(anchor, section) {
     const s = app.session();
     D.menu(anchor, [
@@ -753,6 +796,7 @@
         if (name) commit('Rename section', () => { section.name = name; });
       } },
       { label: 'Edit chords…', run: () => editChords(section) },
+      { label: 'Energy and entry…', run: () => shapeDialog(section) },
       { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
       { label: 'Key down a semitone', run: () => commit('Change section key', () => { section.transpose = Math.max(-11, (section.transpose || 0) - 1); }) },
@@ -1089,6 +1133,7 @@
     'select-section': (el) => { app.ui.sectionId = el.dataset.section; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'play-section': (el) => toggle('section', el.dataset.section),
     'section-menu': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) sectionMenu(el, sec); },
+    'section-shape': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) shapeDialog(sec); },
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),
@@ -1189,6 +1234,10 @@
       D.toast(st.label + ': ' + app.session().bpm + ' BPM, lane sounds updated. New takes use this style.');
     },
     'swing-commit': () => persist(),
+    'feel-commit': () => persist(),
+    'shape-on': (el) => commit(el.value === 'on' ? 'Turn shape on' : 'Turn shape off', (s) => {
+      s.shape = Object.assign(M.defaultShape(), s.shape, { on: el.value === 'on' });
+    }, ['top', 'song']),
     quality: (el) => {
       const was = app.ui.playing;
       const at = was && Odd.transport ? Odd.transport.position() : 0;
@@ -1227,6 +1276,13 @@
 
   let queryTimer = null;
   const inputs = {
+    feel: (el) => {
+      const s = app.session();
+      s.shape = Object.assign(M.defaultShape(), s.shape, { humanize: Number(el.value) });
+      const out = $('#o-feel');
+      if (out) out.textContent = Math.round(s.shape.humanize * 100) + '%';
+      refreshPlayback();
+    },
     swing: (el) => {
       const s = app.session();
       s.swing = Number(el.value);

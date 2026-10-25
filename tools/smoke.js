@@ -91,6 +91,8 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   ok(await page.evaluate(() => Odd.transport.playing && Odd.app.ui.playing.kind === 'song'), 'song plays');
   const lit = await page.evaluate(() => Array.from(document.querySelectorAll('[data-led]')).some((el) => Number(el.style.getPropertyValue('--lit')) > 0));
   ok(lit, 'lane lights flicker');
+  ok(await page.evaluate(() => document.querySelectorAll('.nrg-btn').length === Odd.app.session().sections.length), 'sections show energy');
+  ok(await page.evaluate(() => Odd.render.songEvents(Odd.app.session()).markers.every((m) => typeof m.energy === 'number')), 'song plan has energy');
   await page.screenshot({ path: path.join(out, 'flow-song-playing.png') });
 
   // select a cell and swap

@@ -621,6 +621,31 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
   pointer-events: none;
 }
 .arr-item.is-selected .arr-chip { border-color: var(--ink); }
+/* energy: a fill rising from the bottom of each chip, so the strip reads as a curve */
+.arr-energy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--energy, 0.5) * 100%);
+  background: color-mix(in srgb, var(--sec) 30%, transparent);
+  pointer-events: none;
+}
+/* entry marks on the left edge: fill = one tick, build = a ramp, gap = a ramp with a break */
+.arr-entry {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: 0.55;
+}
+.arr-entry-fill { width: 3px; }
+.arr-entry-build { clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+.arr-entry-gap { clip-path: polygon(0 100%, 60% 25%, 60% 100%); border-right: 2px solid transparent; }
+.arr-chip > .arr-name { margin-left: 2px; }
 .arr-tools { display: flex; justify-content: center; gap: 0; }
 .arr-add { flex: none; height: 36px; }
 
@@ -675,6 +700,27 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
   white-space: nowrap;
 }
 .sec-line-2 { gap: 6px; }
+.nrg-btn {
+  flex: none;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+}
+.nrg-btn:hover { border-color: var(--line); }
+.nrg { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.nrg i { display: block; width: 3px; border-radius: 1px; background: var(--line); }
+.nrg i:nth-child(1) { height: 30%; }
+.nrg i:nth-child(2) { height: 47%; }
+.nrg i:nth-child(3) { height: 64%; }
+.nrg i:nth-child(4) { height: 82%; }
+.nrg i:nth-child(5) { height: 100%; }
+.nrg i.on { background: color-mix(in srgb, var(--sec) 80%, var(--ink)); }
+.nrg-btn.is-auto i.on { background: color-mix(in srgb, var(--sec) 55%, var(--muted)); }
+.nrg-btn.is-off .nrg { opacity: 0.35; }
 .bars-fld { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); color: var(--faint); }
 .bars-fld select { height: 24px; padding: 0 2px; font-size: var(--fs-xs); font-family: var(--font-mono); }
 .chords-btn {
@@ -907,6 +953,7 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .radio { display: flex; align-items: center; gap: 8px; color: var(--ink); padding: 3px 0; }
 .help { font-size: var(--fs-sm); color: var(--muted); }
+.help-warn { color: var(--tally); }
 .chord-preview { font-size: var(--fs-sm); color: var(--ink); min-height: 1.4em; }
 .chord-preview small { color: var(--faint); font-size: 0.66rem; margin-left: 2px; vertical-align: super; }
 .chord-preview .bad { color: var(--tally); }

@@ -51,6 +51,38 @@ note moves to fit the chord under it. A one-bar bass riff kept over the verse
 will follow the chorus progression on its own. Turn **Fit** off on a slot to
 keep a part exactly as written.
 
+### Song shape
+
+Each section has an **energy** level, shown as the small meter next to its
+bar count and as the fill behind each block in the song order. Energy is
+guessed from the section's name (intro low, verse middle, chorus high, drop
+highest) until you set it yourself: click the meter, or use **Energy and
+entry…** in the section menu.
+
+- At 50% parts play as written. Lower energy thins them out (quiet ghost
+  notes and busy hi-hats go first, the kick on one and the backbeat stay)
+  and plays softer. Higher energy plays harder, and above 80% the lead is
+  doubled an octave up. Pads are never thinned.
+- A section that comes back later in the song gets a little more energy each
+  time, so the last chorus lifts.
+- Every 4-bar phrase swells slightly, and the last bar or two of a section
+  gets louder or softer when the next section's energy is higher or lower.
+- **Entry** sets how the song gets into a section: straight in, a drum fill,
+  a snare build over the last bars before it, or a build and then a beat of
+  silence. **Auto** chooses from the jump in energy. The marks on the left
+  edge of the song-order blocks show the entry each one gets.
+
+All of this happens when the song plays or exports, so a part you kept is
+never changed: move it to another section and it takes on that section's
+shape. The booth always plays takes as written. Turn **Shape** off in the
+session settings to hear the song exactly as the parts were written.
+
+**Feel** (session settings) adds small timing and velocity differences, like
+a person playing: drums stay close to the grid, bass sits slightly behind
+the beat, chords are strummed upwards, the lead is loosest. The same notes
+always get the same offsets, so playback, MIDI and audio export match. Set
+it to 0% for a fully quantised export.
+
 ### Styles
 
 Lo-fi, boom bap, trap, house, techno, synthwave, pop, ambient and drum & bass.

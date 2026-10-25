@@ -27,6 +27,7 @@ js/gen/styles.js      genre presets                     Odd.styles
 js/gen/names.js       part names                        Odd.gen (names)
 js/gen/drums.js ...   one file per role                 Odd.gen.roles.<role>
 js/gen/index.js       generate / vary entry points      Odd.gen
+js/core/shape.js      energy, transitions, human feel   Odd.shape
 js/core/render.js     part -> playable events (refit)   Odd.render
 js/core/midi-file.js  Standard MIDI File writer/reader  Odd.midiFile
 js/core/zip.js        store-only .zip writer            Odd.zip
@@ -92,6 +93,34 @@ chord under it in the target section, then shifts the note by the shortest
 diatonic distance between the two roots (`Odd.theory.wrapDelta`). Key and
 mode changes come for free: degrees are rendered in the target key and scale.
 Drums are never shifted. A part shorter than its section loops.
+
+## Song shape (`Odd.shape`)
+
+Shape works on rendered events, never on stored parts, so it re-renders when
+anything changes and kept parts take on the shape of wherever they sit.
+
+```js
+session.shape = { on, humanize, lift }   // on: energy + transitions; humanize 0..1; lift: repeats gain energy
+section.energy = 0..1 | null             // null: guessed from the name (Odd.shape.autoEnergy)
+section.entry  = 'auto' | 'none' | 'fill' | 'build' | 'gap'
+```
+
+- `Odd.shape.plan(session)` resolves the song order into
+  `[{ index, section, start, end, energy, entry, delta }]`: repeat lift
+  applied, `auto` entries resolved from the energy jump.
+- `Odd.render.sectionEvents` runs `shapeLane` on each lane: low energy drops
+  the least important onsets (by place in the bar, velocity and drum type;
+  chord notes go together), velocity scales with energy, each 4-bar phrase
+  swells a little, and the section's end ramps towards the next section's
+  energy. Pass `shape: false` for raw events (the booth does).
+- `Odd.render.songEvents` then runs `transitions`: drum fills (the style's own
+  fill kinds, via `Odd.gen.roles.drums.writeFill`), snare builds, a silent
+  beat for `gap`, and a crash where a drum lane lands in the new section.
+- `Odd.render.perform(session, events, opts)` is the last step for both
+  playback (`Odd.render.sequence`) and export: swing, then `humanize`.
+  Humanize offsets are hashed from each note (track, tick, pitch), so the
+  same song always renders identically, and stems match the mix. Swing
+  runs first because it looks for notes on exact 16th positions.
 
 ## Generators (`Odd.gen`)
 

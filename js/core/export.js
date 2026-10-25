@@ -46,7 +46,7 @@
     const scale = session ? session.scale : part.ctx.scale;
     const length = part.bars * T.BAR;
     let events = R.partEvents(part, { tonic, scale, prog: part.ctx.prog, length });
-    events = R.applySwing(events, session ? session.swing : 0);
+    events = session ? R.perform(session, events, { role: part.role, length }) : events;
     const role = part.role;
     return Odd.midiFile.write({
       name: part.name,
@@ -63,7 +63,7 @@
 
   function sectionMidi(session, section) {
     const length = section.bars * T.BAR;
-    const events = R.applySwing(R.sectionEvents(session, section), session.swing);
+    const events = R.perform(session, R.sectionEvents(session, section), { length });
     const tonic = T.mod(session.tonic + (section.transpose || 0), 12);
     return Odd.midiFile.write({
       name: session.name + ' - ' + section.name,
@@ -75,7 +75,7 @@
 
   function songMidi(session) {
     const song = R.songEvents(session);
-    const events = R.applySwing(song.events, session.swing);
+    const events = R.perform(session, song.events, { length: song.length });
     return Odd.midiFile.write({
       name: session.name,
       bpm: session.bpm, tonic: session.tonic, scale: session.scale, length: song.length,
@@ -106,7 +106,7 @@
   /** zip: one .mid per lane + the full song .mid + a readme */
   function stemsZip(session) {
     const song = R.songEvents(session);
-    const events = R.applySwing(song.events, session.swing);
+    const events = R.perform(session, song.events, { length: song.length });
     const tracks = lanesToTracks(session, events);
     const folder = safeName(session.name);
     const files = [];

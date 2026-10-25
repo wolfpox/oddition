@@ -95,6 +95,7 @@
         '<label class="fld"><span>Style</span><select id="f-style" data-change="style">' + styleOpts + '</select></label>' +
         '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
           '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
+        shapeFields(s) +
         '<label class="fld fld-range"><span>Volume</span><input type="range" id="f-master" data-input="master" min="0" max="1" step="0.01" value="' + (app.ws.prefs.master != null ? app.ws.prefs.master : 0.8) + '"></label>' +
         qualityField(app) +
         '<canvas class="meter" id="meter" aria-hidden="true"></canvas>' +
@@ -104,6 +105,30 @@
         '</div>' +
       '</div>';
     return { html, rolls: [] };
+  }
+
+  function shapeFields(s) {
+    if (!Odd.shape) return '';
+    const cfg = Odd.shape.settings(s);
+    return '<label class="fld fld-range" title="Small timing and velocity differences, like a person playing"><span>Feel <output id="o-feel">' + Math.round(cfg.humanize * 100) + '%</output></span>' +
+        '<input type="range" id="f-feel" data-input="feel" data-change="feel-commit" min="0" max="1" step="0.05" value="' + cfg.humanize + '"></label>' +
+      '<label class="fld" title="Section energy, swells into new sections, fills and builds. Off plays the song exactly as the parts are written"><span>Shape</span>' +
+        '<select id="f-shape" data-change="shape-on"><option value="on"' + (cfg.on ? ' selected' : '') + '>On</option><option value="off"' + (cfg.on ? '' : ' selected') + '>Off</option></select></label>';
+  }
+
+  /** five-step energy meter for a section header */
+  function energyMeter(s, sec) {
+    if (!Odd.shape) return '';
+    const cfg = Odd.shape.settings(s);
+    const e = Odd.shape.energyOf(sec);
+    const auto = Odd.shape.isAuto(sec);
+    const lit = Math.max(1, Math.round(e * 5));
+    let bars = '';
+    for (let i = 0; i < 5; i++) bars += '<i' + (i < lit ? ' class="on"' : '') + '></i>';
+    const entry = Odd.shape.entryOf(sec);
+    const title = 'Energy ' + Math.round(e * 100) + '%' + (auto ? ' (from the name)' : '') + ' · Entry: ' + Odd.shape.ENTRY_LABELS[entry] + (cfg.on ? '' : ' · Shape is off');
+    return '<button type="button" class="nrg-btn' + (auto ? ' is-auto' : '') + (cfg.on ? '' : ' is-off') + '" data-act="section-shape" data-section="' + sec.id + '" aria-label="' + esc('Energy and entry for ' + sec.name + ': ' + title) + '" title="' + esc(title) + '">' +
+      '<span class="nrg" aria-hidden="true">' + bars + '</span></button>';
   }
 
   function qualityField(app) {
@@ -301,14 +326,24 @@
     const sel = app.selectedSlot();
     const bars = Odd.model.songBars(s);
 
-    // arrangement strip
+    // arrangement strip; the fill behind each chip is its energy
+    const shapeOn = !!(Odd.shape && Odd.shape.settings(s).on);
+    const planned = new Map();
+    if (Odd.shape) for (const en of Odd.shape.plan(s)) planned.set(en.index, en);
     const chips = s.arrangement.map((sid, i) => {
       const sec = Odd.model.findSection(s, sid);
       if (!sec) return '';
       const hue = sectionHue(s, sid);
       const isSel = app.ui.arrIndex === i;
-      return '<li class="arr-item' + (isSel ? ' is-selected' : '') + '" style="--sec-hue:' + hue + ';flex-grow:' + sec.bars + '" data-arr="' + i + '">' +
-        '<button type="button" class="arr-chip" data-act="arr-select" data-index="' + i + '" title="' + esc(sec.name) + ', ' + sec.bars + ' bars. Double-click to play from here">' +
+      const en = planned.get(i);
+      const energy = en ? en.energy : 0.5;
+      const entry = shapeOn && en ? en.entry : 'none';
+      const entryText = entry !== 'none' ? ' Enters with ' + Odd.shape.ENTRY_LABELS[entry].toLowerCase() + '.' : '';
+      const energyText = shapeOn ? ' Energy ' + Math.round(energy * 100) + '%.' : '';
+      return '<li class="arr-item' + (isSel ? ' is-selected' : '') + '" style="--sec-hue:' + hue + ';flex-grow:' + sec.bars + ';--energy:' + energy.toFixed(2) + '" data-arr="' + i + '">' +
+        '<button type="button" class="arr-chip" data-act="arr-select" data-index="' + i + '" title="' + esc(sec.name) + ', ' + sec.bars + ' bars.' + energyText + entryText + ' Double-click to play from here">' +
+          (shapeOn ? '<span class="arr-energy" aria-hidden="true"></span>' : '') +
+          (entry !== 'none' ? '<span class="arr-entry arr-entry-' + entry + '" aria-hidden="true"></span>' : '') +
           '<span class="arr-name">' + esc(sec.name) + '</span><span class="arr-bars mono">' + sec.bars + '</span>' +
           '<span class="arr-progress" data-arr-progress="' + i + '"></span>' +
         '</button>' +
@@ -338,6 +373,7 @@
         '</div>' +
         '<div class="sec-line sec-line-2">' +
           '<label class="bars-fld"><select id="sb-' + sec.id + '" data-change="section-bars" data-section="' + sec.id + '" aria-label="Bars in ' + esc(sec.name) + '">' + bOpts + '</select><span>bars</span></label>' +
+          energyMeter(s, sec) +
           (sec.transpose ? '<span class="pill mono">' + (sec.transpose > 0 ? '+' : '') + sec.transpose + '</span>' : '') +
           '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(chordNames(s, sec)) + '">' + esc(chordText(s, sec)) + '</button>' +
           '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
