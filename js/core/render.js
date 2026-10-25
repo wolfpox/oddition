@@ -39,12 +39,17 @@
           continue;
         }
         let deg = n.deg;
+        let acc = n.acc || 0;
         if (refit) {
-          const s = T.chordAt(srcProg, n.t).chord.deg;
-          const g = T.chordAt(tgtProg, t).chord.deg;
-          deg += T.wrapDelta(g - s);
+          const sc = T.chordAt(srcProg, n.t).chord;
+          const gc = T.chordAt(tgtProg, t).chord;
+          deg += T.wrapDelta(gc.deg - sc.deg);
+          // a note that took its chord's accidental (F# over V/V) takes the
+          // new chord's instead; a deliberate chromatic note keeps its own
+          const srcScale = part.ctx && part.ctx.scale ? part.ctx.scale : scale;
+          if (acc === T.chordAlt(sc, srcScale)[T.mod(n.deg, 7)]) acc = T.chordAlt(gc, scale)[T.mod(deg, 7)];
         }
-        out.push({ t, d, p: T.pitchOf(deg, n.acc, tonic, scale, base), v: n.v });
+        out.push({ t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v });
       }
     }
     out.sort(byTime);
@@ -209,7 +214,7 @@
     while (t < length && guard++ < 512) {
       const c = T.chordAt(prog, t);
       const end = Math.min(c.end, length);
-      out.push({ start: t, end, label: T.chordName(c.chord.deg, tonic, scale), roman: T.roman(c.chord.deg, scale) });
+      out.push({ start: t, end, label: T.chordName(c.chord, tonic, scale), roman: T.roman(c.chord, scale) });
       t = end;
     }
     return out;

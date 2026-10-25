@@ -84,11 +84,12 @@
     const clampDeg = (d) => u.clamp(d, lo, hi);
 
     const rootAt = (t) => ctx.chordAt(t).chord.deg;
-    const stable = (d, root) => {
+    const stable = (d, root, t) => {
       const rel = T.mod(d - root, 7);
       if (rel === 0 || rel === 2 || rel === 4) return true;
       if (!L.stableExt) return false;
-      return (rel === 6 && ctx.goodSeventh(root)) || (rel === 1 && ctx.goodNinth(root));
+      const alt = ctx.altAt(t);
+      return (rel === 6 && ctx.goodSeventh(root, alt)) || (rel === 1 && ctx.goodNinth(root, alt));
     };
     const inPenta = (d) => !penta || penta.includes(T.mod(d, 7));
 
@@ -96,8 +97,8 @@
       const root = rootAt(t);
       const strong = t % (2 * BEAT) === 0 || dur >= BEAT || (t % BEAT === 0 && dur >= 2 * STEP);
       if (strong) {
-        if (stable(d, root)) return d;
-        const cands = [d - 1, d + 1, d - 2, d + 2].filter((x) => x >= lo && x <= hi && stable(x, root));
+        if (stable(d, root, t)) return d;
+        const cands = [d - 1, d + 1, d - 2, d + 2].filter((x) => x >= lo && x <= hi && stable(x, root, t));
         if (!cands.length) return d;
         cands.sort((a, b) => Math.abs(a - d) - Math.abs(b - d) || Math.abs(a - prev) - Math.abs(b - prev));
         return cands[0];
@@ -378,8 +379,11 @@
         const a = notes[i], b = notes[i + 1];
         if (b.t % (2 * BEAT) !== 0 || a.t % BEAT === 0 || b.t - a.t > 2 * STEP) continue;
         if (a.deg !== b.deg - 1) continue;
-        const whole = T.degToSemis(b.deg, ctx.scale) - T.degToSemis(b.deg - 1, ctx.scale) === 2;
-        if (whole && rDetail.chance(complexity * 0.3)) { a.deg = b.deg; a.acc = -1; }
+        // semitones as they sound over each note's chord
+        const bAcc = ctx.altAt(b.t)[T.mod(b.deg, 7)];
+        const aAcc = ctx.altAt(a.t)[T.mod(b.deg - 1, 7)];
+        const whole = T.degToSemis(b.deg, ctx.scale) + bAcc - (T.degToSemis(b.deg - 1, ctx.scale) + aAcc) === 2;
+        if (whole && rDetail.chance(complexity * 0.3)) { a.deg = b.deg; a.acc = bAcc - 1; a.fix = true; }
       }
     }
 

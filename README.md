@@ -51,6 +51,35 @@ note moves to fit the chord under it. A one-bar bass riff kept over the verse
 will follow the chorus progression on its own. Turn **Fit** off on a slot to
 keep a part exactly as written.
 
+### Chords from outside the key
+
+Sections can use chords that the key doesn't contain. Type them in the chord
+editor (click a section's chords):
+
+| Write | Means | In C major |
+| --- | --- | --- |
+| `V` `v` | Capitals are major, small letters minor | G, Gm |
+| `bVI` `bVII` `bIII` `iv` | Borrowed from the parallel minor (or major) | Ab, Bb, Eb, Fm |
+| `V/V` `V7/ii` `vii°/vi` | Secondary chords: the V of another chord | D, A7, G#dim |
+| `N` or `bII` | Neapolitan | Db |
+| `bII7` | Tritone substitute for V7 | Db7 |
+| `V7` `IVmaj7` `iiø7` `vii°7` | A seventh every part will play | G7, Fmaj7… |
+
+Accidentals count from the major scale, as in most theory books, so `bVI` is
+Ab in both C major and C minor (where it is simply `VI`). In a minor key
+`V` is the major dominant and `v` the minor one.
+
+Every part bends to the chord it is over. Over `V/V` in C the chords, bass,
+pad, arp and lead all play F# instead of F, without being regenerated, and a
+part moved from there to a plain `ii` goes back to F. Changing the session's
+mode keeps such chords sounding the same: `bIII` in C major becomes plain
+`III` in C minor.
+
+**Harmony** in the session settings sets how often **New chords** (the dice
+on a section) reaches outside the key: Plain, Some colour, Colourful or Rich.
+Each style has its own default (lo-fi leans colourful, techno plain).
+Repeats of a chord loop are coloured the same way each time.
+
 ### Song shape
 
 Each section has an **energy** level, shown as the small meter next to its

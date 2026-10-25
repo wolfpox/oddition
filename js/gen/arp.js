@@ -77,7 +77,7 @@
     let prevLow = S.low;
     for (const o of occ) {
       const classes = [0, 2, 4];
-      if (seventh && ctx.goodSeventh(o.deg)) classes.push(6);
+      if (o.chord.sev || (seventh && ctx.goodSeventh(o.deg, o.alt))) classes.push(6);
       // anchor the chord root near the previous chord's position
       const root = ctx.placeDeg(o.deg, prevLow, LO, 72);
       prevLow = ctx.pitch(root);

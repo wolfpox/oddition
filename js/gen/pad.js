@@ -36,8 +36,8 @@
       // seventh on top only when the style leans that way
       if (name === 'open7' && !rVoice.chance(0.4 + S.color * 0.6)) offs = TEMPLATES.open.slice();
       // drop clashing colour tones (minor-major 7ths, b9 / #9) for this chord
-      offs = offs.filter((x) => T.mod(x, 7) !== 6 || ctx.goodSeventh(o.deg));
-      offs = Array.from(new Set(offs.map((x) => (T.mod(x, 7) === 1 && !ctx.goodNinth(o.deg) ? x - 1 : x))));
+      offs = offs.filter((x) => T.mod(x, 7) !== 6 || ctx.goodSeventh(o.deg, o.alt));
+      offs = Array.from(new Set(offs.map((x) => (T.mod(x, 7) === 1 && !ctx.goodNinth(o.deg, o.alt) ? x - 1 : x))));
       let best = null, bestCost = Infinity;
       while (!best && offs.length >= 2) {
         for (let k = -4; k <= 4; k++) {

@@ -35,8 +35,8 @@
     const out = [];
     for (const c of prog) {
       const last = out[out.length - 1];
-      if (last && last.deg === c.deg) last.beats += c.beats;
-      else out.push({ deg: c.deg, beats: c.beats });
+      if (last && T.sameChord(last, c)) last.beats += c.beats;
+      else out.push(Object.assign(T.chordOnly(c), { beats: c.beats }));
     }
     return out;
   }
@@ -93,6 +93,7 @@
         '<label class="fld"><span>Key</span><select id="f-tonic" data-change="tonic">' + keys + '</select></label>' +
         '<label class="fld"><span>Mode</span><select id="f-scale" data-change="scale">' + scales + '</select></label>' +
         '<label class="fld"><span>Style</span><select id="f-style" data-change="style">' + styleOpts + '</select></label>' +
+        harmonyField(s) +
         '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
           '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
         shapeFields(s) +
@@ -105,6 +106,17 @@
         '</div>' +
       '</div>';
     return { html, rolls: [] };
+  }
+
+  const HARMONY_LEVELS = [[0, 'Plain'], [0.3, 'Some colour'], [0.6, 'Colourful'], [0.9, 'Rich']];
+
+  /** how often new chords reach outside the key; shows the nearest level */
+  function harmonyField(s) {
+    const h = Odd.model.harmonyOf(s);
+    let near = HARMONY_LEVELS[0][0];
+    for (const [v] of HARMONY_LEVELS) if (Math.abs(v - h) < Math.abs(near - h)) near = v;
+    return '<label class="fld" title="How often New chords uses chords from outside the key: borrowed chords, secondary dominants, the Neapolitan. Chords you already have stay as they are."><span>Harmony</span>' +
+      '<select id="f-harmony" data-change="harmony">' + HARMONY_LEVELS.map(([v, l]) => '<option value="' + v + '"' + (v === near ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>';
   }
 
   function shapeFields(s) {
@@ -454,7 +466,7 @@
 
   function chordNames(s, sec) {
     const tonic = T.mod(s.tonic + (sec.transpose || 0), 12);
-    return mergeProg(sec.prog).map((c) => T.chordName(c.deg, tonic, s.scale)).join(' ');
+    return mergeProg(sec.prog).map((c) => T.chordName(c, tonic, s.scale)).join(' ');
   }
 
   function sectionHue(s, sid) {

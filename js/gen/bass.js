@@ -102,7 +102,9 @@
           const target = pitch(nextRoot);
           const fromBelow = prevPitch <= target;
           if (rNotes.chance(S.chromatic * (0.5 + movement))) {
-            return { deg: nextRoot, acc: fromBelow ? -1 : 1 };
+            // a semitone from the next root as it really sounds (bVI is flat)
+            const rootAcc = nxt.alt[T.mod(nextRoot, 7)];
+            return { deg: nextRoot, acc: rootAcc + (fromBelow ? -1 : 1), fix: true };
           }
           const d = nextRoot + (fromBelow ? -1 : 1);
           return { deg: inRange(d) ? d : nextRoot, acc: 0 };
@@ -149,7 +151,7 @@
         if (on.len * STEP >= 4 * STEP && S.gate >= 0.95) d = on.len * STEP - 10;
         let v = S.vel + (on.step % 4 === 0 ? 6 : on.step % 2 === 0 ? 0 : -8) + rVary.int(-4, 4);
         if (t === o.start) v += 4;
-        notes.push({ t, d, v, deg: tone.deg, acc: tone.acc });
+        notes.push({ t, d, v, deg: tone.deg, acc: tone.acc, fix: tone.fix });
         prevPitch = pitch(tone.deg, tone.acc);
       }
     }
@@ -182,7 +184,9 @@
       let cur = n;
       for (const o of occ) {
         if (o.start <= cur.t || o.start >= cur.t + cur.d) continue;
-        if (T.isChordTone(cur.deg, o.deg, 3) && !cur.acc) continue;
+        // keeps ringing only as a chord tone the new chord does not alter differently
+        const k = T.mod(cur.deg, 7);
+        if (T.isChordTone(cur.deg, o.deg, 3) && !cur.fix && o.alt[k] === ctx.altAt(cur.t)[k]) continue;
         const remain = cur.t + cur.d - o.start;
         cur.d = o.start - cur.t;
         out.push(cur);

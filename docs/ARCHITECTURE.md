@@ -82,17 +82,53 @@ A **part** is one generated clip for one stem role:
 }
 ```
 
-A **progression** is `[{ deg, beats }]`: chord roots as scale degrees (0–6),
-chords built from the scale, each lasting `beats` quarter notes.
+A **progression** is `[{ deg, beats, acc?, mode?, sev? }]`, each chord lasting
+`beats` quarter notes. A plain chord is just `deg` (root as a scale degree,
+0–6) and is built from the scale. A chromatic chord adds:
+
+```js
+{ deg: 5, acc: -1, mode: 'lydian', beats: 4 }        // bVI in C major (Ab)
+{ deg: 1, mode: 'mixolydian', sev: 1, beats: 4 }     // V7/V in C major (D7)
+```
+
+- `acc`: semitones from the scale degree to the root.
+- `mode`: the chord's own scale, one of `Odd.theory.MODES` (every mode of
+  major, harmonic minor and melodic minor). It fixes the chord tones and the
+  notes between them, so a melody over D7 in C uses F#.
+- `sev`: the seventh was written ("V7"); generators always play it.
+
+`Odd.theory.chordAlt(chord, scale)` turns this into an accidental per scale
+degree (all zeros for a plain chord). `parseChord`/`roman` read and write the
+roman numerals (`bVI`, `V7/ii`, `N`). An accidental counts from the major
+scale. Without one, the numeral is the scale's own degree, or the major
+scale's if that needs fewer changes (`vii°7` in minor is the leading-tone
+chord). `resolveChord` picks the chord scale that changes the fewest notes
+of the key, which for borrowed chords is the parallel minor or major.
+`roman` only writes text that reads back as the same chord.
+`colorProgression` adds such chords to generated progressions
+(`session.harmony`, default per style).
+
+## Generators and chromatic chords
+
+Generators keep writing plain scale degrees. `finalize` (in `js/gen/index.js`)
+then gives each note the accidental its chord's `chordAlt` table has for that
+degree. A note marked `fix: true` (bass approach notes, lead chromatic
+passing notes) has a deliberate accidental and is left alone. Occurrences
+(`ctx.occ`) carry each chord's `alt` table, and `goodSeventh`/`goodNinth`
+take it, so 7ths and 9ths are judged on the real chord.
 
 ## Refit
 
 Because notes are degrees, a part can play over any section. For each note,
 `Odd.render` finds the chord under it in the part's own `ctx.prog` and the
 chord under it in the target section, then shifts the note by the shortest
-diatonic distance between the two roots (`Odd.theory.wrapDelta`). Key and
-mode changes come for free: degrees are rendered in the target key and scale.
-Drums are never shifted. A part shorter than its section loops.
+diatonic distance between the two roots (`Odd.theory.wrapDelta`). A note
+whose accidental is the one its old chord gave that degree takes the new
+chord's accidental instead (F# over D7 becomes F over Dm); any other
+accidental is deliberate and kept. Key and mode changes come for free:
+degrees are rendered in the target key and scale (`Odd.model.setScale`
+re-reads chromatic chords so they keep sounding the same). Drums are never
+shifted. A part shorter than its section loops.
 
 ## Song shape (`Odd.shape`)
 

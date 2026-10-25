@@ -110,8 +110,15 @@
   function newProgression(session, bars, rng) {
     const style = styleOf(session.style);
     return T.generateProgression(rng || Odd.rng.create(Odd.rng.newSeed()), {
-      scale: session.scale, bars, rate: style.rate || 1, vamp: !!style.vamp,
+      scale: session.scale, bars, rate: style.rate || 1, vamp: !!style.vamp, color: harmonyOf(session),
     });
+  }
+
+  /** how often new chords reach outside the key: the session's setting, else the style's */
+  function harmonyOf(session) {
+    if (typeof session.harmony === 'number') return session.harmony;
+    const st = styleOf(session.style);
+    return st.harmony != null ? st.harmony : 0.3;
   }
 
   function createSection(session, opts) {
@@ -165,6 +172,15 @@
     session.sections = session.sections.filter((s) => s.id !== id);
     session.arrangement = session.arrangement.filter((sid) => sid !== id);
     return true;
+  }
+
+  /** change the session's mode; chromatic chords keep their sound (see theory.rescaleChord) */
+  function setScale(session, scale) {
+    if (!T.SCALES[scale] || scale === session.scale) return;
+    for (const sec of session.sections) {
+      sec.prog = sec.prog.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
+    }
+    session.scale = scale;
   }
 
   function setSectionBars(session, section, bars) {
@@ -236,6 +252,7 @@
       scale,
       bpm: o.bpm || Math.round(rng.range(style.tempo[0], style.tempo[1])),
       swing: style.swing || 0,
+      harmony: style.harmony != null ? style.harmony : 0.3,
       shape: defaultShape(),
       lanes: [],
       sections: [],
@@ -264,6 +281,7 @@
     session.style = style.id;
     session.bpm = Math.round(r.range(style.tempo[0], style.tempo[1]));
     session.swing = style.swing || 0;
+    session.harmony = style.harmony != null ? style.harmony : 0.3;
     for (const lane of session.lanes) lane.patch = patchFor(style, lane.role);
   }
 
@@ -389,6 +407,7 @@
       }
       s.bpm = Math.max(30, Math.min(300, Number(s.bpm) || 100));
       s.swing = Math.max(0, Math.min(0.6, Number(s.swing) || 0));
+      s.harmony = typeof s.harmony === 'number' && isFinite(s.harmony) ? Math.max(0, Math.min(1, s.harmony)) : harmonyOf(Object.assign({}, s, { harmony: null }));
       s.tonic = T.mod(Number(s.tonic) || 0, 12);
       if (!T.SCALES[s.scale]) s.scale = 'minor';
       const shape = Object.assign(defaultShape(), s.shape && typeof s.shape === 'object' ? s.shape : {});
@@ -417,7 +436,7 @@
   Odd.model = {
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
-    newProgression, createSection, findSection, addSection, duplicateSection, removeSection, setSectionBars,
+    newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
     placePart, clearSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,

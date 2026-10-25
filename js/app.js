@@ -804,29 +804,32 @@
     const s = app.session();
     const current = Odd.views.chordText(s, section);
     const tonic = T.mod(s.tonic + (section.transpose || 0), 12);
+    const parse = (text) => T.parseProg(text, section.bars, s.scale);
     const preview = (text) => {
-      const prog = T.parseProg(text, section.bars);
+      const prog = parse(text);
       if (!prog) return '<span class="bad">Use roman numerals such as i VI III VII</span>';
-      return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c.deg, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
+      return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
     };
+    const m = (x) => '<span class="mono">' + x + '</span>';
     const result = await D.dialog({
       title: 'Chords for ' + section.name,
       body:
         '<label class="field"><span>Chords (' + section.bars + ' bars, ' + esc(Odd.views.keyName(s, section)) + ')</span>' +
         '<input type="text" id="dlg-chords" class="mono" value="' + esc(current) + '" autocomplete="off" spellcheck="false"></label>' +
         '<p class="chord-preview mono" id="dlg-chord-preview">' + preview(current) + '</p>' +
-        '<p class="help">Roman numerals count up the scale from the key. Chords are built from the scale, so <span class="mono">V</span> and <span class="mono">v</span> mean the same chord. Chords share the bars evenly; add <span class="mono">:beats</span> to set a length, for example <span class="mono">i:8 VI:4 VII:4</span>.</p>',
+        '<p class="help">Roman numerals count up the scale from the key. Capitals are major chords and small letters minor, so in a minor key ' + m('V') + ' is the major dominant and ' + m('v') + ' the minor one. Chords share the bars evenly; add ' + m(':beats') + ' to set a length, for example ' + m('i:8 VI:4 VII:4') + '.</p>' +
+        '<p class="help">Chords from outside the key: ' + m('bVI') + ' ' + m('bVII') + ' ' + m('iv') + ' (borrowed), ' + m('V/V') + ' ' + m('V7/ii') + ' ' + m('vii°/vi') + ' (secondary), ' + m('N') + ' (Neapolitan), ' + m('bII7') + ' (tritone sub). Add ' + m('7') + ' or ' + m('maj7') + ' to make a part always play the seventh.</p>',
       onOpen: (el) => {
         const inp = $('#dlg-chords', el);
         inp.addEventListener('input', () => { $('#dlg-chord-preview', el).innerHTML = preview(inp.value); });
       },
       actions: [
         { label: 'Cancel', value: null },
-        { label: 'Apply', primary: true, validate: (el) => !!T.parseProg($('#dlg-chords', el).value, section.bars), value: (el) => $('#dlg-chords', el).value },
+        { label: 'Apply', primary: true, validate: (el) => !!parse($('#dlg-chords', el).value), value: (el) => $('#dlg-chords', el).value },
       ],
     });
     if (result == null) return;
-    const prog = T.parseProg(result, section.bars);
+    const prog = parse(result);
     if (prog) commit('Edit chords', () => { section.prog = prog; });
   }
 
@@ -1310,11 +1313,16 @@
       commit('Change tempo', (s) => { s.bpm = v; }, ['top', 'song']);
     },
     tonic: (el) => commit('Change key', (s) => { s.tonic = Number(el.value); }),
-    scale: (el) => commit('Change mode', (s) => { s.scale = el.value; }),
+    scale: (el) => commit('Change mode', (s) => { M.setScale(s, el.value); }),
     style: (el) => {
       const st = Odd.styles.get(el.value);
       commit('Change style', (s) => { M.applyStyle(s, el.value); });
       D.toast(st.label + ': ' + app.session().bpm + ' BPM, lane sounds updated. New takes use this style.');
+    },
+    harmony: (el) => {
+      const v = Number(el.value);
+      commit('Change harmony', (s) => { s.harmony = v; }, ['top']);
+      D.toast(v ? 'New chords will reach outside the key more' + (v >= 0.6 ? ' often.' : ' now and then.') + ' Press the dice on a section to hear it.' : 'New chords will stay in the key.');
     },
     'swing-commit': () => persist(),
     'feel-commit': () => persist(),

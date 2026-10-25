@@ -120,17 +120,18 @@
     const extByDeg = new Map(); // keep the same colour for repeats of a chord
     let prev = null;
     const voicing = occ.map((o) => {
-      let ext = extByDeg.get(o.deg);
+      let ext = extByDeg.get(o.key);
       if (!ext || rColor.chance(0.2 * complexity)) {
         const s7 = rColor.chance(p7);
         const s9 = rColor.chance(p9 * (s7 ? 1 : 0.5));
         ext = { s7, s9 };
-        extByDeg.set(o.deg, ext);
+        extByDeg.set(o.key, ext);
       }
       const r = o.deg;
       let classes = [r, r + 2, r + 4];
-      if (ext.s7 && ctx.goodSeventh(r)) classes.push(r + 6);
-      if (ext.s9 && ctx.goodNinth(r)) classes.push(r + 8);
+      // a 7th written into the chord ("V7") always sounds
+      if (o.chord.sev || (ext.s7 && ctx.goodSeventh(r, o.alt))) classes.push(r + 6);
+      if (ext.s9 && ctx.goodNinth(r, o.alt)) classes.push(r + 8);
       // 7th + 9th: play it rootless (3-5-7-9) and leave the root to the bass
       if (classes.length === 5) classes = [r + 2, r + 4, r + 6, r + 8];
       const spread = rVoice.chance(S.spread);

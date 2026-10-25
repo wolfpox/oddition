@@ -434,6 +434,10 @@
     },
   ];
 
+  // how often new chord progressions reach outside the key (0..1), per style
+  const HARMONY = { lofi: 0.55, boombap: 0.35, trap: 0.15, house: 0.3, techno: 0.05, synthwave: 0.35, pop: 0.3, ambient: 0.2, dnb: 0.25 };
+  for (const s of STYLES) if (s.harmony == null) s.harmony = HARMONY[s.id] != null ? HARMONY[s.id] : 0.3;
+
   const byId = {};
   for (const s of STYLES) byId[s.id] = s;
 

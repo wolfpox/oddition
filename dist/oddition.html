@@ -1160,8 +1160,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  *   acc   = chromatic offset in semitones (usually 0).
  *   base  = MIDI note of a C (multiple of 12) that anchors the register.
  *
- * A progression is [{ deg, beats }] where deg is the chord root as a scale
- * degree (0..6) and chords are built diatonically from the current scale.
+ * A progression is [{ deg, beats, acc?, mode?, sev? }]. deg is the chord root
+ * as a scale degree (0..6). Without acc/mode the chord is built from the
+ * current scale. A chromatic chord (V/V, bVI, the Neapolitan...) adds
+ *   acc   semitone offset of the root (bVI in major: deg 5, acc -1)
+ *   mode  its chord scale, a name from MODES (V/V in major: 'mixolydian')
+ *   sev   1 when the seventh was asked for explicitly ("V7")
+ * chordAlt() turns that into a per-degree accidental table. Generators write
+ * plain scale degrees and the chord's table bends them, so a melody over V/V
+ * picks up the F# without knowing about it.
  */
 (function (Odd) {
   'use strict';
@@ -1229,6 +1236,161 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return NOTE_NAMES[mod(p, 12)] + (Math.floor(p / 12) - 1);
   }
 
+  // ---- chord scales ----
+
+  // every mode of major, harmonic minor and melodic minor, as semitones from its root
+  const PARENTS = {
+    major: { steps: [0, 2, 4, 5, 7, 9, 11], names: ['ionian', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'aeolian', 'locrian'] },
+    harmonicMinor: { steps: [0, 2, 3, 5, 7, 8, 11], names: ['harmonicMinor', 'locrianNat6', 'ionianAug', 'dorianSharp4', 'phrygianDominant', 'lydianSharp2', 'superlocrian'] },
+    melodicMinor: { steps: [0, 2, 3, 5, 7, 9, 11], names: ['melodicMinor', 'dorianFlat2', 'lydianAug', 'lydianDominant', 'mixolydianFlat6', 'locrianNat2', 'altered'] },
+  };
+  const MODES = {};
+  for (const fam of Object.keys(PARENTS)) {
+    const P = PARENTS[fam];
+    P.names.forEach((name, k) => {
+      MODES[name] = { family: fam, steps: P.steps.map((_, i) => mod(P.steps[(i + k) % 7] - P.steps[k], 12)) };
+    });
+  }
+  const MODE_ORDER = Object.keys(MODES);
+
+  /** fold a semitone difference into -6..+5 */
+  function wrapSemis(x) {
+    const m = mod(x, 12);
+    return m > 5 ? m - 12 : m;
+  }
+
+  const ZERO = Object.freeze([0, 0, 0, 0, 0, 0, 0]);
+  const altCache = new Map();
+
+  /** is this a plain chord built from the scale? */
+  function isDiatonic(chord) {
+    return !chord || (!chord.acc && !chord.mode);
+  }
+
+  /**
+   * accidental for each scale degree (index deg mod 7) while `chord` sounds.
+   * All zeros for a diatonic chord.
+   */
+  function chordAlt(chord, scale) {
+    if (isDiatonic(chord)) return ZERO;
+    const key = scale + '|' + chord.deg + '|' + (chord.acc || 0) + '|' + (chord.mode || '');
+    let alt = altCache.get(key);
+    if (alt) return alt;
+    const out = ZERO.slice();
+    const root = degToSemis(chord.deg, scale) + (chord.acc || 0);
+    const m = MODES[chord.mode];
+    for (let i = 0; i < 7; i++) {
+      const k = chord.deg + i;
+      const keySemis = degToSemis(k, scale);
+      const want = m ? root + m.steps[i] : keySemis + (chord.acc || 0);
+      out[mod(k, 7)] = wrapSemis(want - keySemis);
+    }
+    alt = Object.freeze(out);
+    altCache.set(key, alt);
+    return alt;
+  }
+
+  /** semitones of the chord's 3rd, 5th and 7th above its root, and the root above the tonic */
+  function chordShape(chord, scale) {
+    const c = typeof chord === 'object' ? chord : { deg: chord };
+    const alt = chordAlt(c, scale);
+    const at = (d) => degToSemis(d, scale) + alt[mod(d, 7)];
+    const r = at(c.deg);
+    return { root: r, third: at(c.deg + 2) - r, fifth: at(c.deg + 4) - r, seventh: at(c.deg + 6) - r };
+  }
+
+  function qualityOf(third, fifth) {
+    if (third === 4 && fifth === 7) return 'maj';
+    if (third === 3 && fifth === 7) return 'min';
+    if (third === 3 && fifth === 6) return 'dim';
+    if (third === 4 && fifth === 8) return 'aug';
+    return 'maj';
+  }
+
+  function sameChord(a, b) {
+    return !!a && !!b && a.deg === b.deg && (a.acc || 0) === (b.acc || 0) && (a.mode || '') === (b.mode || '') && !!a.sev === !!b.sev;
+  }
+
+  /** chord fields without the length */
+  function chordOnly(c) {
+    const out = { deg: c.deg };
+    const acc = Math.round(Number(c.acc) || 0);
+    if (acc) out.acc = Math.max(-2, Math.min(2, acc));
+    if (c.mode && Object.prototype.hasOwnProperty.call(MODES, c.mode)) out.mode = c.mode;
+    if (c.sev) out.sev = 1;
+    return out;
+  }
+
+  /**
+   * the same chord, read in another scale: a chromatic chord keeps its sound
+   * (bIII in C major stays Eb in C minor, where it is just III); a plain chord
+   * stays a plain chord of the new scale.
+   */
+  function rescaleChord(chord, from, to) {
+    const c = chordOnly(chord);
+    if (isDiatonic(c)) return c;
+    const root = degToSemis(c.deg, from) + (c.acc || 0);
+    const acc = wrapSemis(root - degToSemis(c.deg, to));
+    const out = Object.assign({}, c);
+    if (acc) out.acc = acc; else delete out.acc;
+    // the chord scale is absolute, so nothing else moves. If the new scale
+    // already has this chord, it becomes that plain chord.
+    if (!acc) {
+      const plain = { deg: c.deg, sev: c.sev };
+      const a = chordShape(out, to), b = chordShape(plain, to);
+      if (a.third === b.third && a.fifth === b.fifth && (!c.sev || a.seventh === b.seventh)) {
+        delete out.acc; delete out.mode;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Chord on `deg` (+ root `acc`) with the given triad quality and optional
+   * seventh (semitones: 9, 10, 11). Diatonic when the scale already has it;
+   * otherwise picks the chord scale that changes the fewest notes of the key.
+   */
+  function resolveChord(scale, deg, acc, quality, seventh) {
+    const d = mod(deg, 7);
+    const a = acc || 0;
+    if (!a) {
+      const sh = chordShape({ deg: d }, scale);
+      if (qualityOf(sh.third, sh.fifth) === quality && (seventh == null || sh.seventh === seventh)) return { deg: d };
+    }
+    let best = null, bestCost = Infinity;
+    for (let pass = 0; pass < 2 && !best; pass++) {
+      MODE_ORDER.forEach((name, order) => {
+        const m = MODES[name];
+        if (qualityOf(m.steps[2], m.steps[4]) !== quality) return;
+        if (pass === 0 && seventh != null && m.steps[6] !== seventh) return;
+        const c = { deg: d, acc: a, mode: name };
+        const alt = chordAlt(c, scale);
+        const cost = alt.filter((x) => x !== 0).length + (m.family === 'major' ? 0 : 1) + order * 0.001;
+        if (cost < bestCost) { bestCost = cost; best = c; }
+      });
+    }
+    if (!best.acc) delete best.acc;
+    return best;
+  }
+
+  /** chord number `step` (0-6) in the key of the chord `target`: V/V, vii°/ii... */
+  function secondaryChord(scale, step, target, quality, seventh) {
+    const tq = chordQuality(target, scale);
+    const parent = PARENTS[tq === 'maj' || tq === 'aug' ? 'major' : 'harmonicMinor'];
+    const tRoot = degToSemis(target.deg, scale) + (target.acc || 0);
+    const deg = target.deg + step;
+    const acc = wrapSemis(tRoot + parent.steps[step] - degToSemis(deg, scale));
+    const mode = parent.names[step];
+    const m = MODES[mode];
+    if (qualityOf(m.steps[2], m.steps[4]) === quality && (seventh == null || m.steps[6] === seventh)) {
+      const c = { deg: mod(deg, 7), mode };
+      if (acc) c.acc = acc;
+      // a secondary chord the key already has stays plain
+      return chordAlt(c, scale).every((x) => x === 0) ? { deg: c.deg } : c;
+    }
+    return resolveChord(scale, deg, acc, quality, seventh);
+  }
+
   // ---- chords ----
 
   /** chord tones as scale degrees: size 3 = triad, 4 = 7th, 5 = 9th */
@@ -1245,23 +1407,32 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return (size || 3) >= 4 && rel === 6;
   }
 
+  /** triad quality; `root` is a degree or a chord object */
   function chordQuality(root, scale) {
-    const r = degToSemis(root, scale);
-    const third = degToSemis(root + 2, scale) - r;
-    const fifth = degToSemis(root + 4, scale) - r;
-    if (third === 4 && fifth === 7) return 'maj';
-    if (third === 3 && fifth === 7) return 'min';
-    if (third === 3 && fifth === 6) return 'dim';
-    if (third === 4 && fifth === 8) return 'aug';
-    return 'maj';
+    const sh = chordShape(root, scale);
+    return qualityOf(sh.third, sh.fifth);
   }
 
+  const MAJOR = SCALES.major.steps;
+  const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+  const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  /** how far a chord's root sits from the same numeral in the major scale (bVI: -1) */
+  function majorAcc(c, scale) {
+    return wrapSemis(chordShape(c, scale).root - MAJOR[mod(c.deg, 7)]);
+  }
+
+  /** chord symbol; `root` is a degree or a chord object */
   function chordName(root, tonic, scale, size) {
-    const pc = mod(tonic + degToSemis(root, scale), 12);
-    const q = chordQuality(root, scale);
-    let name = NOTE_NAMES[pc];
-    if ((size || 3) >= 4) {
-      const seventh = degToSemis(root + 6, scale) - degToSemis(root, scale);
+    const c = typeof root === 'object' ? root : { deg: root };
+    const sh = chordShape(c, scale);
+    const q = qualityOf(sh.third, sh.fifth);
+    // chromatic roots are spelt the way their numeral reads: bII is Db, #iv is F#
+    const ma = isDiatonic(c) ? 0 : majorAcc(c, scale);
+    const names = ma < 0 ? FLAT_NAMES : ma > 0 ? SHARP_NAMES : NOTE_NAMES;
+    let name = names[mod(tonic + sh.root, 12)];
+    if ((size || 3) >= 4 || c.sev) {
+      const seventh = sh.seventh;
       if (q === 'maj') name += seventh === 11 ? 'maj7' : '7';
       else if (q === 'min') name += seventh === 10 ? 'm7' : 'm(maj7)';
       else if (q === 'dim') name += seventh === 10 ? 'm7b5' : 'dim7';
@@ -1272,13 +1443,132 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return name;
   }
 
+  /**
+   * roman numeral for a chord (a degree or chord object). Chromatic chords
+   * get an accidental, a 7th or a /target: whichever reads back as the same chord.
+   */
   function roman(root, scale) {
-    const q = chordQuality(root, scale);
-    let n = NUMERALS[mod(root, 7)];
+    const c = typeof root === 'object' ? chordOnly(root) : { deg: root };
+    const cands = romanCandidates(c, scale);
+    const parsed = cands.map((tok) => parseChord(tok, scale));
+    for (let i = 0; i < cands.length; i++) if (parsed[i] && sameChord(parsed[i], c)) return cands[i];
+    // text cannot pick every chord scale; fall back to one with the same chord tones
+    const want = chordShape(c, scale);
+    for (let i = 0; i < cands.length; i++) {
+      const b = parsed[i];
+      if (!b || !!b.sev !== !!c.sev) continue;
+      const sh = chordShape(b, scale);
+      if (sh.root === want.root && sh.third === want.third && sh.fifth === want.fifth && (!c.sev || sh.seventh === want.seventh)) return cands[i];
+    }
+    return cands[0];
+  }
+
+  /**
+   * numeral for a chord. `prefix`: null for a bare numeral, otherwise the
+   * accidental is written relative to the major scale (bVI, ♮vii°).
+   */
+  function romanBase(c, scale, withSeventh, prefix) {
+    const sh = chordShape(c, scale);
+    const q = qualityOf(sh.third, sh.fifth);
+    let n = NUMERALS[mod(c.deg, 7)];
     if (q === 'min' || q === 'dim') n = n.toLowerCase();
-    if (q === 'dim') n += '°';
-    if (q === 'aug') n += '+';
-    return n;
+    let acc = '';
+    if (prefix) {
+      const a = majorAcc(c, scale);
+      acc = a < 0 ? 'b'.repeat(-a) : a > 0 ? '#'.repeat(a) : '♮';
+    }
+    const tok = acc + n;
+    if (!withSeventh) return tok + (q === 'dim' ? '°' : q === 'aug' ? '+' : '');
+    if (q === 'dim') return tok + (sh.seventh === 10 ? 'ø7' : '°7');
+    if (q === 'aug') return tok + '+7';
+    if (q === 'maj') return tok + (sh.seventh === 11 ? 'maj7' : '7');
+    return tok + (sh.seventh === 10 ? '7' : 'maj7');
+  }
+
+  function romanCandidates(c, scale) {
+    const forms = (prefix) => {
+      const plain = romanBase(c, scale, false, prefix);
+      const seventh = romanBase(c, scale, true, prefix);
+      return c.sev ? [seventh, plain] : [plain, seventh];
+    };
+    let list = forms(false);
+    if (isDiatonic(c)) return list;
+    // a chromatic major chord on a natural root usually reads best as a
+    // secondary dominant: II is V/V, III7 is V7/vi, I7 is V7/IV
+    const sh = chordShape(c, scale);
+    const dominant = qualityOf(sh.third, sh.fifth) === 'maj' && majorAcc(c, scale) === 0 && (!c.sev || sh.seventh === 10);
+    const fam = (SCALES[scale] || SCALES.major).family;
+    const preferSecondary = dominant && (c.sev || (fam === 'major' ? [1, 2, 5, 6].includes(mod(c.deg, 7)) : mod(c.deg, 7) === 1));
+    // with an accidental, unless the bare numeral already reads right
+    for (const tok of forms(true)) if (!/^♮/.test(tok) || !list.includes(tok.slice(1))) list.push(tok);
+    // secondary forms over the plain major/minor chords of the key
+    const heads = c.sev ? ['V7', 'vii°7', 'viiø7'] : ['V', 'vii°'];
+    // secondary chords before the Neapolitan's N: they read as more than a name
+    const heads0 = list.length;
+    for (let t = 1; t < 7; t++) {
+      for (const target of [NUMERALS[t], NUMERALS[t].toLowerCase()]) {
+        for (const h of heads) list.push(h + '/' + target);
+      }
+    }
+    if (!c.sev && majorAcc(c, scale) === -1 && mod(c.deg, 7) === 1) list.splice(heads0, 0, 'N');
+    if (preferSecondary) list = list.slice(heads0).concat(list.slice(0, heads0));
+    return list;
+  }
+
+  /** cost of a chord: how many notes of the key it changes (+1 outside the major-mode family) */
+  function chordCost(c, scale) {
+    if (isDiatonic(c)) return 0;
+    const m = MODES[c.mode];
+    return chordAlt(c, scale).filter((x) => x !== 0).length + (m && m.family !== 'major' ? 1 : 0);
+  }
+
+  /**
+   * chord for numeral `idx`. An accidental counts from the major scale
+   * (bVI is Ab in C major and in C minor, where it is the plain VI). A bare
+   * numeral is the scale's own degree, or the major scale's when that needs
+   * fewer changes: vii°7 in C minor is B°7, VII is Bb.
+   */
+  function numeralChord(scale, idx, accStr, quality, seventh) {
+    if (accStr) {
+      let a = 0;
+      for (const ch of accStr) a += ch === 'b' || ch === '♭' ? -1 : ch === '#' || ch === '♯' ? 1 : 0;
+      return resolveChord(scale, idx, wrapSemis(MAJOR[idx] + a - degToSemis(idx, scale)), quality, seventh);
+    }
+    const own = resolveChord(scale, idx, 0, quality, seventh);
+    const shift = wrapSemis(MAJOR[idx] - degToSemis(idx, scale));
+    if (!shift) return own;
+    const other = resolveChord(scale, idx, shift, quality, seventh);
+    return chordCost(other, scale) < chordCost(own, scale) ? other : own;
+  }
+
+  /** parse one chord token ("bVI", "V7/V", "N", "iv"); null if it is not one */
+  function parseChord(tok, scale) {
+    const m = /^([b#♭♯♮]*)(N|[ivIV]+)(°|o|ø|\+|dim|aug)?(maj7|M7|7|m7b5|m7)?(?:sus\d|add\d)?(?:\/([b#♭♯♮]*)([ivIV]+))?$/.exec(tok);
+    if (!m) return null;
+    if (m[2] === 'N') return numeralChord(scale, 1, 'b', 'maj', null); // Neapolitan: bII
+    const idx = NUMERALS.indexOf(m[2].toUpperCase());
+    if (idx < 0) return null;
+    const upper = m[2] === m[2].toUpperCase();
+    const mark = m[3] || '';
+    const sev = m[4] || '';
+    let quality = upper ? 'maj' : 'min';
+    if (mark === '°' || mark === 'o' || mark === 'dim' || mark === 'ø') quality = 'dim';
+    if (mark === '+' || mark === 'aug') quality = 'aug';
+    let seventh = null;
+    if (mark === 'ø' || sev === 'm7b5') { quality = 'dim'; seventh = 10; }
+    else if (sev === 'maj7' || sev === 'M7') seventh = 11;
+    else if (sev) seventh = quality === 'dim' ? 9 : 10;
+    let chord;
+    if (m[6]) {
+      const tIdx = NUMERALS.indexOf(m[6].toUpperCase());
+      if (tIdx < 0) return null;
+      const target = numeralChord(scale, tIdx, m[5], m[6] === m[6].toUpperCase() ? 'maj' : 'min', null);
+      chord = secondaryChord(scale, idx, target, quality, seventh);
+    } else {
+      chord = numeralChord(scale, idx, m[1], quality, seventh);
+    }
+    if (seventh != null) chord.sev = 1;
+    return chord;
   }
 
   /** shortest diatonic move between chord roots, in -3..+3 */
@@ -1326,7 +1616,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const c = chordAt(prog, t);
       const stop = Math.min(c.end, end);
       const beats = (stop - t) / BEAT;
-      if (beats > 0) out.push({ deg: c.chord.deg, beats });
+      if (beats > 0) out.push(Object.assign(chordOnly(c.chord), { beats }));
       t = stop;
     }
     return out;
@@ -1361,8 +1651,95 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   };
 
   /**
+   * Colour a plain progression with chords from outside the key. amount 0..1
+   * (0 leaves it alone). In major: iv, bVI, bVII borrowed from minor. In
+   * minor: the major V before i, a dorian IV, the Neapolitan before V. In
+   * both: secondary dominants into the next chord, and with a lot of colour a
+   * tritone sub for V7 into I.
+   */
+  function colorProgression(prog, rng, scale, amount) {
+    if (!(amount > 0) || !prog.length) return prog;
+    const fam = (SCALES[scale] || SCALES.minor).family;
+    const P = (tok, beats) => Object.assign(parseChord(tok, scale), { beats });
+    const changed = new WeakSet();
+    const list = prog.map((c) => Object.assign({}, c));
+    // one decision per chord move, so a repeated loop is coloured the same way each time
+    const decided = new Map();
+    const decide = (key, p) => {
+      if (!decided.has(key)) decided.set(key, rng.chance(Math.min(1, p)));
+      return decided.get(key);
+    };
+    const moveKey = (kind, c, next) => kind + ':' + c.deg + '>' + (next ? next.deg : '-');
+    // sections loop, so the last chord leads back into the first
+    const after = (arr, i) => (arr.length > 1 ? arr[(i + 1) % arr.length] : null);
+
+    // 1. borrowed chords
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (!isDiatonic(c) || (i === 0 && c.deg === 0)) continue;
+      const next = after(list, i);
+      const q = chordQuality(c, scale);
+      let tok = null, p = 0;
+      if (fam === 'major') {
+        if (c.deg === 3 && q === 'maj') { tok = 'iv'; p = 0.35; }
+        else if (c.deg === 5 && q === 'min') { tok = 'bVI'; p = 0.3; }
+        else if (c.deg === 6) { tok = 'bVII'; p = 0.45; }
+      } else {
+        if (c.deg === 4 && q === 'min' && (!next || next.deg === 0)) { tok = 'V'; p = 0.7; }
+        else if (c.deg === 3 && q === 'min') { tok = 'IV'; p = 0.2; }
+        else if (c.deg === 1 && next && next.deg === 4) { tok = 'N'; p = 0.3; }
+      }
+      if (tok && decide(moveKey('b', c, next), p * amount)) { list[i] = P(tok, c.beats); changed.add(list[i]); }
+    }
+
+    // 2. secondary dominants into the next chord (not the tonic: V/I is just V)
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      const next = after(list, i);
+      out.push(c);
+      if (!next || changed.has(c) || changed.has(next) || next.deg === 0) continue;
+      const nq = chordQuality(next, scale);
+      if (nq !== 'maj' && nq !== 'min') continue;
+      const key = moveKey('s', c, next);
+      if (!decide(key, 0.22 * amount)) continue;
+      const target = (nq === 'maj' ? NUMERALS[next.deg] : NUMERALS[next.deg].toLowerCase());
+      const sev = decide(key + ':7', 0.4 + 0.4 * amount);
+      const split = decide(key + ':split', 0.6);
+      const sec = parseChord((sev ? 'V7/' : 'V/') + target, scale);
+      if (!sec || sameChord(sec, c)) continue;
+      // the opening chord (and its repeats) is never replaced, only shortened
+      const keepFirst = c.deg === list[0].deg;
+      if (c.beats >= 4 && (keepFirst || split)) {
+        // the second half of this chord leads into the next
+        const half = c.beats / 2;
+        c.beats = half;
+        const s = Object.assign(sec, { beats: half });
+        changed.add(s);
+        out.push(s);
+      } else if (!keepFirst) {
+        const s = Object.assign(sec, { beats: c.beats });
+        changed.add(s);
+        out[out.length - 1] = s;
+      }
+    }
+
+    // 3. tritone sub: V7 into I becomes bII7 (only with a lot of colour)
+    for (let i = 0; i < out.length; i++) {
+      const c = out[i];
+      const next = after(out, i);
+      if (next && c.deg === 4 && chordQuality(c, scale) === 'maj' && next.deg === 0 && !changed.has(c) &&
+          decide('t', Math.max(0, amount - 0.5) * 0.9)) {
+        out[i] = P('bII7', c.beats);
+      }
+    }
+    return out;
+  }
+
+  /**
    * New chord progression for a section.
-   * opts: { scale, bars, rate (chords per bar: 0.5 | 1 | 2), vamp (bool) }
+   * opts: { scale, bars, rate (chords per bar: 0.5 | 1 | 2), vamp (bool),
+   *         color (0..1: chords from outside the key, see colorProgression) }
    */
   function generateProgression(rng, opts) {
     const scale = opts.scale || 'minor';
@@ -1394,12 +1771,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
 
     // merge identical neighbours into longer chords
-    const prog = [];
+    let prog = [];
     for (const d of out) {
       const last = prog[prog.length - 1];
       if (last && last.deg === d && last.beats < 8) last.beats += beatsPer;
       else prog.push({ deg: d, beats: beatsPer });
     }
+    // a separate stream, so the same seed gives the same plain chords at any colour
+    if (opts.color > 0 && !opts.vamp) prog = colorProgression(prog, rng.fork('color'), scale, opts.color);
     return fitProg(prog, bars);
   }
 
@@ -1412,34 +1791,41 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     for (const c of prog) counts.set(c.beats, (counts.get(c.beats) || 0) + 1);
     let common = prog[0].beats;
     for (const [b, n] of counts) if (n > counts.get(common)) common = b;
-    return prog.map((c) => roman(c.deg, scale) + (c.beats === common ? '' : ':' + c.beats)).join(' ');
+    return prog.map((c) => roman(c, scale) + (c.beats === common ? '' : ':' + c.beats)).join(' ');
   }
 
-  /** parse roman-numeral text into a progression spanning `bars` bars; null if invalid */
-  function parseProg(text, bars) {
+  /**
+   * parse roman-numeral text into a progression spanning `bars` bars; null if invalid.
+   * Case sets the quality (V major, v minor), so "V" in a minor key is the
+   * major dominant. Also: b/# roots (bVI), 7ths (V7, ii7, IVmaj7), ° ø +,
+   * secondary chords (V/V, V7/ii, vii°/vi) and N for the Neapolitan.
+   * Without `scale` only the chord roots are kept (plain degrees).
+   */
+  function parseProg(text, bars, scale) {
     const tokens = String(text).replace(/[|,]/g, ' ').trim().split(/\s+/).filter(Boolean);
     if (!tokens.length) return null;
     const items = [];
     for (const tok of tokens) {
-      const m = /^(b|#)?([ivIV]+)[°o+]?(?:maj7|m7|7|dim|sus\d)?(?::(\d+(?:\.\d+)?))?$/.exec(tok);
-      if (!m) return null;
-      const idx = NUMERALS.indexOf(m[2].toUpperCase());
-      if (idx < 0) return null;
-      items.push({ deg: idx, beats: m[3] ? parseFloat(m[3]) : null });
+      const m = /^(.+?)(?::(\d+(?:\.\d+)?))?$/.exec(tok);
+      const chord = m && parseChord(m[1], scale || 'major');
+      if (!chord) return null;
+      const c = scale ? chord : { deg: chord.deg };
+      items.push(Object.assign(c, { beats: m[2] ? parseFloat(m[2]) : null }));
     }
     const total = bars * 4;
     const fixed = items.reduce((s, it) => s + (it.beats || 0), 0);
     const free = items.filter((it) => !it.beats).length;
     const each = free ? Math.max(0.5, (total - fixed) / free) : 0;
-    const prog = items.map((it) => ({ deg: it.deg, beats: it.beats || each }));
+    const prog = items.map((it) => Object.assign(it, { beats: it.beats || each }));
     return fitProg(prog, bars);
   }
 
   Odd.theory = {
     PPQ, BEAT, BAR, STEP, NOTE_NAMES, NUMERALS, SCALES,
     mod, scaleSteps, degToSemis, tonicOffset, pitchOf, degreeOf, midiName, clampPitch,
+    MODES, chordAlt, chordShape, isDiatonic, sameChord, chordOnly, rescaleChord, resolveChord, parseChord,
     chordDegs, isChordTone, chordQuality, chordName, roman, wrapDelta,
-    progBeats, progTicks, chordAt, sliceProg, fitProg, generateProgression,
+    progBeats, progTicks, chordAt, sliceProg, fitProg, generateProgression, colorProgression,
     formatProg, parseProg,
   };
 })(globalThis.Odd = globalThis.Odd || {});
@@ -1880,6 +2266,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       arp: { rate: '16', pattern: 'updown', seventh: 0.7, low: 57 },
     },
   ];
+
+  // how often new chord progressions reach outside the key (0..1), per style
+  const HARMONY = { lofi: 0.55, boombap: 0.35, trap: 0.15, house: 0.3, techno: 0.05, synthwave: 0.35, pop: 0.3, ambient: 0.2, dnb: 0.25 };
+  for (const s of STYLES) if (s.harmony == null) s.harmony = HARMONY[s.id] != null ? HARMONY[s.id] : 0.3;
 
   const byId = {};
   for (const s of STYLES) byId[s.id] = s;
@@ -2362,7 +2752,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const target = pitch(nextRoot);
           const fromBelow = prevPitch <= target;
           if (rNotes.chance(S.chromatic * (0.5 + movement))) {
-            return { deg: nextRoot, acc: fromBelow ? -1 : 1 };
+            // a semitone from the next root as it really sounds (bVI is flat)
+            const rootAcc = nxt.alt[T.mod(nextRoot, 7)];
+            return { deg: nextRoot, acc: rootAcc + (fromBelow ? -1 : 1), fix: true };
           }
           const d = nextRoot + (fromBelow ? -1 : 1);
           return { deg: inRange(d) ? d : nextRoot, acc: 0 };
@@ -2409,7 +2801,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         if (on.len * STEP >= 4 * STEP && S.gate >= 0.95) d = on.len * STEP - 10;
         let v = S.vel + (on.step % 4 === 0 ? 6 : on.step % 2 === 0 ? 0 : -8) + rVary.int(-4, 4);
         if (t === o.start) v += 4;
-        notes.push({ t, d, v, deg: tone.deg, acc: tone.acc });
+        notes.push({ t, d, v, deg: tone.deg, acc: tone.acc, fix: tone.fix });
         prevPitch = pitch(tone.deg, tone.acc);
       }
     }
@@ -2442,7 +2834,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       let cur = n;
       for (const o of occ) {
         if (o.start <= cur.t || o.start >= cur.t + cur.d) continue;
-        if (T.isChordTone(cur.deg, o.deg, 3) && !cur.acc) continue;
+        // keeps ringing only as a chord tone the new chord does not alter differently
+        const k = T.mod(cur.deg, 7);
+        if (T.isChordTone(cur.deg, o.deg, 3) && !cur.fix && o.alt[k] === ctx.altAt(cur.t)[k]) continue;
         const remain = cur.t + cur.d - o.start;
         cur.d = o.start - cur.t;
         out.push(cur);
@@ -2588,17 +2982,18 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const extByDeg = new Map(); // keep the same colour for repeats of a chord
     let prev = null;
     const voicing = occ.map((o) => {
-      let ext = extByDeg.get(o.deg);
+      let ext = extByDeg.get(o.key);
       if (!ext || rColor.chance(0.2 * complexity)) {
         const s7 = rColor.chance(p7);
         const s9 = rColor.chance(p9 * (s7 ? 1 : 0.5));
         ext = { s7, s9 };
-        extByDeg.set(o.deg, ext);
+        extByDeg.set(o.key, ext);
       }
       const r = o.deg;
       let classes = [r, r + 2, r + 4];
-      if (ext.s7 && ctx.goodSeventh(r)) classes.push(r + 6);
-      if (ext.s9 && ctx.goodNinth(r)) classes.push(r + 8);
+      // a 7th written into the chord ("V7") always sounds
+      if (o.chord.sev || (ext.s7 && ctx.goodSeventh(r, o.alt))) classes.push(r + 6);
+      if (ext.s9 && ctx.goodNinth(r, o.alt)) classes.push(r + 8);
       // 7th + 9th: play it rootless (3-5-7-9) and leave the root to the bass
       if (classes.length === 5) classes = [r + 2, r + 4, r + 6, r + 8];
       const spread = rVoice.chance(S.spread);
@@ -2755,8 +3150,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       // seventh on top only when the style leans that way
       if (name === 'open7' && !rVoice.chance(0.4 + S.color * 0.6)) offs = TEMPLATES.open.slice();
       // drop clashing colour tones (minor-major 7ths, b9 / #9) for this chord
-      offs = offs.filter((x) => T.mod(x, 7) !== 6 || ctx.goodSeventh(o.deg));
-      offs = Array.from(new Set(offs.map((x) => (T.mod(x, 7) === 1 && !ctx.goodNinth(o.deg) ? x - 1 : x))));
+      offs = offs.filter((x) => T.mod(x, 7) !== 6 || ctx.goodSeventh(o.deg, o.alt));
+      offs = Array.from(new Set(offs.map((x) => (T.mod(x, 7) === 1 && !ctx.goodNinth(o.deg, o.alt) ? x - 1 : x))));
       let best = null, bestCost = Infinity;
       while (!best && offs.length >= 2) {
         for (let k = -4; k <= 4; k++) {
@@ -2917,11 +3312,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const clampDeg = (d) => u.clamp(d, lo, hi);
 
     const rootAt = (t) => ctx.chordAt(t).chord.deg;
-    const stable = (d, root) => {
+    const stable = (d, root, t) => {
       const rel = T.mod(d - root, 7);
       if (rel === 0 || rel === 2 || rel === 4) return true;
       if (!L.stableExt) return false;
-      return (rel === 6 && ctx.goodSeventh(root)) || (rel === 1 && ctx.goodNinth(root));
+      const alt = ctx.altAt(t);
+      return (rel === 6 && ctx.goodSeventh(root, alt)) || (rel === 1 && ctx.goodNinth(root, alt));
     };
     const inPenta = (d) => !penta || penta.includes(T.mod(d, 7));
 
@@ -2929,8 +3325,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const root = rootAt(t);
       const strong = t % (2 * BEAT) === 0 || dur >= BEAT || (t % BEAT === 0 && dur >= 2 * STEP);
       if (strong) {
-        if (stable(d, root)) return d;
-        const cands = [d - 1, d + 1, d - 2, d + 2].filter((x) => x >= lo && x <= hi && stable(x, root));
+        if (stable(d, root, t)) return d;
+        const cands = [d - 1, d + 1, d - 2, d + 2].filter((x) => x >= lo && x <= hi && stable(x, root, t));
         if (!cands.length) return d;
         cands.sort((a, b) => Math.abs(a - d) - Math.abs(b - d) || Math.abs(a - prev) - Math.abs(b - prev));
         return cands[0];
@@ -3211,8 +3607,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         const a = notes[i], b = notes[i + 1];
         if (b.t % (2 * BEAT) !== 0 || a.t % BEAT === 0 || b.t - a.t > 2 * STEP) continue;
         if (a.deg !== b.deg - 1) continue;
-        const whole = T.degToSemis(b.deg, ctx.scale) - T.degToSemis(b.deg - 1, ctx.scale) === 2;
-        if (whole && rDetail.chance(complexity * 0.3)) { a.deg = b.deg; a.acc = -1; }
+        // semitones as they sound over each note's chord
+        const bAcc = ctx.altAt(b.t)[T.mod(b.deg, 7)];
+        const aAcc = ctx.altAt(a.t)[T.mod(b.deg - 1, 7)];
+        const whole = T.degToSemis(b.deg, ctx.scale) + bAcc - (T.degToSemis(b.deg - 1, ctx.scale) + aAcc) === 2;
+        if (whole && rDetail.chance(complexity * 0.3)) { a.deg = b.deg; a.acc = bAcc - 1; a.fix = true; }
       }
     }
 
@@ -3330,7 +3729,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     let prevLow = S.low;
     for (const o of occ) {
       const classes = [0, 2, 4];
-      if (seventh && ctx.goodSeventh(o.deg)) classes.push(6);
+      if (o.chord.sev || (seventh && ctx.goodSeventh(o.deg, o.alt))) classes.push(6);
       // anchor the chord root near the previous chord's position
       const root = ctx.placeDeg(o.deg, prevLow, LO, 72);
       prevLow = ctx.pitch(root);
@@ -3444,15 +3843,23 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return clamp(Math.round(x), 0, n - 1);
   }
 
-  /** chord occurrences in order: [{ start, end, deg, index }] */
-  function occurrences(prog, total) {
+  /**
+   * chord occurrences in order: [{ start, end, deg, chord, alt, key, index }]
+   * alt: the chord's accidental per scale degree (all 0 for a plain chord);
+   * key: identifies the chord, so repeats of it can share choices
+   */
+  function occurrences(prog, total, scale) {
     const out = [];
     let t = 0;
     let guard = 0;
     while (t < total && guard++ < 512) {
       const c = T.chordAt(prog, t);
       const end = Math.min(c.end, total);
-      out.push({ start: t, end, deg: c.chord.deg, index: out.length });
+      const chord = T.chordOnly(c.chord);
+      out.push({
+        start: t, end, deg: chord.deg, chord, alt: T.chordAlt(chord, scale),
+        key: chord.deg + ':' + (chord.acc || 0) + ':' + (chord.mode || ''), index: out.length,
+      });
       t = end;
     }
     return out;
@@ -3486,7 +3893,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const given = req.seeds || {};
     const ctx = {
       role, mod, bars, total, styleId, style, tonic, scale, prog, params, seed, base, shift, seeds,
-      occ: occurrences(prog, total),
+      occ: occurrences(prog, total, scale),
       rngFor(aspect) {
         let s = given[aspect];
         if (s == null) s = (seed ^ R.hash(aspect)) >>> 0;
@@ -3494,19 +3901,30 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         return R.create(s >>> 0);
       },
       pitch(deg, acc) { return T.pitchOf(deg, acc || 0, tonic, scale, base); },
-      /** semitones from `root` up to `deg`, folded into one octave */
-      interval(root, deg) { return T.mod(T.degToSemis(deg, scale) - T.degToSemis(root, scale), 12); },
-      /** diatonic 7th that sounds consonant (no minor-major 7th, no augmented major 7th) */
-      goodSeventh(root) {
-        const s = ctx.interval(root, root + 6);
-        const q = T.chordQuality(root, scale);
-        if (s === 10) return true;
-        if (s === 11) return q === 'maj';
-        return s === 9 && q === 'dim';
+      /**
+       * semitones from `root` up to `deg`, folded into one octave. `alt` is
+       * the chord's accidental table (occurrence .alt, or ctx.altAt(t)).
+       */
+      interval(root, deg, alt) {
+        const a = alt || ZERO_ALT;
+        const s = T.degToSemis(deg, scale) + a[T.mod(deg, 7)];
+        const r = T.degToSemis(root, scale) + a[T.mod(root, 7)];
+        return T.mod(s - r, 12);
       },
-      /** diatonic 9th that is a whole step above the root (no b9 / #9) */
-      goodNinth(root) { return ctx.interval(root, root + 1) === 2; },
+      /** 7th that sounds consonant (no minor-major 7th, no augmented major 7th) */
+      goodSeventh(root, alt) {
+        const s = ctx.interval(root, root + 6, alt);
+        const third = ctx.interval(root, root + 2, alt);
+        const fifth = ctx.interval(root, root + 4, alt);
+        if (s === 10) return true;
+        if (s === 11) return third === 4 && fifth === 7;
+        return s === 9 && third === 3 && fifth === 6;
+      },
+      /** 9th that is a whole step above the root (no b9 / #9) */
+      goodNinth(root, alt) { return ctx.interval(root, root + 1, alt) === 2; },
       chordAt(t) { return T.chordAt(prog, t); },
+      /** accidental table of the chord sounding at tick t */
+      altAt(t) { return T.chordAlt(T.chordAt(prog, t).chord, scale); },
       /** the degree, among deg + 7k, whose pitch lies in [lo, hi] closest to target pitch */
       placeDeg(deg, target, lo, hi) {
         let best = null, bestDist = Infinity;
@@ -3543,7 +3961,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return ctx;
   }
 
-  /** enforce note invariants, sort, dedupe, and clear same-pitch overlaps */
+  const ZERO_ALT = [0, 0, 0, 0, 0, 0, 0];
+
+  /**
+   * enforce note invariants, bend notes to the chord under them, sort, dedupe,
+   * and clear same-pitch overlaps.
+   * Generators write plain scale degrees; each note then takes the accidental
+   * its chord gives that degree (F# over V/V). A note marked `fix` already has
+   * a deliberate chromatic accidental (approach notes) and keeps it.
+   */
   function finalize(notes, ctx) {
     const total = ctx.total;
     const drum = ctx.role === 'drums';
@@ -3562,7 +3988,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       }
       const v = vel(n.v);
       if (drum) out.push({ t, d, v, p: Math.round(n.p) });
-      else out.push({ t, d, v, deg: Math.round(n.deg), acc: Math.round(n.acc || 0) });
+      else {
+        const deg = Math.round(n.deg);
+        let acc = Math.round(n.acc || 0);
+        if (!n.fix) acc += ctx.altAt(t)[T.mod(deg, 7)];
+        out.push({ t, d, v, deg, acc });
+      }
     }
     out.sort((a, b) => a.t - b.t || keyOf(a) - keyOf(b) || b.v - a.v);
     // dedupe same time + same pitch
@@ -3618,7 +4049,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       seeds: Object.assign({}, ctx.seeds),
       bars: ctx.bars,
       params: Object.assign({}, ctx.params),
-      ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => ({ deg: c.deg, beats: c.beats })) },
+      ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => Object.assign(T.chordOnly(c), { beats: c.beats })) },
       base: ctx.base == null ? null : ctx.base + ctx.shift,
       notes,
       name: gen.name(ctx.role, nameRng, ctx.styleId),
@@ -4091,12 +4522,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           continue;
         }
         let deg = n.deg;
+        let acc = n.acc || 0;
         if (refit) {
-          const s = T.chordAt(srcProg, n.t).chord.deg;
-          const g = T.chordAt(tgtProg, t).chord.deg;
-          deg += T.wrapDelta(g - s);
+          const sc = T.chordAt(srcProg, n.t).chord;
+          const gc = T.chordAt(tgtProg, t).chord;
+          deg += T.wrapDelta(gc.deg - sc.deg);
+          // a note that took its chord's accidental (F# over V/V) takes the
+          // new chord's instead; a deliberate chromatic note keeps its own
+          const srcScale = part.ctx && part.ctx.scale ? part.ctx.scale : scale;
+          if (acc === T.chordAlt(sc, srcScale)[T.mod(n.deg, 7)]) acc = T.chordAlt(gc, scale)[T.mod(deg, 7)];
         }
-        out.push({ t, d, p: T.pitchOf(deg, n.acc, tonic, scale, base), v: n.v });
+        out.push({ t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v });
       }
     }
     out.sort(byTime);
@@ -4261,7 +4697,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     while (t < length && guard++ < 512) {
       const c = T.chordAt(prog, t);
       const end = Math.min(c.end, length);
-      out.push({ start: t, end, label: T.chordName(c.chord.deg, tonic, scale), roman: T.roman(c.chord.deg, scale) });
+      out.push({ start: t, end, label: T.chordName(c.chord, tonic, scale), roman: T.roman(c.chord, scale) });
       t = end;
     }
     return out;
@@ -4727,8 +5163,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function newProgression(session, bars, rng) {
     const style = styleOf(session.style);
     return T.generateProgression(rng || Odd.rng.create(Odd.rng.newSeed()), {
-      scale: session.scale, bars, rate: style.rate || 1, vamp: !!style.vamp,
+      scale: session.scale, bars, rate: style.rate || 1, vamp: !!style.vamp, color: harmonyOf(session),
     });
+  }
+
+  /** how often new chords reach outside the key: the session's setting, else the style's */
+  function harmonyOf(session) {
+    if (typeof session.harmony === 'number') return session.harmony;
+    const st = styleOf(session.style);
+    return st.harmony != null ? st.harmony : 0.3;
   }
 
   function createSection(session, opts) {
@@ -4782,6 +5225,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     session.sections = session.sections.filter((s) => s.id !== id);
     session.arrangement = session.arrangement.filter((sid) => sid !== id);
     return true;
+  }
+
+  /** change the session's mode; chromatic chords keep their sound (see theory.rescaleChord) */
+  function setScale(session, scale) {
+    if (!T.SCALES[scale] || scale === session.scale) return;
+    for (const sec of session.sections) {
+      sec.prog = sec.prog.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
+    }
+    session.scale = scale;
   }
 
   function setSectionBars(session, section, bars) {
@@ -4853,6 +5305,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       scale,
       bpm: o.bpm || Math.round(rng.range(style.tempo[0], style.tempo[1])),
       swing: style.swing || 0,
+      harmony: style.harmony != null ? style.harmony : 0.3,
       shape: defaultShape(),
       lanes: [],
       sections: [],
@@ -4881,6 +5334,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     session.style = style.id;
     session.bpm = Math.round(r.range(style.tempo[0], style.tempo[1]));
     session.swing = style.swing || 0;
+    session.harmony = style.harmony != null ? style.harmony : 0.3;
     for (const lane of session.lanes) lane.patch = patchFor(style, lane.role);
   }
 
@@ -5006,6 +5460,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       }
       s.bpm = Math.max(30, Math.min(300, Number(s.bpm) || 100));
       s.swing = Math.max(0, Math.min(0.6, Number(s.swing) || 0));
+      s.harmony = typeof s.harmony === 'number' && isFinite(s.harmony) ? Math.max(0, Math.min(1, s.harmony)) : harmonyOf(Object.assign({}, s, { harmony: null }));
       s.tonic = T.mod(Number(s.tonic) || 0, 12);
       if (!T.SCALES[s.scale]) s.scale = 'minor';
       const shape = Object.assign(defaultShape(), s.shape && typeof s.shape === 'object' ? s.shape : {});
@@ -5034,7 +5489,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   Odd.model = {
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
-    newProgression, createSection, findSection, addSection, duplicateSection, removeSection, setSectionBars,
+    newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
     placePart, clearSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
@@ -8175,8 +8630,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const out = [];
     for (const c of prog) {
       const last = out[out.length - 1];
-      if (last && last.deg === c.deg) last.beats += c.beats;
-      else out.push({ deg: c.deg, beats: c.beats });
+      if (last && T.sameChord(last, c)) last.beats += c.beats;
+      else out.push(Object.assign(T.chordOnly(c), { beats: c.beats }));
     }
     return out;
   }
@@ -8233,6 +8688,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<label class="fld"><span>Key</span><select id="f-tonic" data-change="tonic">' + keys + '</select></label>' +
         '<label class="fld"><span>Mode</span><select id="f-scale" data-change="scale">' + scales + '</select></label>' +
         '<label class="fld"><span>Style</span><select id="f-style" data-change="style">' + styleOpts + '</select></label>' +
+        harmonyField(s) +
         '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
           '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
         shapeFields(s) +
@@ -8245,6 +8701,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '</div>' +
       '</div>';
     return { html, rolls: [] };
+  }
+
+  const HARMONY_LEVELS = [[0, 'Plain'], [0.3, 'Some colour'], [0.6, 'Colourful'], [0.9, 'Rich']];
+
+  /** how often new chords reach outside the key; shows the nearest level */
+  function harmonyField(s) {
+    const h = Odd.model.harmonyOf(s);
+    let near = HARMONY_LEVELS[0][0];
+    for (const [v] of HARMONY_LEVELS) if (Math.abs(v - h) < Math.abs(near - h)) near = v;
+    return '<label class="fld" title="How often New chords uses chords from outside the key: borrowed chords, secondary dominants, the Neapolitan. Chords you already have stay as they are."><span>Harmony</span>' +
+      '<select id="f-harmony" data-change="harmony">' + HARMONY_LEVELS.map(([v, l]) => '<option value="' + v + '"' + (v === near ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select></label>';
   }
 
   function shapeFields(s) {
@@ -8594,7 +9061,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   function chordNames(s, sec) {
     const tonic = T.mod(s.tonic + (sec.transpose || 0), 12);
-    return mergeProg(sec.prog).map((c) => T.chordName(c.deg, tonic, s.scale)).join(' ');
+    return mergeProg(sec.prog).map((c) => T.chordName(c, tonic, s.scale)).join(' ');
   }
 
   function sectionHue(s, sid) {
@@ -9419,29 +9886,32 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const s = app.session();
     const current = Odd.views.chordText(s, section);
     const tonic = T.mod(s.tonic + (section.transpose || 0), 12);
+    const parse = (text) => T.parseProg(text, section.bars, s.scale);
     const preview = (text) => {
-      const prog = T.parseProg(text, section.bars);
+      const prog = parse(text);
       if (!prog) return '<span class="bad">Use roman numerals such as i VI III VII</span>';
-      return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c.deg, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
+      return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
     };
+    const m = (x) => '<span class="mono">' + x + '</span>';
     const result = await D.dialog({
       title: 'Chords for ' + section.name,
       body:
         '<label class="field"><span>Chords (' + section.bars + ' bars, ' + esc(Odd.views.keyName(s, section)) + ')</span>' +
         '<input type="text" id="dlg-chords" class="mono" value="' + esc(current) + '" autocomplete="off" spellcheck="false"></label>' +
         '<p class="chord-preview mono" id="dlg-chord-preview">' + preview(current) + '</p>' +
-        '<p class="help">Roman numerals count up the scale from the key. Chords are built from the scale, so <span class="mono">V</span> and <span class="mono">v</span> mean the same chord. Chords share the bars evenly; add <span class="mono">:beats</span> to set a length, for example <span class="mono">i:8 VI:4 VII:4</span>.</p>',
+        '<p class="help">Roman numerals count up the scale from the key. Capitals are major chords and small letters minor, so in a minor key ' + m('V') + ' is the major dominant and ' + m('v') + ' the minor one. Chords share the bars evenly; add ' + m(':beats') + ' to set a length, for example ' + m('i:8 VI:4 VII:4') + '.</p>' +
+        '<p class="help">Chords from outside the key: ' + m('bVI') + ' ' + m('bVII') + ' ' + m('iv') + ' (borrowed), ' + m('V/V') + ' ' + m('V7/ii') + ' ' + m('vii°/vi') + ' (secondary), ' + m('N') + ' (Neapolitan), ' + m('bII7') + ' (tritone sub). Add ' + m('7') + ' or ' + m('maj7') + ' to make a part always play the seventh.</p>',
       onOpen: (el) => {
         const inp = $('#dlg-chords', el);
         inp.addEventListener('input', () => { $('#dlg-chord-preview', el).innerHTML = preview(inp.value); });
       },
       actions: [
         { label: 'Cancel', value: null },
-        { label: 'Apply', primary: true, validate: (el) => !!T.parseProg($('#dlg-chords', el).value, section.bars), value: (el) => $('#dlg-chords', el).value },
+        { label: 'Apply', primary: true, validate: (el) => !!parse($('#dlg-chords', el).value), value: (el) => $('#dlg-chords', el).value },
       ],
     });
     if (result == null) return;
-    const prog = T.parseProg(result, section.bars);
+    const prog = parse(result);
     if (prog) commit('Edit chords', () => { section.prog = prog; });
   }
 
@@ -9925,11 +10395,16 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       commit('Change tempo', (s) => { s.bpm = v; }, ['top', 'song']);
     },
     tonic: (el) => commit('Change key', (s) => { s.tonic = Number(el.value); }),
-    scale: (el) => commit('Change mode', (s) => { s.scale = el.value; }),
+    scale: (el) => commit('Change mode', (s) => { M.setScale(s, el.value); }),
     style: (el) => {
       const st = Odd.styles.get(el.value);
       commit('Change style', (s) => { M.applyStyle(s, el.value); });
       D.toast(st.label + ': ' + app.session().bpm + ' BPM, lane sounds updated. New takes use this style.');
+    },
+    harmony: (el) => {
+      const v = Number(el.value);
+      commit('Change harmony', (s) => { s.harmony = v; }, ['top']);
+      D.toast(v ? 'New chords will reach outside the key more' + (v >= 0.6 ? ' often.' : ' now and then.') + ' Press the dice on a section to hear it.' : 'New chords will stay in the key.');
     },
     'swing-commit': () => persist(),
     'feel-commit': () => persist(),

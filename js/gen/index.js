@@ -47,15 +47,23 @@
     return clamp(Math.round(x), 0, n - 1);
   }
 
-  /** chord occurrences in order: [{ start, end, deg, index }] */
-  function occurrences(prog, total) {
+  /**
+   * chord occurrences in order: [{ start, end, deg, chord, alt, key, index }]
+   * alt: the chord's accidental per scale degree (all 0 for a plain chord);
+   * key: identifies the chord, so repeats of it can share choices
+   */
+  function occurrences(prog, total, scale) {
     const out = [];
     let t = 0;
     let guard = 0;
     while (t < total && guard++ < 512) {
       const c = T.chordAt(prog, t);
       const end = Math.min(c.end, total);
-      out.push({ start: t, end, deg: c.chord.deg, index: out.length });
+      const chord = T.chordOnly(c.chord);
+      out.push({
+        start: t, end, deg: chord.deg, chord, alt: T.chordAlt(chord, scale),
+        key: chord.deg + ':' + (chord.acc || 0) + ':' + (chord.mode || ''), index: out.length,
+      });
       t = end;
     }
     return out;
@@ -89,7 +97,7 @@
     const given = req.seeds || {};
     const ctx = {
       role, mod, bars, total, styleId, style, tonic, scale, prog, params, seed, base, shift, seeds,
-      occ: occurrences(prog, total),
+      occ: occurrences(prog, total, scale),
       rngFor(aspect) {
         let s = given[aspect];
         if (s == null) s = (seed ^ R.hash(aspect)) >>> 0;
@@ -97,19 +105,30 @@
         return R.create(s >>> 0);
       },
       pitch(deg, acc) { return T.pitchOf(deg, acc || 0, tonic, scale, base); },
-      /** semitones from `root` up to `deg`, folded into one octave */
-      interval(root, deg) { return T.mod(T.degToSemis(deg, scale) - T.degToSemis(root, scale), 12); },
-      /** diatonic 7th that sounds consonant (no minor-major 7th, no augmented major 7th) */
-      goodSeventh(root) {
-        const s = ctx.interval(root, root + 6);
-        const q = T.chordQuality(root, scale);
-        if (s === 10) return true;
-        if (s === 11) return q === 'maj';
-        return s === 9 && q === 'dim';
+      /**
+       * semitones from `root` up to `deg`, folded into one octave. `alt` is
+       * the chord's accidental table (occurrence .alt, or ctx.altAt(t)).
+       */
+      interval(root, deg, alt) {
+        const a = alt || ZERO_ALT;
+        const s = T.degToSemis(deg, scale) + a[T.mod(deg, 7)];
+        const r = T.degToSemis(root, scale) + a[T.mod(root, 7)];
+        return T.mod(s - r, 12);
       },
-      /** diatonic 9th that is a whole step above the root (no b9 / #9) */
-      goodNinth(root) { return ctx.interval(root, root + 1) === 2; },
+      /** 7th that sounds consonant (no minor-major 7th, no augmented major 7th) */
+      goodSeventh(root, alt) {
+        const s = ctx.interval(root, root + 6, alt);
+        const third = ctx.interval(root, root + 2, alt);
+        const fifth = ctx.interval(root, root + 4, alt);
+        if (s === 10) return true;
+        if (s === 11) return third === 4 && fifth === 7;
+        return s === 9 && third === 3 && fifth === 6;
+      },
+      /** 9th that is a whole step above the root (no b9 / #9) */
+      goodNinth(root, alt) { return ctx.interval(root, root + 1, alt) === 2; },
       chordAt(t) { return T.chordAt(prog, t); },
+      /** accidental table of the chord sounding at tick t */
+      altAt(t) { return T.chordAlt(T.chordAt(prog, t).chord, scale); },
       /** the degree, among deg + 7k, whose pitch lies in [lo, hi] closest to target pitch */
       placeDeg(deg, target, lo, hi) {
         let best = null, bestDist = Infinity;
@@ -146,7 +165,15 @@
     return ctx;
   }
 
-  /** enforce note invariants, sort, dedupe, and clear same-pitch overlaps */
+  const ZERO_ALT = [0, 0, 0, 0, 0, 0, 0];
+
+  /**
+   * enforce note invariants, bend notes to the chord under them, sort, dedupe,
+   * and clear same-pitch overlaps.
+   * Generators write plain scale degrees; each note then takes the accidental
+   * its chord gives that degree (F# over V/V). A note marked `fix` already has
+   * a deliberate chromatic accidental (approach notes) and keeps it.
+   */
   function finalize(notes, ctx) {
     const total = ctx.total;
     const drum = ctx.role === 'drums';
@@ -165,7 +192,12 @@
       }
       const v = vel(n.v);
       if (drum) out.push({ t, d, v, p: Math.round(n.p) });
-      else out.push({ t, d, v, deg: Math.round(n.deg), acc: Math.round(n.acc || 0) });
+      else {
+        const deg = Math.round(n.deg);
+        let acc = Math.round(n.acc || 0);
+        if (!n.fix) acc += ctx.altAt(t)[T.mod(deg, 7)];
+        out.push({ t, d, v, deg, acc });
+      }
     }
     out.sort((a, b) => a.t - b.t || keyOf(a) - keyOf(b) || b.v - a.v);
     // dedupe same time + same pitch
@@ -221,7 +253,7 @@
       seeds: Object.assign({}, ctx.seeds),
       bars: ctx.bars,
       params: Object.assign({}, ctx.params),
-      ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => ({ deg: c.deg, beats: c.beats })) },
+      ctx: { tonic: ctx.tonic, scale: ctx.scale, prog: ctx.prog.map((c) => Object.assign(T.chordOnly(c), { beats: c.beats })) },
       base: ctx.base == null ? null : ctx.base + ctx.shift,
       notes,
       name: gen.name(ctx.role, nameRng, ctx.styleId),
