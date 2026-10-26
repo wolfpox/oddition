@@ -1394,6 +1394,21 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   .fit-cols { grid-template-columns: 1fr; }
 }
 
+/* melody first: a tune that sets its section's chords */
+.chords-btn.is-led, .chord-line.is-led { color: var(--ink); }
+.chords-btn.is-led .ico, .chord-line.is-led .ico { vertical-align: -2px; margin-right: 3px; }
+.chords-btn.is-led { border-color: var(--line); border-style: dashed; }
+.lead-mark { display: inline-flex; flex: none; color: var(--ink); }
+.ribbon .lead-mark { vertical-align: -2px; margin-left: 3px; }
+.tiny-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+.fit-lead { display: inline-flex; align-items: center; gap: 4px; height: 22px; }
+.fit-part:has(.fit-lead) { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
+.fit-tune strong { font-weight: 700; }
+.tune-opts { display: grid; gap: 6px; }
+.tune-opts .type-opt small.mono { color: var(--ink); font-size: var(--fs-sm); }
+.lead-note { display: flex; gap: 6px; align-items: flex-start; }
+.lead-note .ico { flex: none; margin-top: 2px; }
+
 </style>
 </head>
 <body>
@@ -6346,7 +6361,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  *             ideas: the idea library (see Odd.idea)
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
- * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
+ * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, lead, slots: { [laneId]: slot } }
+ *             lead: a tune sets the chords (see Odd.harmonise); none = the chords lead
  *             energy: 0..1 or null (guessed from the name); entry: 'auto' | Odd.shape.ENTRIES
  *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
  *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
@@ -6531,6 +6547,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (!T.SCALES[scale] || scale === session.scale) return;
     for (const sec of session.sections) {
       sec.prog = sec.prog.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
+      if (sec.lead && sec.lead.prev) sec.lead.prev = sec.lead.prev.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
     }
     session.scale = scale;
   }
@@ -6634,7 +6651,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const placed = placePart(session, sid, laneId, part);
       if (!placed) continue;
       placed.oct = slot.oct || 0;
-      placed.refit = slot.refit !== false;
+      // a tune that sets its own section's chords plays as written there only
+      const leads = src.lead && src.lead.lane === laneId;
+      placed.refit = leads ? src.lead.refit !== false : slot.refit !== false;
       if (form === 'full') delete placed.form;
       else placed.form = form;
       n++;
@@ -6884,6 +6903,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           if (slot.form != null && (!forms.includes(slot.form) || slot.form === 'full')) delete slot.form;
         }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
+        const L = sec.lead;
+        if (L && typeof L === 'object' && L.lane != null && sec.slots[String(L.lane)]) {
+          sec.lead = {
+            lane: String(L.lane),
+            variant: Math.max(0, Math.round(Number(L.variant) || 0)),
+            prev: T.fitProg(Array.isArray(L.prev) && L.prev.length ? L.prev : sec.prog, sec.bars),
+            refit: L.refit !== false,
+          };
+        } else delete sec.lead;
       }
       const ids = new Set(s.sections.map((x) => x.id));
       s.arrangement = s.arrangement.filter((id) => ids.has(id));
@@ -7410,6 +7438,357 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   };
 })(globalThis.Odd = globalThis.Odd || {});
 
+/* js/core/harmonise.js */
+/* Oddition — melody first: chords chosen to fit a tune.
+ *
+ * Normally a section's chords lead: every pitched part is bent to them
+ * (refit). A section can hand the lead to a tune instead. The tune then
+ * plays as written, the section's chords are worked out from its notes, and
+ * every other part fits to those chords, so the tune steers the harmony.
+ *
+ * The harmoniser cuts the section into half-bar slots and scores each chord
+ * against the tune's notes in it: chord tones are good, a note a semitone off
+ * a chord tone clashes, other notes are passing colour. Long notes and notes
+ * on the beat count most. It then picks the best path through the slots:
+ * changing chord costs a little (more in the middle of a bar, unless the
+ * style moves two chords a bar), chords from outside the key cost more, and
+ * a root falling a fifth (V to I) is a little cheaper. Where the tune rests,
+ * the chords the section had before stay.
+ *
+ * section.lead = { lane, variant, prev, refit }
+ *   lane     the lane whose part sets the chords
+ *   variant  0 = the best fit; higher numbers are other good fits
+ *   prev     the chords before the tune took over (restored on release)
+ *   refit    the slot's refit before it led (restored on release)
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+  const BEAT = T.BEAT, BAR = T.BAR;
+  const SLOT = 2 * BEAT; // half a bar
+
+  /** extra chords worth trying, by scale family (plain chords of the scale are always tried) */
+  const COLOUR = {
+    major: [['V7', 4], ['iv'], ['bVI'], ['bVII'], ['V/V', 4], ['V/vi', 5], ['V/ii', 1], ['V7/IV', 3]],
+    minor: [['V', 0], ['V7', 0], ['IV'], ['V/iv', 3], ['V/III', 2]],
+  };
+
+  const candCache = new Map();
+  /** the chords a tune in `scale` may get: [{ chord, tones, root, deg, prior, to }] */
+  function candidates(scale) {
+    if (candCache.has(scale)) return candCache.get(scale);
+    const out = [];
+    const seen = new Set();
+    const add = (chord, prior, to) => {
+      const sh = T.chordShape(chord, scale);
+      const root = T.mod(sh.root, 12);
+      const tones = [0, sh.third, sh.fifth].concat(chord.sev ? [sh.seventh] : []);
+      const key = root + ':' + tones.join(',');
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ chord: T.chordOnly(chord), root, deg: T.mod(chord.deg, 7), third: sh.third, fifth: sh.fifth, seventh: sh.seventh, sev: !!chord.sev, prior, to: to == null ? null : to, plain: T.isDiatonic(chord) });
+    };
+    for (let d = 0; d < 7; d++) {
+      const q = T.chordQuality(d, scale);
+      add({ deg: d }, q === 'maj' || q === 'min' ? 0 : q === 'dim' ? 1 : 1.6);
+    }
+    const fam = (T.SCALES[scale] || T.SCALES.minor).family;
+    for (const [tok, to] of COLOUR[fam]) {
+      const c = T.parseChord(tok, scale);
+      if (!c) continue;
+      add(c, (T.isDiatonic(c) ? 0.15 : 0.55) + (c.sev ? 0.1 : 0), to);
+    }
+    candCache.set(scale, out);
+    return out;
+  }
+
+  /** how well one note (pitch class above the tonic) sits on a chord */
+  function noteScore(pc, c) {
+    const i = T.mod(pc - c.root, 12);
+    if (i === 0) return 1.1;
+    if (i === c.third || i === c.fifth) return 1;
+    if (c.sev && i === c.seventh) return 0.9;
+    if (i === c.seventh) return 0.3; // adds the seventh: colour, not a clash
+    const tones = [0, c.third, c.fifth];
+    let d = 12;
+    for (const x of tones) d = Math.min(d, Math.abs(i - x), 12 - Math.abs(i - x));
+    return d <= 1 ? -1 : 0.05;
+  }
+
+  /** how much a note counts in a slot: its length there, more on the beat */
+  function weightIn(n, a, b) {
+    const s = Math.max(a, n.t), e = Math.min(b, n.t + n.d);
+    if (e <= s) return 0;
+    // a short note is still heard as that pitch: it counts as at least an 8th
+    const beats = n.t < a ? Math.min(2, (e - s) / BEAT) : Math.max(0.5, Math.min(2, (e - s) / BEAT));
+    let accent;
+    if (n.t < a) accent = 0.6; // held over from before
+    else if (n.t === a) accent = 1.6;
+    else if (n.t % BEAT === 0) accent = 1.25;
+    else if (n.t % (BEAT / 2) === 0) accent = 1;
+    else accent = 0.7;
+    return beats * accent;
+  }
+
+  /** root motion from chord j to chord k */
+  function motion(j, k) {
+    if (j.to != null) return k.deg === j.to ? -0.3 : 0.4; // V/V wants to go to V
+    const dd = T.mod(k.deg - j.deg, 7);
+    if (dd === 3) return -0.15; // down a fifth
+    if (dd === 2 || dd === 5) return 0.1;
+    return 0.05;
+  }
+
+  /**
+   * Chords for a tune.
+   * events: the tune's notes, { t, d, p } with absolute pitches.
+   * opts: { tonic, scale, bars, rate (chords per bar the style likes: 0.5 | 1 | 2),
+   *         color (0..1, how readily chords leave the key), variant, prev (a progression) }
+   * Returns { prog, chords: [{ chord, start, beats, fit, notes }], fit (share of the
+   *           tune's weight on chord tones), heard (the tune had notes) }
+   */
+  function harmonise(events, opts) {
+    const o = opts || {};
+    const scale = o.scale || 'major';
+    const bars = Math.max(1, o.bars || 4);
+    const rate = o.rate || 1;
+    const color = o.color != null ? o.color : 0.3;
+    const tonic = T.mod(o.tonic || 0, 12);
+    const cands = candidates(scale);
+    const K = cands.length;
+    const S = bars * 2;
+    const notes = (events || []).filter((e) => e.p != null && e.d > 0);
+    const prior = cands.map((c) => (c.plain ? c.prior : c.prior * (1.6 - color)));
+
+    // each slot: the tune's weight on every chord, and how much tune there is
+    const base = [];
+    const amount = [];
+    const pcs = [];
+    for (let t = 0; t < S; t++) {
+      const a = t * SLOT, b = a + SLOT;
+      const row = new Array(K).fill(0);
+      let w = 0;
+      const heard = new Set();
+      for (const n of notes) {
+        const x = weightIn(n, a, b);
+        if (!x) continue;
+        const pc = T.mod(n.p - tonic, 12);
+        heard.add(pc);
+        w += x;
+        for (let k = 0; k < K; k++) row[k] += x * noteScore(pc, cands[k]);
+      }
+      base.push(row);
+      amount.push(w);
+      pcs.push(heard);
+    }
+    const heard = amount.some((w) => w > 0);
+    // costs are in the same units as the tune's weight: a sparse tune pays less to change chord
+    const busy = amount.filter((w) => w > 0).sort((x, y) => x - y);
+    const unit = busy.length ? Math.max(0.4, Math.min(1.2, busy[Math.floor(busy.length / 2)] / 2.5)) : 1;
+
+    // where the tune rests, the old chords stay
+    const prev = o.prev && o.prev.length ? o.prev : null;
+    const keep = (t, k) => {
+      if (!prev) return 0;
+      const c = cands[k];
+      const was = T.chordAt(prev, t * SLOT).chord;
+      const sh = T.chordShape(was, scale);
+      const same = T.mod(sh.root, 12) === c.root && sh.third === c.third && sh.fifth === c.fifth;
+      return same ? 0.9 * Math.max(0, 1 - amount[t]) : 0;
+    };
+
+    const fam = (T.SCALES[scale] || T.SCALES.minor).family;
+    const homeRel = fam === 'major' ? 5 : 2; // vi in major, III in minor
+    const change = (t) => {
+      const mid = t % 2 === 1;
+      if (mid) return rate >= 2 ? 0.1 : rate >= 1 ? 0.8 : 1.4;
+      if (rate < 1 && t % 4 === 2) return 0.5;
+      return 0;
+    };
+
+    const solve = (noise) => {
+      const score = base.map((row, t) => row.map((x, k) => {
+        let v = x + unit * (keep(t, k) + (noise ? noise(t, k) : 0));
+        const c = cands[k];
+        if (t === 0 && c.plain) v += unit * (c.deg === 0 ? 0.45 : c.deg === homeRel ? 0.15 : 0);
+        if (t === S - 1 && [4, 3, 6].includes(c.deg)) v += unit * 0.15;
+        return v;
+      }));
+      // best path through the slots
+      let val = score[0].map((x, k) => x - unit * (0.3 + prior[k]));
+      const back = [];
+      for (let t = 1; t < S; t++) {
+        const nv = new Array(K);
+        const bk = new Array(K);
+        for (let k = 0; k < K; k++) {
+          let best = -Infinity, arg = 0;
+          for (let j = 0; j < K; j++) {
+            const cost = j === k ? 0 : unit * (0.3 + prior[k] + change(t) + motion(cands[j], cands[k]));
+            const v = val[j] - cost;
+            if (v > best) { best = v; arg = j; }
+          }
+          nv[k] = best + score[t][k];
+          bk[k] = arg;
+        }
+        back.push(bk);
+        val = nv;
+      }
+      let k = 0;
+      for (let i = 1; i < K; i++) if (val[i] > val[k]) k = i;
+      const path = new Array(S);
+      path[S - 1] = k;
+      for (let t = S - 1; t > 0; t--) { k = back[t - 1][k]; path[t - 1] = k; }
+      return path;
+    };
+
+    const same = (a, b) => a.every((x, i) => x === b[i]);
+    let path = solve(null);
+    const variant = Math.max(0, Math.round(o.variant || 0));
+    if (variant > 0) {
+      // another good fit: nudge the scores until the answer changes
+      const plain = path;
+      for (let tries = 0; tries < 8; tries++) {
+        const rng = Odd.rng.create('harmonise:' + variant + ':' + tries);
+        const bias = cands.map(() => rng.gauss() * 0.35);
+        const cell = base.map(() => cands.map(() => rng.gauss()));
+        const amp = 0.45 + tries * 0.2;
+        const p = solve((t, k) => bias[k] + cell[t][k] * amp);
+        path = p;
+        if (!same(p, plain)) break;
+      }
+    }
+
+    // merge slots into chords
+    const chords = [];
+    let good = 0, all = 0;
+    for (let t = 0; t < S; t++) {
+      const c = cands[path[t]];
+      const last = chords[chords.length - 1];
+      if (last && last.k === path[t]) {
+        last.beats += 2;
+        for (const pc of pcs[t]) last.pcs.add(pc);
+      } else {
+        chords.push({ k: path[t], chord: c.chord, start: t * SLOT, beats: 2, pcs: new Set(pcs[t]), w: 0, ok: 0 });
+      }
+      const cur = chords[chords.length - 1];
+      for (const n of notes) {
+        const x = weightIn(n, t * SLOT, (t + 1) * SLOT);
+        if (!x) continue;
+        const sc = noteScore(T.mod(n.p - tonic, 12), c);
+        cur.w += x; all += x;
+        if (sc >= 0.9) { cur.ok += x; good += x; }
+      }
+    }
+    const prog = T.fitProg(chords.map((c) => Object.assign({}, c.chord, { beats: c.beats })), bars);
+    return {
+      prog,
+      chords: chords.map((c) => ({ chord: c.chord, start: c.start, beats: c.beats, fit: c.w ? c.ok / c.w : null, notes: [...c.pcs].sort((a, b) => a - b) })),
+      fit: all ? good / all : null,
+      heard,
+    };
+  }
+
+  // ---------------- a section led by a tune ----------------
+
+  function leaderOf(section) {
+    return section && section.lead && section.lead.lane ? section.lead.lane : null;
+  }
+
+  /** the tune's notes in the section, as written (optionally with another part in its slot) */
+  function tuneEvents(session, section, laneId, part) {
+    const slot = section.slots && section.slots[laneId];
+    if (!slot || !(part || slot.part)) return [];
+    const asWritten = Object.assign({}, slot, { refit: false }, part ? { part } : {});
+    const view = Object.assign({}, section, { slots: { [laneId]: asWritten } });
+    return Odd.render.sectionEvents(session, view, { only: laneId, shape: false });
+  }
+
+  function styleRate(session) {
+    const st = Odd.model ? Odd.model.styleOf(session.style) : null;
+    return (st && st.rate) || 1;
+  }
+
+  /**
+   * the chords `laneId`'s part (or `opts.part` in its place) would give the
+   * section. opts: { part, variant (default: the section's) }
+   */
+  function forSection(session, section, laneId, opts) {
+    const o = opts || {};
+    const lead = section.lead && section.lead.lane === laneId ? section.lead : null;
+    const tgt = Odd.render.sectionTarget(session, section);
+    return harmonise(tuneEvents(session, section, laneId, o.part), {
+      tonic: tgt.tonic, scale: session.scale, bars: section.bars, rate: styleRate(session),
+      color: Odd.model ? Odd.model.harmonyOf(session) : 0.3,
+      variant: o.variant != null ? o.variant : lead ? lead.variant : 0,
+      prev: lead ? lead.prev : section.prog,
+    });
+  }
+
+  /** can this lane's part in this section set the chords? */
+  function canLead(session, section, laneId) {
+    const lane = session.lanes.find((l) => l.id === laneId);
+    const slot = section.slots && section.slots[laneId];
+    return !!(lane && slot && slot.part && !T.isDrumRole(lane.role));
+  }
+
+  /** let a lane's tune set the section's chords */
+  function lead(session, section, laneId) {
+    if (!canLead(session, section, laneId)) return false;
+    const slot = section.slots[laneId];
+    const old = section.lead;
+    if (old && old.lane !== laneId) release(session, section);
+    if (!section.lead) {
+      section.lead = { lane: laneId, variant: 0, prev: section.prog.map((c) => Object.assign({}, c)), refit: slot.refit !== false };
+    }
+    slot.refit = false;
+    section.prog = forSection(session, section, laneId).prog;
+    return true;
+  }
+
+  /**
+   * hand the lead back to the chords. keep: the chords the tune gave stay
+   * (and the tune keeps its own notes); otherwise the old chords come back.
+   */
+  function release(session, section, opts) {
+    const L = section.lead;
+    if (!L) return false;
+    const keep = !!(opts && opts.keep);
+    const slot = section.slots && section.slots[L.lane];
+    if (!keep) {
+      if (L.prev && L.prev.length) section.prog = T.fitProg(L.prev, section.bars);
+      if (slot) slot.refit = L.refit !== false;
+    }
+    delete section.lead;
+    return true;
+  }
+
+  /** another good set of chords for the same tune */
+  function vary(session, section, dir) {
+    const L = section.lead;
+    if (!L) return false;
+    L.variant = Math.max(0, (L.variant || 0) + (dir || 1));
+    section.prog = forSection(session, section, L.lane).prog;
+    return true;
+  }
+
+  /**
+   * Keep every tune-led section's chords in step with its tune. Called after
+   * each change: a new take, an edit, other bars. A lead whose part has gone
+   * is handed back to the old chords.
+   */
+  function sync(session) {
+    for (const section of session.sections) {
+      const L = section.lead;
+      if (!L) continue;
+      if (!canLead(session, section, L.lane)) { release(session, section); continue; }
+      section.slots[L.lane].refit = false;
+      section.prog = forSection(session, section, L.lane).prog;
+    }
+  }
+
+  Odd.harmonise = { harmonise, candidates, leaderOf, tuneEvents, forSection, canLead, lead, release, vary, sync };
+})(globalThis.Odd = globalThis.Odd || {});
+
 /* js/core/relate.js */
 /* Oddition — who leads: how the parts of a section fit to each other.
  *
@@ -7433,6 +7812,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  *             (answer). Both ways at once is a pair (move together, trade).
  * Pitched parts that refit follow the section's chords; that link goes to
  * the harmony, which is not a lane, and does not count as a lane steering.
+ * Unless a tune sets the chords (Odd.harmonise): then every part bent to
+ * them follows that tune (harmony links), and the tune steers.
  *
  * Only what is heard counts: muted lanes are left out, and with any lane
  * soloed only the soloed ones count.
@@ -7459,7 +7840,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   const STEER = 0.45;
   const LOCK = 0.55, PAIR = 0.6, ANSWER = 0.5, AVOID = 0.75;
   /** how much each kind of link shapes the part it points to */
-  const PULL = { lock: 1, avoid: 0.9, answer: 0.9, clear: 0.4, pair: 0.6, trade: 0.4 };
+  const PULL = { lock: 1, avoid: 0.9, answer: 0.9, clear: 0.4, pair: 0.6, trade: 0.4, harmony: 0.8 };
   const ROLE_OF = { drums: 'drums', percussion: 'perc', bass: 'bass', chords: 'chords', pad: 'pad', lead: 'lead', arp: 'arp' };
 
   /** what part.heard says, as links. `to` is a role. */
@@ -7624,11 +8005,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   /**
    * lanes: [{ id, role, name, events: [{ t, d, p, v }] (ticks from the
    *          section start), heard: [string], fits (pitched: follows the
-   *          section's chords; null for drums) }]
+   *          section's chords; null for drums), leads (its tune sets the chords) }]
    * opts: { length (ticks) }
    * Returns { lanes: [{ id, role, name, salience, rel, authority, box, stands,
    *           steers, why, notes }], links: [{ from, to, kind, strength,
-   *           logged, measured, mutual, kick, text }], harmony: { follow, own },
+   *           logged, measured, mutual, kick, text }], harmony: { follow, own, leader },
    *           top (lane id of the part with the most primacy, or null) }
    */
   function analyse(lanes, opts) {
@@ -7709,7 +8090,16 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       for (const l of mine.slice(0, 2)) out.push(l);
     }
     for (const l of links.values()) if (l.mutual) out.push(l);
-    for (const l of out) { l.text = linkText(l, name); l.detail = detailOf(l); }
+    // a tune that sets the chords shapes every part bent to them
+    const leader = P.find((p) => p.lane.leads && !p.drum) || null;
+    if (leader) {
+      for (const p of P) {
+        if (p === leader || p.drum || !p.lane.fits) continue;
+        const r = p.lane.role;
+        out.push({ from: p.lane.id, to: leader.lane.id, kind: 'harmony', strength: r === 'chords' || r === 'pad' ? 1 : r === 'bass' ? 0.85 : 0.7, logged: true });
+      }
+    }
+    for (const l of out) { l.text = linkText(l, name); l.detail = detailOf(l, name); }
 
     // authority: chance that at least one follower is shaped by the part
     const auth = new Map(P.map((p) => [p.lane.id, 1]));
@@ -7721,7 +8111,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
     const follow = [], own = [];
     for (const p of P) {
-      if (p.drum || p.lane.fits == null) continue;
+      if (p.drum || p.lane.fits == null || p === leader) continue;
       (p.lane.fits ? follow : own).push(p.lane.id);
     }
 
@@ -7738,7 +8128,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       return {
         id, role: p.lane.role, name: p.lane.name, part: p.lane.part,
         salience: sal[i].score, rel, authority, stands, steers, box,
-        why: whyOf(sal[i], stands, steers, out.filter((l) => l.to === id || (l.mutual && l.from === id)), id, name, topPart),
+        why: whyOf(sal[i], stands, steers, out.filter((l) => l.to === id || (l.mutual && l.from === id)), id, name, topPart).concat(p === leader ? ['Sets the chords'] : []),
         follows: out.filter((l) => l.from === id || (l.mutual && l.to === id)).length + (follow.includes(id) ? 1 : 0),
         notes: notes.get(id),
       };
@@ -7751,7 +8141,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const d = rank(r) - rank(lead);
       if (d > 0 || (d === 0 && (r.box === 'groove' ? r.authority > lead.authority : r.rel > lead.rel))) lead = r;
     }
-    return { lanes: res, links: out, harmony: { follow, own }, top: lead ? lead.id : null, length };
+    return { lanes: res, links: out, harmony: { follow, own, leader: leader ? leader.lane.id : null }, top: lead ? lead.id : null, length };
   }
 
   function linkText(l, name) {
@@ -7763,12 +8153,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       case 'clear': return a + ' moved an octave to clear ' + b;
       case 'pair': return a + ' and ' + b + ' move together';
       case 'trade': return a + ' and ' + b + ' trade phrases';
+      case 'harmony': return a + verb(a, ' fits to ', ' fit to ') + 'the chords ' + b + verb(b, ' sets', ' set');
       default: return a + verb(a, ' fits to ', ' fit to ') + b;
     }
   }
 
   /** the evidence for a link, in words */
-  function detailOf(l) {
+  function detailOf(l, name) {
+    if (l.kind === 'harmony') return 'The section\'s chords are worked out from ' + name(l.to) + '\'s notes';
     const pct = l.measured != null ? Math.round(l.measured * 100) + '%' : '';
     const said = l.logged ? 'It listened for this when it was made' : '';
     let seen = '';
@@ -7819,6 +8211,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         id: lane.id, role: lane.role, name: lane.name, part: slot.part.name, events,
         heard: slot.part.heard || [],
         fits: drum ? null : slot.refit !== false && !slot.part.imported,
+        leads: !drum && !!Odd.harmonise && Odd.harmonise.leaderOf(section) === lane.id,
       });
     }
     return out;
@@ -11181,6 +11574,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     headphones: '<path d="M4 15v-3a8 8 0 0116 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/>',
     file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
     leads: '<circle cx="16" cy="7.5" r="3"/><circle cx="5.5" cy="17.5" r="2"/><circle cx="17" cy="19.5" r="1.6"/><path d="M7.2 15.8l6.3-6"/><path d="M9.8 9.8h3.9v3.9"/><path d="M17 17.6v-5.4M15 14l2-2 2 2"/>',
+    tune: '<path d="M9 17.5V6l10-2.5v11.5"/><path d="M9 9.5l10-2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
     ladder: '<path d="M7 3v18M17 3v18M7 7.5h10M7 12h10M7 16.5h10"/>',
     idea: '<circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9L18 18M18 6l-2.1 2.1M8.1 15.9L6 18"/>',
   };
@@ -11906,7 +12300,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<h2 class="panel-title">' + icon('booth', 'ico-title') + 'Audition booth</h2>' +
         '<div class="booth-target">' +
           '<label class="inline-fld"><span>Section</span><select id="b-section" data-change="booth-section">' + sectionOpts + '</select></label>' +
-          '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordShown(app, s, sec)) + '</span>' +
+          boothChords(app, s, sec, take) +
         '</div>' +
       '</div>' +
       '<div class="roles" role="tablist" aria-label="Stem">' + roles + '</div>' +
@@ -11934,6 +12328,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<button type="button" class="btn btn-ghost btn-sm params-reset" data-act="params-reset" title="Reset these controls">Reset</button>' +
       '</div>';
     return { html, rolls };
+  }
+
+  /** the booth's chord line: the section's chords, or the ones this take sets when its lane leads */
+  function boothChords(app, s, sec, take) {
+    const prog = app.leadProg ? app.leadProg(take, app.boothLane()) : null;
+    if (!prog) return '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordShown(app, s, sec)) + '</span>';
+    return '<span class="chord-line mono is-led" title="This take sets the chords of ' + esc(sec.name) + ': they are worked out from its notes">' + icon('tune', 'ico-xs') + esc(chordShown(app, s, Object.assign({}, sec, { prog }))) + '</span>';
   }
 
   // drum rows always offered while editing, so a sound that isn't there yet can be added
@@ -12140,6 +12541,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   /** one sentence: who leads this section, and how */
   function fitHeadline(res) {
     if (!res || !res.lanes.length) return '';
+    const base = fitHeadlineBase(res);
+    const lid = res.harmony && res.harmony.leader;
+    const ld = lid ? res.lanes.find((l) => l.id === lid) : null;
+    return ld ? base + ' The chords come from ' + ld.name + '\'s tune.' : base;
+  }
+
+  function fitHeadlineBase(res) {
     const V = Odd.relate.verb;
     const many = (list, one, more) => (list.length > 1 || V(list[0], false, true) ? more : one);
     const top = res.lanes.find((l) => l.id === res.top);
@@ -12164,7 +12572,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return 'No part takes the lead: everything sits back together.';
   }
 
-  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3' };
+  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3', harmony: '9 3 1.5 3' };
 
   /** the plane: stands out (up) against steers others (right), with who fits to whom */
   function fitPlane(res) {
@@ -12270,19 +12678,33 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
     const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
     const sample = (k) => '<svg class="fit-sample" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5 L24 5" class="fit-link' + (k.logged ? ' is-logged' : '') + '"' + (LINK_DASH[k.kind] ? ' stroke-dasharray="' + LINK_DASH[k.kind] + '"' : '') + ' marker-end="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' + (k.mutual ? ' marker-start="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' : '') + '/></svg>';
-    let links = res.links.map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
-    if (res.harmony.follow.length) {
+    let links = res.links.filter((k) => k.kind !== 'harmony').map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
+    const leaderId = res.harmony.leader;
+    if (leaderId) {
+      const ln = nameOf(leaderId);
+      const fl = res.harmony.follow.map(nameOf);
+      const hk = res.links.find((k) => k.kind === 'harmony');
+      const r = Odd.harmonise.forSection(s, sec, leaderId);
+      const pct = r.fit != null ? ' ' + Math.round(r.fit * 100) + '% of its notes land on chord tones.' : '';
+      links = '<li class="fit-tune">' + (hk ? sample(hk) : '<span class="fit-sample fit-chords" aria-hidden="true">' + icon('tune', 'ico-xs') + '</span>') + '<span><strong>' +
+        esc(fl.length ? listNames(fl) + (fl.length > 1 || X.verb(fl[0], false, true) ? ' fit' : ' fits') + ' to the chords ' + ln + Odd.relate.verb(ln, ' sets', ' set') : ln + Odd.relate.verb(ln, ' sets', ' set') + ' the chords') +
+        '</strong><small>' + esc(chordShown(app, s, sec)) + ', worked out from ' + esc(ln) + '\'s notes.' + esc(pct) + '</small></span></li>' + links;
+    } else if (res.harmony.follow.length) {
       const fl = res.harmony.follow.map(nameOf);
       links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(fl)) + (fl.length > 1 || Odd.relate.verb(fl[0], false, true) ? ' follow' : ' follows') + ' the chords</strong><small>' + esc(chordShown(app, s, sec)) + '. The chords steer every part that fits to them.</small></span></li>';
     }
     if (res.harmony.own.length) {
       links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(res.harmony.own.map(nameOf))) + ' ' + (res.harmony.own.length > 1 || Odd.relate.verb(nameOf(res.harmony.own[0]), false, true) ? 'keep their' : 'keeps its') + ' own harmony</strong><small>Fit is off, so the section\'s chords don\'t bend it.</small></span></li>';
     }
-    if (!res.links.length) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
+    if (!res.links.length && !leaderId) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
 
     const parts = res.lanes.slice().sort((a, b) => X.BOX_ORDER.indexOf(a.box) - X.BOX_ORDER.indexOf(b.box) || b.rel - a.rel).map((l) =>
       '<li class="fit-part" data-role="' + l.role + '"><span class="dot"></span><strong>' + esc(l.name) + '</strong>' + boxTag(l.box) +
       '<button type="button" class="ms" data-act="lane-mute" data-lane="' + l.id + '" aria-pressed="false" title="Mute ' + esc(l.name) + ' to hear who takes over">M</button>' +
+      (Odd.harmonise && Odd.harmonise.canLead(s, sec, l.id)
+        ? '<button type="button" class="tiny-toggle fit-lead' + (leaderId === l.id ? ' is-on' : '') + '" data-act="lead-toggle" data-section="' + sec.id + '" data-lane="' + l.id + '" aria-pressed="' + (leaderId === l.id) + '" title="' +
+          esc(leaderId === l.id ? 'Its tune sets the chords. Click to let the chords lead again.' : 'Let ' + l.name + '\'s tune set the chords: it plays as written and the other parts follow it') + '">' + icon('tune', 'ico-xs') + '<span>Sets chords</span></button>'
+        : '') +
       '<small>' + esc(l.why.join(' · ')) + (l.notes.length ? ' · ' + esc(l.notes.join(' · ').toLowerCase()) : '') + '</small></li>').join('') +
       s.lanes.filter((ln) => ln.mute && sec.slots[ln.id] && sec.slots[ln.id].part).map((ln) =>
         '<li class="fit-part is-muted" data-role="' + ln.role + '"><span class="dot"></span><strong>' + esc(ln.name) + '</strong><span class="box-tag" data-box="none">Muted</span>' +
@@ -12298,7 +12720,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         used.map((ln) => '<tr data-role="' + ln.role + '"><th scope="row"><span class="dot"></span>' + esc(ln.name) + '</th>' +
           song.map((e) => {
             const l = e.fit.lanes.find((x) => x.id === ln.id);
-            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
+            const sets = l && e.fit.harmony && e.fit.harmony.leader === l.id ? '<span class="lead-mark" title="Its tune sets the chords here">' + icon('tune', 'ico-xs') + '</span>' : '';
+            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') + sets : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
           }).join('') + '</tr>').join('') +
         '</tbody></table></div>';
     }
@@ -12315,7 +12738,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<section><h3 class="eyebrow">Each part</h3><ul class="fit-parts">' + parts + '</ul></section>' +
       '</div>' +
       (ribbon ? '<section><h3 class="eyebrow">Across the song</h3>' + ribbon + '</section>' : '') +
-      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Bold arrows were heard when the take was made; the others are measured from the notes. Mute a lane to see who takes over.</p>';
+      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Dash-dot: fits to the chords a tune sets. Bold arrows were heard when the take was made, or come from a tune that sets the chords; the others are measured from the notes. Mute a lane to see who takes over, or let a part\'s tune set the chords to flip who follows whom.</p>';
     return { html, rolls: [] };
   }
 
@@ -12390,8 +12813,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           '<label class="bars-fld"><select id="sb-' + sec.id + '" data-change="section-bars" data-section="' + sec.id + '" aria-label="Bars in ' + esc(sec.name) + '">' + bOpts + '</select><span>bars</span></label>' +
           energyMeter(s, sec) +
           (sec.transpose ? '<span class="pill mono">' + (sec.transpose > 0 ? '+' : '') + sec.transpose + '</span>' : '') +
-          '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(app.ws.prefs.chordNames ? chordText(s, sec) : chordNames(s, sec)) + '">' + esc(chordShown(app, s, sec)) + '</button>' +
-          '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
+          (() => {
+            const ld = leaderLane(s, sec);
+            const other = app.ws.prefs.chordNames ? chordText(s, sec) : chordNames(s, sec);
+            return '<button type="button" class="chords-btn mono' + (ld ? ' is-led' : '') + '" data-act="edit-chords" data-section="' + sec.id + '" title="' + esc(ld ? 'Chords worked out from ' + ld.name + '\'s tune: ' + other + '. Click to write your own.' : 'Edit chords: ' + other) + '">' + (ld ? icon('tune', 'ico-xs') : '') + esc(chordShown(app, s, sec)) + '</button>' +
+              '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="' + esc(ld ? 'Other chords for ' + ld.name + '\'s tune' : 'New chords for ' + sec.name) + '" title="' + esc(ld ? 'Other chords for ' + ld.name + '\'s tune' : 'New chords') + '">' + icon('dice') + '</button>';
+          })() +
         '</div>' +
         typeLine(sec) +
       '</div>';
@@ -12423,11 +12850,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
           const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
           const fl = showRoles ? fitOf(sec).lanes.find((x) => x.id === lane.id) : null;
+          const leads = !!Odd.harmonise && Odd.harmonise.leaderOf(sec) === lane.id;
           inner = '<span class="cell-head"><span class="cell-name">' +
               (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
               esc(slot.part.name) +
               (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            (leads ? '<span class="lead-mark" title="' + esc(lane.name + '\'s tune sets the chords of ' + sec.name) + '">' + icon('tune', 'ico-xs') + '</span>' : '') +
             (fl ? boxTag(fl.box, 'box-tag-sm') : '') + '</span>' +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
@@ -12442,7 +12871,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-swap" data-dir="1" aria-label="Next part from the shelf" title="Swap in the next ' + esc(roleLabel(lane.role)) + ' from the shelf">' + icon('fwd') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="-1" aria-label="Octave down" title="Octave down">' + icon('minus') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
-              (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
+              (!T.isDrumRole(lane.role) ? (() => {
+                const leads = !!Odd.harmonise && Odd.harmonise.leaderOf(sec) === lane.id;
+                return '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '"' + (leads ? ' disabled title="It sets the chords here, so it plays as written"' : ' title="Follow this section\'s chords"') + '>Fit</button>' +
+                  (Odd.harmonise ? '<button type="button" class="tiny-toggle' + (leads ? ' is-on' : '') + '" data-act="cell-lead" aria-pressed="' + leads + '" title="' + (leads ? 'Its tune sets the chords. Click to let the chords lead again (H)' : 'Let its tune set the section\'s chords: it plays as written and the chords follow it (H)') + '">Lead</button>' : '');
+              })() : '') +
               '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
               '<button type="button" class="tiny-toggle' + (slot.form && slot.form !== 'full' ? ' is-on' : '') + '" data-act="cell-form" aria-haspopup="menu" aria-expanded="false" title="Play this part another way here: outline, tease, fragment, half-time">Form</button>' +
               '<button type="button" class="tiny-toggle" data-act="cell-reuse" title="Use this part in other sections, as a theme that comes back">Reuse</button>' +
@@ -12515,6 +12948,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const a = (span.from / sec.bars) * 100, w = ((span.to - span.from) / sec.bars) * 100;
     const label = span.to === sec.bars ? 'from bar ' + (span.from + 1) : span.from === 0 ? 'until bar ' + span.to : 'bars ' + (span.from + 1) + '–' + span.to;
     return '<span class="span-bar" title="Plays ' + label + '"><i style="left:' + a.toFixed(1) + '%;width:' + w.toFixed(1) + '%"></i></span>';
+  }
+
+  /** the lane whose tune sets a section's chords, or null */
+  function leaderLane(s, sec) {
+    const id = Odd.harmonise && Odd.harmonise.leaderOf(sec);
+    return id ? Odd.model.findLane(s, id) : null;
   }
 
   /** what the selected section does, in words */
@@ -12633,15 +13072,33 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return d[key];
   };
 
+  /**
+   * When `lane`'s tune sets the selected section's chords, a part auditioned
+   * for that lane leads too: the chords it would give the section. null otherwise.
+   */
+  app.leadProg = (part, lane) => {
+    const H = Odd.harmonise;
+    const sec = app.selectedSection();
+    if (!H || !part || !sec || !lane || H.leaderOf(sec) !== lane.id || part.role !== lane.role) return null;
+    return H.forSection(app.session(), sec, lane.id, { part }).prog;
+  };
+
+  /** where a booth take plays: the selected section, or the chords it sets there when it leads */
+  app.boothTarget = (part, length, lane) => {
+    const s = app.session();
+    const tgt = R.sectionTarget(s, app.selectedSection(), length);
+    const prog = app.leadProg(part, lane || app.boothLane());
+    return prog ? Object.assign(tgt, { prog, refit: false, leads: true }) : tgt;
+  };
+
   app.boothRoll = (part) => {
     const s = app.session();
-    const sec = app.selectedSection();
     const length = part.bars * T.BAR;
-    const tgt = R.sectionTarget(s, sec, length);
+    const tgt = app.boothTarget(part, length);
     return {
       events: R.partEvents(part, Object.assign({ withIndex: true }, tgt)),
       length,
-      chords: R.chordLabels(sec.prog, tgt.tonic, s.scale, length),
+      chords: R.chordLabels(tgt.prog, tgt.tonic, s.scale, length),
     };
   };
 
@@ -12769,6 +13226,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     Odd.history.record(app.ws, label);
     delete app.ws.fresh; // the starter workspace now holds real work
     const result = fn(app.session(), app.ws);
+    // a section led by a tune re-works its chords whenever the tune changes
+    if (Odd.harmonise) Odd.harmonise.sync(app.session());
     app.session().updated = Date.now();
     persist();
     paint(views);
@@ -12841,11 +13300,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const partLen = part.bars * T.BAR;
       const withSection = app.ui.booth.context;
       const length = withSection ? Math.max(partLen, sec.bars * T.BAR) : partLen;
-      const tgt = R.sectionTarget(s, sec, length);
+      // a take for the lane whose tune sets the chords is heard leading them
+      const tgt = app.boothTarget(part, length, lane);
       let events = R.partEvents(part, tgt);
       for (const e of events) e.track = TAKE_TRACK;
       // the booth plays parts as written: song shape only applies on the song sheet
-      if (withSection) events = events.concat(R.sectionEvents(s, sec, { length, exclude: lane && lane.id, shape: false }));
+      const band = tgt.leads ? Object.assign({}, sec, { prog: tgt.prog }) : sec;
+      if (withSection) events = events.concat(R.sectionEvents(s, band, { length, exclude: lane && lane.id, shape: false }));
       const take = {
         role: part.role,
         patch: lane ? lane.patch : M.roleInfo(part.role).defaultPatch,
@@ -13184,7 +13645,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const pk = e.target.closest('[data-fit-pick]');
           if (pk) { go(pk.dataset.fitPick); return; }
           // muting runs in the page's own click handler, after this one
-          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"]')) setTimeout(render, 0);
+          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"], [data-act="lead-toggle"]')) setTimeout(render, 0);
         });
         host.addEventListener('change', (e) => {
           const t = e.target.closest('[data-fit-section]');
@@ -13783,9 +14244,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
     };
     const m = (x) => '<span class="mono">' + x + '</span>';
+    const H = Odd.harmonise;
+    const leader = H && H.leaderOf(section) ? M.findLane(s, H.leaderOf(section)) : null;
     const result = await D.dialog({
       title: 'Chords for ' + section.name,
       body:
+        (leader ? '<p class="help lead-note">' + Odd.icon('tune', 'ico-xs') + ' These chords are worked out from ' + esc(leader.name) + '\'s tune. Writing your own hands the lead back to the chords; ' + esc(leader.name) + ' keeps its notes as written.</p>' : '') +
         '<label class="field"><span>Chords (' + section.bars + ' bars, ' + esc(Odd.views.keyName(s, section)) + ')</span>' +
         '<input type="text" id="dlg-chords" class="mono" value="' + esc(current) + '" autocomplete="off" spellcheck="false"></label>' +
         '<p class="chord-preview mono" id="dlg-chord-preview">' + preview(current) + '</p>' +
@@ -13802,7 +14266,66 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     });
     if (result == null) return;
     const prog = parse(result);
-    if (prog) commit('Edit chords', () => { section.prog = prog; });
+    if (prog) commit('Edit chords', () => { if (leader) H.release(s, section, { keep: true }); section.prog = prog; });
+  }
+
+  // ======================= melody first =======================
+  /** chords as shown, for a progression the section might get */
+  function progShown(s, section, prog) {
+    return Odd.views.chordShown(app, s, Object.assign({}, section, { prog }));
+  }
+
+  /** let a lane's tune set a section's chords, or hand them back to the chords */
+  function toggleLead(section, laneId) {
+    const H = Odd.harmonise;
+    const s = app.session();
+    const lane = M.findLane(s, laneId);
+    if (!H || !section || !lane) return;
+    if (H.leaderOf(section) === laneId) {
+      commit('Chords lead again', () => { H.release(s, section); });
+      D.toast('The chords lead ' + section.name + ' again: ' + Odd.views.chordShown(app, s, section), { action: { label: 'Undo', run: undo } });
+      return;
+    }
+    if (!H.canLead(s, section, laneId)) { D.toast('Only a pitched part in this section can set its chords.'); return; }
+    commit(lane.name + ' sets the chords', () => { H.lead(s, section, laneId); });
+    D.toast(lane.name + ' sets the chords of ' + section.name + ': ' + Odd.views.chordShown(app, s, section), { action: { label: 'Undo', run: undo } });
+  }
+
+  /** another good set of chords for the tune that leads */
+  function varyLead(section, dir) {
+    const H = Odd.harmonise;
+    if (!H || !H.leaderOf(section)) return;
+    const s = app.session();
+    commit('Other chords for the tune', () => { H.vary(s, section, dir || 1); });
+  }
+
+  /** pick which part's tune sets the chords */
+  async function tuneDialog(section) {
+    const H = Odd.harmonise;
+    const s = app.session();
+    const lanes = s.lanes.filter((l) => H.canLead(s, section, l.id));
+    if (!lanes.length) { D.toast('Put a melody or another pitched part in ' + section.name + ' first.'); return; }
+    if (lanes.length === 1) { toggleLead(section, lanes[0].id); return; }
+    const fit = Odd.relate ? Odd.relate.forSection(s, section) : null;
+    const rank = (l) => (l.role === 'lead' ? 3 : 0) + (fit && fit.top === l.id ? 2 : 0) + (l.role === 'arp' ? 1 : 0);
+    const pick = lanes.slice().sort((a, b) => rank(b) - rank(a))[0];
+    const rows = lanes.map((l) => {
+      const r = H.forSection(s, section, l.id, { variant: 0 });
+      const pct = r.fit != null ? Math.round(r.fit * 100) + '% of its notes are chord tones' : 'it rests throughout';
+      return '<label class="type-opt" data-role="' + l.role + '"><input type="radio" name="dlg-tune" value="' + l.id + '"' + (l === pick ? ' checked' : '') + '>' +
+        '<span><strong>' + esc(l.name) + ' · ' + esc(section.slots[l.id].part.name) + '</strong>' +
+        '<small class="mono">' + esc(progShown(s, section, r.prog)) + '</small><small>' + esc(pct) + '</small></span></label>';
+    }).join('');
+    const v = await D.dialog({
+      title: 'Which tune sets the chords of ' + section.name + '?',
+      body: '<div class="tune-opts">' + rows + '</div>' +
+        '<p class="help">The part you pick plays as written, and the section\'s chords are worked out from its notes. Every other part that fits to the chords follows them, so this part leads. Change the tune later and the chords follow it.</p>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Let it lead', primary: true, value: (el) => { const c = $('input[name="dlg-tune"]:checked', el); return c ? c.value : null; } },
+      ],
+    });
+    if (v) toggleLead(section, v);
   }
 
   async function shapeDialog(section) {
@@ -13994,7 +14517,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
       { label: 'Who leads…', disabled: !Object.keys(section.slots).length, run: () => fitDialog(section.id) },
       { label: 'Capture an idea from this section…', disabled: !Object.keys(section.slots).length, run: () => captureFromSection(section) },
-      { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
+      ...(Odd.harmonise && Odd.harmonise.leaderOf(section)
+        ? [
+          { label: 'Other chords for the tune', run: () => varyLead(section, 1) },
+          { label: 'Chords lead again', run: () => toggleLead(section, Odd.harmonise.leaderOf(section)) },
+        ]
+        : [
+          { label: 'Let a tune set the chords…', disabled: !Odd.harmonise || !s.lanes.some((l) => Odd.harmonise.canLead(s, section, l.id)), run: () => tuneDialog(section) },
+          { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
+        ]),
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
       { label: 'Key down a semitone', run: () => commit('Change section key', () => { section.transpose = Math.max(-11, (section.transpose || 0) - 1); }) },
       { label: 'Reset section key', disabled: !section.transpose, run: () => commit('Change section key', () => { section.transpose = 0; }) },
@@ -14446,6 +14977,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       ['P', 'Keep and place it in the selected section'], ['V', 'Make a variation of the take'],
       ['I', 'Capture the take as an idea (with the parts you hear it with)'],
       ['W', 'Who leads: how the parts of the selected section fit to each other'],
+      ['H', 'Let the selected part\'s tune set its section\'s chords, or hand them back'],
       ['← →', 'Step through takes'], ['1 – 7', 'Switch stem: drums, percussion, bass, chords, pad, lead, arp'],
       ['Esc', 'Stop'], ['Ctrl Z', 'Undo'], ['Ctrl Shift Z', 'Redo'],
     ];
@@ -14558,7 +15090,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       paint(['booth']);
     },
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
-    'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
+    'new-chords': (el) => {
+      const s = app.session();
+      const sec = M.findSection(s, el.dataset.section);
+      if (!sec) return;
+      if (Odd.harmonise && Odd.harmonise.leaderOf(sec)) varyLead(sec, 1);
+      else commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); });
+    },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),
     'add-lane': (el) => D.menu(el, [{ heading: 'Add a lane' }].concat(Odd.gen.ROLES.map((r) => ({
       label: Odd.views.roleLabel(r), run: () => commit('Add lane', (s) => { const l = M.addLane(s, r); app.ui.laneId = l.id; }, ['song', 'booth']),
@@ -14575,7 +15113,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'cell-refit': () => {
       const { section, lane } = app.selectedSlot();
       const slot = lane && section.slots[lane.id];
-      if (slot) commit('Toggle chord fit', () => { slot.refit = slot.refit === false; }, ['song']);
+      if (!slot) return;
+      if (Odd.harmonise && Odd.harmonise.leaderOf(section) === lane.id) { D.toast(lane.name + ' sets the chords here, so it plays as written. Turn off Lead to fit it to chords.'); return; }
+      commit('Toggle chord fit', () => { slot.refit = slot.refit === false; }, ['song']);
+    },
+    'cell-lead': () => {
+      const { section, lane } = app.selectedSlot();
+      if (lane && section.slots[lane.id]) toggleLead(section, lane.id);
+    },
+    'lead-toggle': (el) => {
+      const sec = M.findSection(app.session(), el.dataset.section);
+      if (sec) toggleLead(sec, el.dataset.lane);
     },
     'cell-clear': () => {
       const { section, lane } = app.selectedSlot();
@@ -14774,7 +15322,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (!h) return;
     e.preventDefault();
     const s = app.session();
-    const target = R.sectionTarget(s, app.selectedSection(), take.bars * T.BAR);
+    const target = app.boothTarget(take, take.bars * T.BAR);
     const drum = T.isDrumRole(take.role);
     if (!h.hit) {
       const t = Math.floor(h.t / T.STEP) * T.STEP;
@@ -14953,6 +15501,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       case 'v': case 'V': vary(); break;
       case 'i': case 'I': captureFromBooth(); break;
       case 'w': case 'W': fitDialog(app.selectedSection().id); break;
+      case 'h': case 'H': {
+        const { section, lane } = app.selectedSlot();
+        if (lane && section.slots[lane.id]) toggleLead(section, lane.id);
+        else tuneDialog(section);
+        break;
+      }
       case 'ArrowLeft': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(-1); } break;
       case 'ArrowRight': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(1); } break;
       case 'Escape': stop(); break;

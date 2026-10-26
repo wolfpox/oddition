@@ -273,6 +273,36 @@ line above the sheet says who leads the selected section. **Who leads?** (or
 Mute a part in the dialog to hear and see who takes over. Step through
 sections with `←` `→` while it loops (`Space`).
 
+### Melody first: let a tune set the chords
+
+Normally a section's chords lead and every pitched part bends to them. You
+can flip that: pick a part, usually the melody, and let its tune set the
+chords. The tune then plays exactly as written, the section's chords are
+worked out from its notes, and every other part that fits to chords follows
+them. So the tune leads and the harmony follows it.
+
+- Turn it on with **Lead** on a selected slot, `H`, **Sets chords** in the
+  Who leads dialog, or **Let a tune set the chords…** in the section menu
+  (it shows the chords each part would give).
+- The chords follow the tune from then on. Swap in another take or edit its
+  notes and the chords change with it. In the booth, a take for that lane is
+  heard leading: the chord line and *Play with the section* use the chords
+  that take would give.
+- The dice next to the chords gives other good chords for the same tune.
+- **Lead** again, `H`, or **Chords lead again** brings back the chords the
+  section had before. Writing your own chords also ends it, but keeps the
+  tune as written.
+
+How the chords are picked: each half bar is scored against the notes that
+sound in it. Chord tones count for, notes a semitone off a chord tone count
+against, and long notes and notes on the beat count most. Changing chord in
+the middle of a bar costs extra unless the style moves two chords a bar.
+Chords from outside the key need a note that asks for them, such as F♯ for
+D major in C. Where the tune rests, the old chords stay.
+
+Who leads shows the flip: dash-dot arrows run from every part bent to the
+chords to the tune, which usually becomes the hook.
+
 ### Song shape
 
 Each section has an **energy** level, shown as the small meter next to its
@@ -378,6 +408,7 @@ WAV export always renders at full quality.
 | `V` | Variation of the take |
 | `I` | Capture the take as an idea (with the parts you hear it with) |
 | `W` | Who leads: how the parts of the selected section fit to each other |
+| `H` | Let the selected part's tune set its section's chords, or hand them back |
 | `←` `→` | Previous / next take |
 | `1`–`7` | Drums, percussion, bass, chords, pad, lead, arp |
 | `Esc` | Stop |

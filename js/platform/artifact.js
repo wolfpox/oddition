@@ -69,7 +69,9 @@
         const slot = sec.slots[k];
         const lib = slot.sourceId && libById.get(slot.sourceId);
         if (lib && sameMusic(lib, slot.part)) {
-          sec.slots[k] = { ref: slot.sourceId, name: slot.part.name, sourceId: slot.sourceId, oct: slot.oct || 0, refit: slot.refit !== false };
+          const packed = Object.assign({}, slot, { ref: slot.sourceId, name: slot.part.name, oct: slot.oct || 0, refit: slot.refit !== false });
+          delete packed.part;
+          sec.slots[k] = packed;
         }
       }
     }
@@ -85,7 +87,10 @@
           if (!lib) { delete sec.slots[k]; continue; }
           const part = JSON.parse(JSON.stringify(lib));
           part.name = slot.name || part.name;
-          sec.slots[k] = { part, sourceId: slot.ref, oct: slot.oct || 0, refit: slot.refit !== false };
+          // everything but the music itself (form, bars) travels with the reference
+          const full = Object.assign({}, slot, { part, sourceId: slot.ref, oct: slot.oct || 0, refit: slot.refit !== false });
+          delete full.ref; delete full.name;
+          sec.slots[k] = full;
         }
       }
     }

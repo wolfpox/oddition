@@ -1384,3 +1384,18 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 @media (max-width: 640px) {
   .fit-cols { grid-template-columns: 1fr; }
 }
+
+/* melody first: a tune that sets its section's chords */
+.chords-btn.is-led, .chord-line.is-led { color: var(--ink); }
+.chords-btn.is-led .ico, .chord-line.is-led .ico { vertical-align: -2px; margin-right: 3px; }
+.chords-btn.is-led { border-color: var(--line); border-style: dashed; }
+.lead-mark { display: inline-flex; flex: none; color: var(--ink); }
+.ribbon .lead-mark { vertical-align: -2px; margin-left: 3px; }
+.tiny-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+.fit-lead { display: inline-flex; align-items: center; gap: 4px; height: 22px; }
+.fit-part:has(.fit-lead) { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
+.fit-tune strong { font-weight: 700; }
+.tune-opts { display: grid; gap: 6px; }
+.tune-opts .type-opt small.mono { color: var(--ink); font-size: var(--fs-sm); }
+.lead-note { display: flex; gap: 6px; align-items: flex-start; }
+.lead-note .ico { flex: none; margin-top: 2px; }

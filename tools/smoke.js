@@ -231,9 +231,49 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.click('#overlay .fit-part.is-muted [data-act="lane-mute"]');
   await page.waitForTimeout(300);
   ok(await page.evaluate((n) => document.querySelectorAll('#overlay .fit-node').length === n, fit0.nodes), 'unmuting brings it back');
+  // melody first: the lead's tune sets the chords
+  const chords0 = await page.evaluate(() => Odd.theory.formatProg(Odd.app.selectedSection().prog, Odd.app.session().scale));
+  const leadId = await page.evaluate(() => Odd.model.laneForRole(Odd.app.session(), 'lead').id);
+  await page.click('#overlay [data-act="lead-toggle"][data-lane="' + leadId + '"]');
+  await page.waitForTimeout(300);
+  const led = await page.evaluate((id) => {
+    const sec = Odd.app.selectedSection();
+    return {
+      leader: Odd.harmonise.leaderOf(sec), refit: sec.slots[id].refit,
+      arrows: document.querySelectorAll('#overlay .fit-link[data-kind="harmony"]').length,
+      row: !!document.querySelector('#overlay .fit-tune'), pressed: document.querySelector('#overlay [data-act="lead-toggle"][data-lane="' + id + '"]').getAttribute('aria-pressed'),
+      headline: document.querySelector('#overlay .fit-headline').textContent,
+    };
+  }, leadId);
+  ok(led.leader === leadId && led.refit === false && led.arrows > 0 && led.row && led.pressed === 'true' && /chords come from/.test(led.headline), 'a tune can set the chords, and the map shows the parts following it (' + led.arrows + ' arrows)');
+  await page.screenshot({ path: path.join(out, 'fit-lead.png') });
   await page.click('#overlay .btn-primary');
   await page.waitForTimeout(200);
   ok(await page.evaluate(() => !Odd.app.ui.fit && !document.querySelector('#overlay .fit')), 'done closes who leads');
+  ok(await page.evaluate(() => !!document.querySelector('.sec-head.is-selected .chords-btn.is-led') && !!document.querySelector('.cell .lead-mark')), 'the sheet shows which tune sets the chords');
+  const ledChords = await page.evaluate(() => Odd.theory.formatProg(Odd.app.selectedSection().prog, Odd.app.session().scale));
+  await page.click('.sec-head.is-selected [data-act="new-chords"]');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate((c) => Odd.app.selectedSection().lead.variant === 1 && Odd.theory.formatProg(Odd.app.selectedSection().prog, Odd.app.session().scale) !== c, ledChords), 'the dice gives other chords for the same tune');
+  // the booth: a take for the leading lane is heard leading
+  await page.evaluate((id) => { Odd.app.ui.laneId = id; Odd.app.ui.booth.role = 'lead'; Odd.app.paint(); }, leadId);
+  await page.click('[data-act="tab"][data-tab="booth"]').catch(() => {});
+  await page.keyboard.press('x');
+  await page.waitForTimeout(300);
+  const booth = await page.evaluate(() => {
+    const take = Odd.app.currentTake();
+    const prog = Odd.app.leadProg(take, Odd.app.boothLane());
+    return { leads: !!prog && Odd.app.boothTarget(take, take.bars * 1920).refit === false, line: !!document.querySelector('.booth .chord-line.is-led'), playing: Odd.transport.playing };
+  });
+  ok(booth.leads && booth.line && booth.playing, 'a new take for that lane plays with chords worked out from it');
+  await page.keyboard.press('Escape');
+  // H on the selected cell hands the chords back
+  await page.click('[data-act="tab"][data-tab="song"]').catch(() => {});
+  await page.evaluate((id) => { Odd.app.ui.laneId = id; Odd.app.paint(['song']); }, leadId);
+  await page.evaluate(() => document.body.focus());
+  await page.keyboard.press('h');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate((c) => !Odd.app.selectedSection().lead && Odd.theory.formatProg(Odd.app.selectedSection().prog, Odd.app.session().scale) === c && !document.querySelector('.chords-btn.is-led'), chords0), 'H lets the chords lead again, with the chords they had');
   await page.keyboard.press('Escape');
   await page.click('[data-act="roles-toggle"]');
   await page.waitForTimeout(200);

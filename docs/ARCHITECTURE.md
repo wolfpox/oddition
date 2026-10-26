@@ -35,6 +35,7 @@ js/core/midi-file.js  Standard MIDI File writer/reader  Odd.midiFile
 js/core/zip.js        store-only .zip writer            Odd.zip
 js/core/model.js      workspace, sessions, sections     Odd.model
 js/core/idea.js       the core of parts: ideas          Odd.idea
+js/core/harmonise.js  melody first: chords from a tune  Odd.harmonise
 js/core/relate.js     who leads: roles and links        Odd.relate
 js/core/recipes.js    section types (intro builds...)   Odd.recipes
 js/core/export.js     .mid / .zip / project builders    Odd.exporter
@@ -302,6 +303,45 @@ the part with the most primacy: a hook, else the top topline, else the
 strongest groove. The views draw the boxes on sheet cells, the headline in
 the section story, and the dialog (`fitDialog` in `js/app.js`): the plane,
 links in words, and the strip across the song.
+
+When a tune sets the section's chords, `sectionLanes` marks it `leads`, and
+every pitched lane that refits gets a `harmony` link to it (strength 1 for
+chords and pad, .85 bass, .7 others; `PULL.harmony` .8). These links are not
+capped at two. `harmony.leader` names the tune, which leaves `own`.
+
+## Melody first (`Odd.harmonise`)
+
+`harmonise(events, { tonic, scale, bars, rate, color, variant, prev })` picks
+chords for a tune. Each half-bar slot scores every candidate chord: the
+scale's own triads (prior cost 1 for dim, 1.6 for aug), plus a few colours per
+family (major: V7, iv, bVI, bVII, V/V, V/vi, V/ii, V7/IV; minor: V, V7, IV,
+V/iv, V/III) with a prior cost scaled by `1.6 − color`. A note scores 1.1 on
+the root, 1 on the 3rd or 5th, .9 on an asked-for 7th, .3 on the chord's own
+7th, −1 a semitone off a chord tone and .05 otherwise. Its weight is its
+length in the slot (at least an 8th for a note that starts there, at most 2
+beats) times an accent (1.6 on the slot start, 1.25 on a beat, 1 on an 8th,
+.7 otherwise, .6 when held over). A Viterbi pass finds the best path: a change
+costs .3 + prior + mid-bar cost (.1 at rate 2, .8 at rate 1, 1.4 at rate .5)
++ root motion (−.15 down a fifth; a secondary chord −.3 into its target, .4
+elsewhere). Costs scale with the median slot weight, so a sparse tune can
+still change chord. Slot 0 favours the tonic; the last slot favours V, IV or
+VII. Where the tune is quiet, the chord `prev` had there scores up to .9.
+`variant > 0` adds seeded noise until the path changes. Same input, same
+output.
+
+`section.lead = { lane, variant, prev, refit }`. `lead()` stores the old
+chords and fit, sets the slot's `refit` false (the tune plays as written; its
+notes never depend on the chords made from it) and writes `section.prog`.
+`sync(session)` runs after every `commit` in the app and re-works the chords
+of each led section, or `release`s a lead whose part is gone. `release()`
+restores `prev` and the old `refit`; `{ keep: true }` keeps the chords and the
+tune's own notes (used when the user writes chords). `vary()` steps the
+variant. Because the derived progression is stored in `section.prog`,
+playback, export and the views need no special case. The booth asks
+`app.leadProg(part, lane)`: a take for the leading lane plays with
+`refit: false` over the chords it would give, and so does the band behind
+it. `migrate` keeps a lead only while its slot exists; `setScale` rescales
+`prev` too.
 
 ## Song shape (`Odd.shape`)
 

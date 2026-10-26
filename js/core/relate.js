@@ -20,6 +20,8 @@
  *             (answer). Both ways at once is a pair (move together, trade).
  * Pitched parts that refit follow the section's chords; that link goes to
  * the harmony, which is not a lane, and does not count as a lane steering.
+ * Unless a tune sets the chords (Odd.harmonise): then every part bent to
+ * them follows that tune (harmony links), and the tune steers.
  *
  * Only what is heard counts: muted lanes are left out, and with any lane
  * soloed only the soloed ones count.
@@ -46,7 +48,7 @@
   const STEER = 0.45;
   const LOCK = 0.55, PAIR = 0.6, ANSWER = 0.5, AVOID = 0.75;
   /** how much each kind of link shapes the part it points to */
-  const PULL = { lock: 1, avoid: 0.9, answer: 0.9, clear: 0.4, pair: 0.6, trade: 0.4 };
+  const PULL = { lock: 1, avoid: 0.9, answer: 0.9, clear: 0.4, pair: 0.6, trade: 0.4, harmony: 0.8 };
   const ROLE_OF = { drums: 'drums', percussion: 'perc', bass: 'bass', chords: 'chords', pad: 'pad', lead: 'lead', arp: 'arp' };
 
   /** what part.heard says, as links. `to` is a role. */
@@ -211,11 +213,11 @@
   /**
    * lanes: [{ id, role, name, events: [{ t, d, p, v }] (ticks from the
    *          section start), heard: [string], fits (pitched: follows the
-   *          section's chords; null for drums) }]
+   *          section's chords; null for drums), leads (its tune sets the chords) }]
    * opts: { length (ticks) }
    * Returns { lanes: [{ id, role, name, salience, rel, authority, box, stands,
    *           steers, why, notes }], links: [{ from, to, kind, strength,
-   *           logged, measured, mutual, kick, text }], harmony: { follow, own },
+   *           logged, measured, mutual, kick, text }], harmony: { follow, own, leader },
    *           top (lane id of the part with the most primacy, or null) }
    */
   function analyse(lanes, opts) {
@@ -296,7 +298,16 @@
       for (const l of mine.slice(0, 2)) out.push(l);
     }
     for (const l of links.values()) if (l.mutual) out.push(l);
-    for (const l of out) { l.text = linkText(l, name); l.detail = detailOf(l); }
+    // a tune that sets the chords shapes every part bent to them
+    const leader = P.find((p) => p.lane.leads && !p.drum) || null;
+    if (leader) {
+      for (const p of P) {
+        if (p === leader || p.drum || !p.lane.fits) continue;
+        const r = p.lane.role;
+        out.push({ from: p.lane.id, to: leader.lane.id, kind: 'harmony', strength: r === 'chords' || r === 'pad' ? 1 : r === 'bass' ? 0.85 : 0.7, logged: true });
+      }
+    }
+    for (const l of out) { l.text = linkText(l, name); l.detail = detailOf(l, name); }
 
     // authority: chance that at least one follower is shaped by the part
     const auth = new Map(P.map((p) => [p.lane.id, 1]));
@@ -308,7 +319,7 @@
 
     const follow = [], own = [];
     for (const p of P) {
-      if (p.drum || p.lane.fits == null) continue;
+      if (p.drum || p.lane.fits == null || p === leader) continue;
       (p.lane.fits ? follow : own).push(p.lane.id);
     }
 
@@ -325,7 +336,7 @@
       return {
         id, role: p.lane.role, name: p.lane.name, part: p.lane.part,
         salience: sal[i].score, rel, authority, stands, steers, box,
-        why: whyOf(sal[i], stands, steers, out.filter((l) => l.to === id || (l.mutual && l.from === id)), id, name, topPart),
+        why: whyOf(sal[i], stands, steers, out.filter((l) => l.to === id || (l.mutual && l.from === id)), id, name, topPart).concat(p === leader ? ['Sets the chords'] : []),
         follows: out.filter((l) => l.from === id || (l.mutual && l.to === id)).length + (follow.includes(id) ? 1 : 0),
         notes: notes.get(id),
       };
@@ -338,7 +349,7 @@
       const d = rank(r) - rank(lead);
       if (d > 0 || (d === 0 && (r.box === 'groove' ? r.authority > lead.authority : r.rel > lead.rel))) lead = r;
     }
-    return { lanes: res, links: out, harmony: { follow, own }, top: lead ? lead.id : null, length };
+    return { lanes: res, links: out, harmony: { follow, own, leader: leader ? leader.lane.id : null }, top: lead ? lead.id : null, length };
   }
 
   function linkText(l, name) {
@@ -350,12 +361,14 @@
       case 'clear': return a + ' moved an octave to clear ' + b;
       case 'pair': return a + ' and ' + b + ' move together';
       case 'trade': return a + ' and ' + b + ' trade phrases';
+      case 'harmony': return a + verb(a, ' fits to ', ' fit to ') + 'the chords ' + b + verb(b, ' sets', ' set');
       default: return a + verb(a, ' fits to ', ' fit to ') + b;
     }
   }
 
   /** the evidence for a link, in words */
-  function detailOf(l) {
+  function detailOf(l, name) {
+    if (l.kind === 'harmony') return 'The section\'s chords are worked out from ' + name(l.to) + '\'s notes';
     const pct = l.measured != null ? Math.round(l.measured * 100) + '%' : '';
     const said = l.logged ? 'It listened for this when it was made' : '';
     let seen = '';
@@ -406,6 +419,7 @@
         id: lane.id, role: lane.role, name: lane.name, part: slot.part.name, events,
         heard: slot.part.heard || [],
         fits: drum ? null : slot.refit !== false && !slot.part.imported,
+        leads: !drum && !!Odd.harmonise && Odd.harmonise.leaderOf(section) === lane.id,
       });
     }
     return out;

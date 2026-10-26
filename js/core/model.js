@@ -4,7 +4,8 @@
  *             ideas: the idea library (see Odd.idea)
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
- * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
+ * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, lead, slots: { [laneId]: slot } }
+ *             lead: a tune sets the chords (see Odd.harmonise); none = the chords lead
  *             energy: 0..1 or null (guessed from the name); entry: 'auto' | Odd.shape.ENTRIES
  *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
  *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
@@ -189,6 +190,7 @@
     if (!T.SCALES[scale] || scale === session.scale) return;
     for (const sec of session.sections) {
       sec.prog = sec.prog.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
+      if (sec.lead && sec.lead.prev) sec.lead.prev = sec.lead.prev.map((c) => Object.assign(T.rescaleChord(c, session.scale, scale), { beats: c.beats }));
     }
     session.scale = scale;
   }
@@ -292,7 +294,9 @@
       const placed = placePart(session, sid, laneId, part);
       if (!placed) continue;
       placed.oct = slot.oct || 0;
-      placed.refit = slot.refit !== false;
+      // a tune that sets its own section's chords plays as written there only
+      const leads = src.lead && src.lead.lane === laneId;
+      placed.refit = leads ? src.lead.refit !== false : slot.refit !== false;
       if (form === 'full') delete placed.form;
       else placed.form = form;
       n++;
@@ -542,6 +546,15 @@
           if (slot.form != null && (!forms.includes(slot.form) || slot.form === 'full')) delete slot.form;
         }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
+        const L = sec.lead;
+        if (L && typeof L === 'object' && L.lane != null && sec.slots[String(L.lane)]) {
+          sec.lead = {
+            lane: String(L.lane),
+            variant: Math.max(0, Math.round(Number(L.variant) || 0)),
+            prev: T.fitProg(Array.isArray(L.prev) && L.prev.length ? L.prev : sec.prog, sec.bars),
+            refit: L.refit !== false,
+          };
+        } else delete sec.lead;
       }
       const ids = new Set(s.sections.map((x) => x.id));
       s.arrangement = s.arrangement.filter((id) => ids.has(id));

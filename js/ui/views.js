@@ -262,7 +262,7 @@
         '<h2 class="panel-title">' + icon('booth', 'ico-title') + 'Audition booth</h2>' +
         '<div class="booth-target">' +
           '<label class="inline-fld"><span>Section</span><select id="b-section" data-change="booth-section">' + sectionOpts + '</select></label>' +
-          '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordShown(app, s, sec)) + '</span>' +
+          boothChords(app, s, sec, take) +
         '</div>' +
       '</div>' +
       '<div class="roles" role="tablist" aria-label="Stem">' + roles + '</div>' +
@@ -290,6 +290,13 @@
         '<button type="button" class="btn btn-ghost btn-sm params-reset" data-act="params-reset" title="Reset these controls">Reset</button>' +
       '</div>';
     return { html, rolls };
+  }
+
+  /** the booth's chord line: the section's chords, or the ones this take sets when its lane leads */
+  function boothChords(app, s, sec, take) {
+    const prog = app.leadProg ? app.leadProg(take, app.boothLane()) : null;
+    if (!prog) return '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordShown(app, s, sec)) + '</span>';
+    return '<span class="chord-line mono is-led" title="This take sets the chords of ' + esc(sec.name) + ': they are worked out from its notes">' + icon('tune', 'ico-xs') + esc(chordShown(app, s, Object.assign({}, sec, { prog }))) + '</span>';
   }
 
   // drum rows always offered while editing, so a sound that isn't there yet can be added
@@ -496,6 +503,13 @@
   /** one sentence: who leads this section, and how */
   function fitHeadline(res) {
     if (!res || !res.lanes.length) return '';
+    const base = fitHeadlineBase(res);
+    const lid = res.harmony && res.harmony.leader;
+    const ld = lid ? res.lanes.find((l) => l.id === lid) : null;
+    return ld ? base + ' The chords come from ' + ld.name + '\'s tune.' : base;
+  }
+
+  function fitHeadlineBase(res) {
     const V = Odd.relate.verb;
     const many = (list, one, more) => (list.length > 1 || V(list[0], false, true) ? more : one);
     const top = res.lanes.find((l) => l.id === res.top);
@@ -520,7 +534,7 @@
     return 'No part takes the lead: everything sits back together.';
   }
 
-  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3' };
+  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3', harmony: '9 3 1.5 3' };
 
   /** the plane: stands out (up) against steers others (right), with who fits to whom */
   function fitPlane(res) {
@@ -626,19 +640,33 @@
 
     const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
     const sample = (k) => '<svg class="fit-sample" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5 L24 5" class="fit-link' + (k.logged ? ' is-logged' : '') + '"' + (LINK_DASH[k.kind] ? ' stroke-dasharray="' + LINK_DASH[k.kind] + '"' : '') + ' marker-end="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' + (k.mutual ? ' marker-start="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' : '') + '/></svg>';
-    let links = res.links.map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
-    if (res.harmony.follow.length) {
+    let links = res.links.filter((k) => k.kind !== 'harmony').map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
+    const leaderId = res.harmony.leader;
+    if (leaderId) {
+      const ln = nameOf(leaderId);
+      const fl = res.harmony.follow.map(nameOf);
+      const hk = res.links.find((k) => k.kind === 'harmony');
+      const r = Odd.harmonise.forSection(s, sec, leaderId);
+      const pct = r.fit != null ? ' ' + Math.round(r.fit * 100) + '% of its notes land on chord tones.' : '';
+      links = '<li class="fit-tune">' + (hk ? sample(hk) : '<span class="fit-sample fit-chords" aria-hidden="true">' + icon('tune', 'ico-xs') + '</span>') + '<span><strong>' +
+        esc(fl.length ? listNames(fl) + (fl.length > 1 || X.verb(fl[0], false, true) ? ' fit' : ' fits') + ' to the chords ' + ln + Odd.relate.verb(ln, ' sets', ' set') : ln + Odd.relate.verb(ln, ' sets', ' set') + ' the chords') +
+        '</strong><small>' + esc(chordShown(app, s, sec)) + ', worked out from ' + esc(ln) + '\'s notes.' + esc(pct) + '</small></span></li>' + links;
+    } else if (res.harmony.follow.length) {
       const fl = res.harmony.follow.map(nameOf);
       links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(fl)) + (fl.length > 1 || Odd.relate.verb(fl[0], false, true) ? ' follow' : ' follows') + ' the chords</strong><small>' + esc(chordShown(app, s, sec)) + '. The chords steer every part that fits to them.</small></span></li>';
     }
     if (res.harmony.own.length) {
       links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(res.harmony.own.map(nameOf))) + ' ' + (res.harmony.own.length > 1 || Odd.relate.verb(nameOf(res.harmony.own[0]), false, true) ? 'keep their' : 'keeps its') + ' own harmony</strong><small>Fit is off, so the section\'s chords don\'t bend it.</small></span></li>';
     }
-    if (!res.links.length) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
+    if (!res.links.length && !leaderId) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
 
     const parts = res.lanes.slice().sort((a, b) => X.BOX_ORDER.indexOf(a.box) - X.BOX_ORDER.indexOf(b.box) || b.rel - a.rel).map((l) =>
       '<li class="fit-part" data-role="' + l.role + '"><span class="dot"></span><strong>' + esc(l.name) + '</strong>' + boxTag(l.box) +
       '<button type="button" class="ms" data-act="lane-mute" data-lane="' + l.id + '" aria-pressed="false" title="Mute ' + esc(l.name) + ' to hear who takes over">M</button>' +
+      (Odd.harmonise && Odd.harmonise.canLead(s, sec, l.id)
+        ? '<button type="button" class="tiny-toggle fit-lead' + (leaderId === l.id ? ' is-on' : '') + '" data-act="lead-toggle" data-section="' + sec.id + '" data-lane="' + l.id + '" aria-pressed="' + (leaderId === l.id) + '" title="' +
+          esc(leaderId === l.id ? 'Its tune sets the chords. Click to let the chords lead again.' : 'Let ' + l.name + '\'s tune set the chords: it plays as written and the other parts follow it') + '">' + icon('tune', 'ico-xs') + '<span>Sets chords</span></button>'
+        : '') +
       '<small>' + esc(l.why.join(' · ')) + (l.notes.length ? ' · ' + esc(l.notes.join(' · ').toLowerCase()) : '') + '</small></li>').join('') +
       s.lanes.filter((ln) => ln.mute && sec.slots[ln.id] && sec.slots[ln.id].part).map((ln) =>
         '<li class="fit-part is-muted" data-role="' + ln.role + '"><span class="dot"></span><strong>' + esc(ln.name) + '</strong><span class="box-tag" data-box="none">Muted</span>' +
@@ -654,7 +682,8 @@
         used.map((ln) => '<tr data-role="' + ln.role + '"><th scope="row"><span class="dot"></span>' + esc(ln.name) + '</th>' +
           song.map((e) => {
             const l = e.fit.lanes.find((x) => x.id === ln.id);
-            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
+            const sets = l && e.fit.harmony && e.fit.harmony.leader === l.id ? '<span class="lead-mark" title="Its tune sets the chords here">' + icon('tune', 'ico-xs') + '</span>' : '';
+            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') + sets : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
           }).join('') + '</tr>').join('') +
         '</tbody></table></div>';
     }
@@ -671,7 +700,7 @@
         '<section><h3 class="eyebrow">Each part</h3><ul class="fit-parts">' + parts + '</ul></section>' +
       '</div>' +
       (ribbon ? '<section><h3 class="eyebrow">Across the song</h3>' + ribbon + '</section>' : '') +
-      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Bold arrows were heard when the take was made; the others are measured from the notes. Mute a lane to see who takes over.</p>';
+      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Dash-dot: fits to the chords a tune sets. Bold arrows were heard when the take was made, or come from a tune that sets the chords; the others are measured from the notes. Mute a lane to see who takes over, or let a part\'s tune set the chords to flip who follows whom.</p>';
     return { html, rolls: [] };
   }
 
@@ -746,8 +775,12 @@
           '<label class="bars-fld"><select id="sb-' + sec.id + '" data-change="section-bars" data-section="' + sec.id + '" aria-label="Bars in ' + esc(sec.name) + '">' + bOpts + '</select><span>bars</span></label>' +
           energyMeter(s, sec) +
           (sec.transpose ? '<span class="pill mono">' + (sec.transpose > 0 ? '+' : '') + sec.transpose + '</span>' : '') +
-          '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(app.ws.prefs.chordNames ? chordText(s, sec) : chordNames(s, sec)) + '">' + esc(chordShown(app, s, sec)) + '</button>' +
-          '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
+          (() => {
+            const ld = leaderLane(s, sec);
+            const other = app.ws.prefs.chordNames ? chordText(s, sec) : chordNames(s, sec);
+            return '<button type="button" class="chords-btn mono' + (ld ? ' is-led' : '') + '" data-act="edit-chords" data-section="' + sec.id + '" title="' + esc(ld ? 'Chords worked out from ' + ld.name + '\'s tune: ' + other + '. Click to write your own.' : 'Edit chords: ' + other) + '">' + (ld ? icon('tune', 'ico-xs') : '') + esc(chordShown(app, s, sec)) + '</button>' +
+              '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="' + esc(ld ? 'Other chords for ' + ld.name + '\'s tune' : 'New chords for ' + sec.name) + '" title="' + esc(ld ? 'Other chords for ' + ld.name + '\'s tune' : 'New chords') + '">' + icon('dice') + '</button>';
+          })() +
         '</div>' +
         typeLine(sec) +
       '</div>';
@@ -779,11 +812,13 @@
           const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
           const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
           const fl = showRoles ? fitOf(sec).lanes.find((x) => x.id === lane.id) : null;
+          const leads = !!Odd.harmonise && Odd.harmonise.leaderOf(sec) === lane.id;
           inner = '<span class="cell-head"><span class="cell-name">' +
               (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
               esc(slot.part.name) +
               (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            (leads ? '<span class="lead-mark" title="' + esc(lane.name + '\'s tune sets the chords of ' + sec.name) + '">' + icon('tune', 'ico-xs') + '</span>' : '') +
             (fl ? boxTag(fl.box, 'box-tag-sm') : '') + '</span>' +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
@@ -798,7 +833,11 @@
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-swap" data-dir="1" aria-label="Next part from the shelf" title="Swap in the next ' + esc(roleLabel(lane.role)) + ' from the shelf">' + icon('fwd') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="-1" aria-label="Octave down" title="Octave down">' + icon('minus') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
-              (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
+              (!T.isDrumRole(lane.role) ? (() => {
+                const leads = !!Odd.harmonise && Odd.harmonise.leaderOf(sec) === lane.id;
+                return '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '"' + (leads ? ' disabled title="It sets the chords here, so it plays as written"' : ' title="Follow this section\'s chords"') + '>Fit</button>' +
+                  (Odd.harmonise ? '<button type="button" class="tiny-toggle' + (leads ? ' is-on' : '') + '" data-act="cell-lead" aria-pressed="' + leads + '" title="' + (leads ? 'Its tune sets the chords. Click to let the chords lead again (H)' : 'Let its tune set the section\'s chords: it plays as written and the chords follow it (H)') + '">Lead</button>' : '');
+              })() : '') +
               '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
               '<button type="button" class="tiny-toggle' + (slot.form && slot.form !== 'full' ? ' is-on' : '') + '" data-act="cell-form" aria-haspopup="menu" aria-expanded="false" title="Play this part another way here: outline, tease, fragment, half-time">Form</button>' +
               '<button type="button" class="tiny-toggle" data-act="cell-reuse" title="Use this part in other sections, as a theme that comes back">Reuse</button>' +
@@ -871,6 +910,12 @@
     const a = (span.from / sec.bars) * 100, w = ((span.to - span.from) / sec.bars) * 100;
     const label = span.to === sec.bars ? 'from bar ' + (span.from + 1) : span.from === 0 ? 'until bar ' + span.to : 'bars ' + (span.from + 1) + '–' + span.to;
     return '<span class="span-bar" title="Plays ' + label + '"><i style="left:' + a.toFixed(1) + '%;width:' + w.toFixed(1) + '%"></i></span>';
+  }
+
+  /** the lane whose tune sets a section's chords, or null */
+  function leaderLane(s, sec) {
+    const id = Odd.harmonise && Odd.harmonise.leaderOf(sec);
+    return id ? Odd.model.findLane(s, id) : null;
   }
 
   /** what the selected section does, in words */

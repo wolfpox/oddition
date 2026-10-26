@@ -83,15 +83,33 @@
     return d[key];
   };
 
+  /**
+   * When `lane`'s tune sets the selected section's chords, a part auditioned
+   * for that lane leads too: the chords it would give the section. null otherwise.
+   */
+  app.leadProg = (part, lane) => {
+    const H = Odd.harmonise;
+    const sec = app.selectedSection();
+    if (!H || !part || !sec || !lane || H.leaderOf(sec) !== lane.id || part.role !== lane.role) return null;
+    return H.forSection(app.session(), sec, lane.id, { part }).prog;
+  };
+
+  /** where a booth take plays: the selected section, or the chords it sets there when it leads */
+  app.boothTarget = (part, length, lane) => {
+    const s = app.session();
+    const tgt = R.sectionTarget(s, app.selectedSection(), length);
+    const prog = app.leadProg(part, lane || app.boothLane());
+    return prog ? Object.assign(tgt, { prog, refit: false, leads: true }) : tgt;
+  };
+
   app.boothRoll = (part) => {
     const s = app.session();
-    const sec = app.selectedSection();
     const length = part.bars * T.BAR;
-    const tgt = R.sectionTarget(s, sec, length);
+    const tgt = app.boothTarget(part, length);
     return {
       events: R.partEvents(part, Object.assign({ withIndex: true }, tgt)),
       length,
-      chords: R.chordLabels(sec.prog, tgt.tonic, s.scale, length),
+      chords: R.chordLabels(tgt.prog, tgt.tonic, s.scale, length),
     };
   };
 
@@ -219,6 +237,8 @@
     Odd.history.record(app.ws, label);
     delete app.ws.fresh; // the starter workspace now holds real work
     const result = fn(app.session(), app.ws);
+    // a section led by a tune re-works its chords whenever the tune changes
+    if (Odd.harmonise) Odd.harmonise.sync(app.session());
     app.session().updated = Date.now();
     persist();
     paint(views);
@@ -291,11 +311,13 @@
       const partLen = part.bars * T.BAR;
       const withSection = app.ui.booth.context;
       const length = withSection ? Math.max(partLen, sec.bars * T.BAR) : partLen;
-      const tgt = R.sectionTarget(s, sec, length);
+      // a take for the lane whose tune sets the chords is heard leading them
+      const tgt = app.boothTarget(part, length, lane);
       let events = R.partEvents(part, tgt);
       for (const e of events) e.track = TAKE_TRACK;
       // the booth plays parts as written: song shape only applies on the song sheet
-      if (withSection) events = events.concat(R.sectionEvents(s, sec, { length, exclude: lane && lane.id, shape: false }));
+      const band = tgt.leads ? Object.assign({}, sec, { prog: tgt.prog }) : sec;
+      if (withSection) events = events.concat(R.sectionEvents(s, band, { length, exclude: lane && lane.id, shape: false }));
       const take = {
         role: part.role,
         patch: lane ? lane.patch : M.roleInfo(part.role).defaultPatch,
@@ -634,7 +656,7 @@
           const pk = e.target.closest('[data-fit-pick]');
           if (pk) { go(pk.dataset.fitPick); return; }
           // muting runs in the page's own click handler, after this one
-          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"]')) setTimeout(render, 0);
+          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"], [data-act="lead-toggle"]')) setTimeout(render, 0);
         });
         host.addEventListener('change', (e) => {
           const t = e.target.closest('[data-fit-section]');
@@ -1233,9 +1255,12 @@
       return Odd.views.mergeProg(prog).map((c) => esc(T.chordName(c, tonic, s.scale)) + '<small>' + c.beats + '</small>').join(' ');
     };
     const m = (x) => '<span class="mono">' + x + '</span>';
+    const H = Odd.harmonise;
+    const leader = H && H.leaderOf(section) ? M.findLane(s, H.leaderOf(section)) : null;
     const result = await D.dialog({
       title: 'Chords for ' + section.name,
       body:
+        (leader ? '<p class="help lead-note">' + Odd.icon('tune', 'ico-xs') + ' These chords are worked out from ' + esc(leader.name) + '\'s tune. Writing your own hands the lead back to the chords; ' + esc(leader.name) + ' keeps its notes as written.</p>' : '') +
         '<label class="field"><span>Chords (' + section.bars + ' bars, ' + esc(Odd.views.keyName(s, section)) + ')</span>' +
         '<input type="text" id="dlg-chords" class="mono" value="' + esc(current) + '" autocomplete="off" spellcheck="false"></label>' +
         '<p class="chord-preview mono" id="dlg-chord-preview">' + preview(current) + '</p>' +
@@ -1252,7 +1277,66 @@
     });
     if (result == null) return;
     const prog = parse(result);
-    if (prog) commit('Edit chords', () => { section.prog = prog; });
+    if (prog) commit('Edit chords', () => { if (leader) H.release(s, section, { keep: true }); section.prog = prog; });
+  }
+
+  // ======================= melody first =======================
+  /** chords as shown, for a progression the section might get */
+  function progShown(s, section, prog) {
+    return Odd.views.chordShown(app, s, Object.assign({}, section, { prog }));
+  }
+
+  /** let a lane's tune set a section's chords, or hand them back to the chords */
+  function toggleLead(section, laneId) {
+    const H = Odd.harmonise;
+    const s = app.session();
+    const lane = M.findLane(s, laneId);
+    if (!H || !section || !lane) return;
+    if (H.leaderOf(section) === laneId) {
+      commit('Chords lead again', () => { H.release(s, section); });
+      D.toast('The chords lead ' + section.name + ' again: ' + Odd.views.chordShown(app, s, section), { action: { label: 'Undo', run: undo } });
+      return;
+    }
+    if (!H.canLead(s, section, laneId)) { D.toast('Only a pitched part in this section can set its chords.'); return; }
+    commit(lane.name + ' sets the chords', () => { H.lead(s, section, laneId); });
+    D.toast(lane.name + ' sets the chords of ' + section.name + ': ' + Odd.views.chordShown(app, s, section), { action: { label: 'Undo', run: undo } });
+  }
+
+  /** another good set of chords for the tune that leads */
+  function varyLead(section, dir) {
+    const H = Odd.harmonise;
+    if (!H || !H.leaderOf(section)) return;
+    const s = app.session();
+    commit('Other chords for the tune', () => { H.vary(s, section, dir || 1); });
+  }
+
+  /** pick which part's tune sets the chords */
+  async function tuneDialog(section) {
+    const H = Odd.harmonise;
+    const s = app.session();
+    const lanes = s.lanes.filter((l) => H.canLead(s, section, l.id));
+    if (!lanes.length) { D.toast('Put a melody or another pitched part in ' + section.name + ' first.'); return; }
+    if (lanes.length === 1) { toggleLead(section, lanes[0].id); return; }
+    const fit = Odd.relate ? Odd.relate.forSection(s, section) : null;
+    const rank = (l) => (l.role === 'lead' ? 3 : 0) + (fit && fit.top === l.id ? 2 : 0) + (l.role === 'arp' ? 1 : 0);
+    const pick = lanes.slice().sort((a, b) => rank(b) - rank(a))[0];
+    const rows = lanes.map((l) => {
+      const r = H.forSection(s, section, l.id, { variant: 0 });
+      const pct = r.fit != null ? Math.round(r.fit * 100) + '% of its notes are chord tones' : 'it rests throughout';
+      return '<label class="type-opt" data-role="' + l.role + '"><input type="radio" name="dlg-tune" value="' + l.id + '"' + (l === pick ? ' checked' : '') + '>' +
+        '<span><strong>' + esc(l.name) + ' · ' + esc(section.slots[l.id].part.name) + '</strong>' +
+        '<small class="mono">' + esc(progShown(s, section, r.prog)) + '</small><small>' + esc(pct) + '</small></span></label>';
+    }).join('');
+    const v = await D.dialog({
+      title: 'Which tune sets the chords of ' + section.name + '?',
+      body: '<div class="tune-opts">' + rows + '</div>' +
+        '<p class="help">The part you pick plays as written, and the section\'s chords are worked out from its notes. Every other part that fits to the chords follows them, so this part leads. Change the tune later and the chords follow it.</p>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Let it lead', primary: true, value: (el) => { const c = $('input[name="dlg-tune"]:checked', el); return c ? c.value : null; } },
+      ],
+    });
+    if (v) toggleLead(section, v);
   }
 
   async function shapeDialog(section) {
@@ -1444,7 +1528,15 @@
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
       { label: 'Who leads…', disabled: !Object.keys(section.slots).length, run: () => fitDialog(section.id) },
       { label: 'Capture an idea from this section…', disabled: !Object.keys(section.slots).length, run: () => captureFromSection(section) },
-      { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
+      ...(Odd.harmonise && Odd.harmonise.leaderOf(section)
+        ? [
+          { label: 'Other chords for the tune', run: () => varyLead(section, 1) },
+          { label: 'Chords lead again', run: () => toggleLead(section, Odd.harmonise.leaderOf(section)) },
+        ]
+        : [
+          { label: 'Let a tune set the chords…', disabled: !Odd.harmonise || !s.lanes.some((l) => Odd.harmonise.canLead(s, section, l.id)), run: () => tuneDialog(section) },
+          { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
+        ]),
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
       { label: 'Key down a semitone', run: () => commit('Change section key', () => { section.transpose = Math.max(-11, (section.transpose || 0) - 1); }) },
       { label: 'Reset section key', disabled: !section.transpose, run: () => commit('Change section key', () => { section.transpose = 0; }) },
@@ -1896,6 +1988,7 @@
       ['P', 'Keep and place it in the selected section'], ['V', 'Make a variation of the take'],
       ['I', 'Capture the take as an idea (with the parts you hear it with)'],
       ['W', 'Who leads: how the parts of the selected section fit to each other'],
+      ['H', 'Let the selected part\'s tune set its section\'s chords, or hand them back'],
       ['← →', 'Step through takes'], ['1 – 7', 'Switch stem: drums, percussion, bass, chords, pad, lead, arp'],
       ['Esc', 'Stop'], ['Ctrl Z', 'Undo'], ['Ctrl Shift Z', 'Redo'],
     ];
@@ -2008,7 +2101,13 @@
       paint(['booth']);
     },
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
-    'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
+    'new-chords': (el) => {
+      const s = app.session();
+      const sec = M.findSection(s, el.dataset.section);
+      if (!sec) return;
+      if (Odd.harmonise && Odd.harmonise.leaderOf(sec)) varyLead(sec, 1);
+      else commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); });
+    },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),
     'add-lane': (el) => D.menu(el, [{ heading: 'Add a lane' }].concat(Odd.gen.ROLES.map((r) => ({
       label: Odd.views.roleLabel(r), run: () => commit('Add lane', (s) => { const l = M.addLane(s, r); app.ui.laneId = l.id; }, ['song', 'booth']),
@@ -2025,7 +2124,17 @@
     'cell-refit': () => {
       const { section, lane } = app.selectedSlot();
       const slot = lane && section.slots[lane.id];
-      if (slot) commit('Toggle chord fit', () => { slot.refit = slot.refit === false; }, ['song']);
+      if (!slot) return;
+      if (Odd.harmonise && Odd.harmonise.leaderOf(section) === lane.id) { D.toast(lane.name + ' sets the chords here, so it plays as written. Turn off Lead to fit it to chords.'); return; }
+      commit('Toggle chord fit', () => { slot.refit = slot.refit === false; }, ['song']);
+    },
+    'cell-lead': () => {
+      const { section, lane } = app.selectedSlot();
+      if (lane && section.slots[lane.id]) toggleLead(section, lane.id);
+    },
+    'lead-toggle': (el) => {
+      const sec = M.findSection(app.session(), el.dataset.section);
+      if (sec) toggleLead(sec, el.dataset.lane);
     },
     'cell-clear': () => {
       const { section, lane } = app.selectedSlot();
@@ -2224,7 +2333,7 @@
     if (!h) return;
     e.preventDefault();
     const s = app.session();
-    const target = R.sectionTarget(s, app.selectedSection(), take.bars * T.BAR);
+    const target = app.boothTarget(take, take.bars * T.BAR);
     const drum = T.isDrumRole(take.role);
     if (!h.hit) {
       const t = Math.floor(h.t / T.STEP) * T.STEP;
@@ -2403,6 +2512,12 @@
       case 'v': case 'V': vary(); break;
       case 'i': case 'I': captureFromBooth(); break;
       case 'w': case 'W': fitDialog(app.selectedSection().id); break;
+      case 'h': case 'H': {
+        const { section, lane } = app.selectedSlot();
+        if (lane && section.slots[lane.id]) toggleLead(section, lane.id);
+        else tuneDialog(section);
+        break;
+      }
       case 'ArrowLeft': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(-1); } break;
       case 'ArrowRight': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(1); } break;
       case 'Escape': stop(); break;

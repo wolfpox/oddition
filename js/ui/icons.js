@@ -34,6 +34,7 @@
     headphones: '<path d="M4 15v-3a8 8 0 0116 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/>',
     file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
     leads: '<circle cx="16" cy="7.5" r="3"/><circle cx="5.5" cy="17.5" r="2"/><circle cx="17" cy="19.5" r="1.6"/><path d="M7.2 15.8l6.3-6"/><path d="M9.8 9.8h3.9v3.9"/><path d="M17 17.6v-5.4M15 14l2-2 2 2"/>',
+    tune: '<path d="M9 17.5V6l10-2.5v11.5"/><path d="M9 9.5l10-2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
     ladder: '<path d="M7 3v18M17 3v18M7 7.5h10M7 12h10M7 16.5h10"/>',
     idea: '<circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9L18 18M18 6l-2.1 2.1M8.1 15.9L6 18"/>',
   };
