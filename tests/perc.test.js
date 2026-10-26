@@ -87,3 +87,13 @@ test('percussion exports on channel 10 without a program change', () => {
   assert.ok(notes.length > 0);
   assert.ok(notes.every((n) => n.ch === 9));
 });
+
+test('older sessions get a percussion lane when loaded', () => {
+  const ws = Odd.model.createWorkspace({ seed: 9, style: 'pop' });
+  const s = Odd.model.currentSession(ws);
+  s.lanes = s.lanes.filter((l) => l.role !== 'perc');
+  const m = Odd.model.migrate(JSON.parse(JSON.stringify(ws)));
+  const lanes = Odd.model.currentSession(m).lanes;
+  assert.strictEqual(lanes[1].role, 'perc');
+  assert.strictEqual(lanes.filter((l) => l.role === 'perc').length, 1);
+});

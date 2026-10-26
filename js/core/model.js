@@ -529,6 +529,8 @@
       }
       const ids = new Set(s.sections.map((x) => x.id));
       s.arrangement = s.arrangement.filter((id) => ids.has(id));
+      // sessions from before the percussion lane get one
+      if (s.lanes.length && !s.lanes.some((l) => l.role === 'perc')) addLane(s, 'perc');
     }
     if (!ws.sessions.find((s) => s.id === ws.currentId)) ws.currentId = ws.sessions[0].id;
     return ws;
