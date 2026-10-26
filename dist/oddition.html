@@ -866,6 +866,54 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .tiny-toggle.is-on { color: var(--ink); border-color: var(--role); }
 .hint { margin: 0; font-size: var(--fs-xs); color: var(--faint); }
 
+/* section type, energy curve, the bars a part plays */
+.sec-line-3 { gap: 6px; }
+.type-btn {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.type-btn:hover { color: var(--ink); border-color: color-mix(in srgb, var(--sec) 60%, var(--line)); }
+.type-btn.is-set {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--sec) 45%, transparent);
+  background: color-mix(in srgb, var(--sec) 12%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.curve-tag { flex: none; display: inline-flex; align-items: center; color: color-mix(in srgb, var(--sec) 80%, var(--ink)); }
+.curve-glyph { width: 22px; height: 13px; overflow: visible; }
+.curve-glyph path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.span-bar { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.span-bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--role); }
+.span-note { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+.cell.is-out .mini-roll, .cell.is-out .cell-name { opacity: 0.4; }
+.cell.is-out.is-filled { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--role) 6%, transparent) 6px 12px), var(--panel); }
+.sec-story { margin: 0 0 8px; font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; }
+.sec-story strong { color: var(--ink); }
+
+.type-group { border: 0; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+.type-group legend { font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-bottom: 4px; }
+.type-opt { display: flex; gap: 10px; align-items: flex-start; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; }
+.type-opt:hover { border-color: var(--muted); }
+.type-opt:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.type-opt input { margin-top: 3px; flex: none; }
+.type-opt span { display: grid; gap: 2px; }
+.type-opt small { color: var(--muted); font-size: var(--fs-xs); line-height: 1.4; }
+.type-more { margin: 4px 0 10px; }
+.type-more summary { cursor: pointer; font-size: var(--fs-sm); color: var(--muted); margin-bottom: 8px; }
+.type-none { margin-top: 4px; }
+
 /* ---------------- tabs (phones) ---------------- */
 .tabs {
   display: none;
@@ -4829,8 +4877,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  *   humanize     small timing and velocity offsets per role, strummed chords.
  *                Seeded from each note, so playback and export always match.
  *
+ *   curve        how energy moves across a section: flat, rise (builds up to
+ *                the section's energy), fall (starts there and dies away),
+ *                swell (up and back down) or dip (drops in the middle).
+ *
  * session.shape = { on, humanize, lift }    see DEFAULTS
  * section.energy = number | null,  section.entry = 'auto' | ENTRIES
+ * section.exit = 'auto' | ENTRIES: how the next section is entered when its
+ *                own entry is 'auto' (a pre-chorus that always ends in a build)
+ * section.curve = CURVES
  */
 (function (Odd) {
   'use strict';
@@ -4842,6 +4897,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   const ENTRY_LABELS = {
     auto: 'Auto', none: 'Straight in', fill: 'Drum fill', build: 'Snare build', gap: 'Build and a gap',
   };
+  const CURVES = ['flat', 'rise', 'fall', 'swell', 'dip'];
+  const CURVE_LABELS = { flat: 'Steady', rise: 'Rise', fall: 'Fall away', swell: 'Swell', dip: 'Dip' };
+  // how far a curve moves below the section's energy
+  const CURVE_DEPTH = 0.4;
 
   // energy guessed from a section's name; first match wins
   const NAME_ENERGY = [
@@ -4941,7 +5000,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       const len = section.bars * BAR;
       const prev = out[out.length - 1];
       const delta = prev ? energy - prev.energy : 0;
-      const entry = prev && cfg.on ? resolveEntry(entryOf(section), prev.energy, energy) : 'none';
+      // the section's own entry wins; on 'auto' the previous section's exit decides
+      let setting = entryOf(section);
+      if (setting === 'auto' && prev && ENTRIES.includes(prev.section.exit)) setting = prev.section.exit;
+      const entry = prev && cfg.on ? resolveEntry(setting, prev.energy, energy) : 'none';
       out.push({ index, section, sectionId: sid, start: pos, end: pos + len, energy, entry, delta });
       pos += len;
     });
@@ -4975,33 +5037,53 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return x;
   }
 
+  /** energy at position x (0..1) through a section of energy e with this curve */
+  function curveAt(e, curve, x) {
+    const k = clamp(x, 0, 1);
+    let drop = 0;
+    if (curve === 'rise') drop = 1 - k;
+    else if (curve === 'fall') drop = k;
+    else if (curve === 'swell') drop = 1 - Math.sin(Math.PI * k);
+    else if (curve === 'dip') drop = Math.sin(Math.PI * k);
+    return clamp(e - CURVE_DEPTH * drop, 0, 1);
+  }
+
   /**
    * Shape one lane's events inside one section (events already at song time).
-   * o: { role, energy, start, end, nextEnergy (null at the song end or when looping a section) }
+   * o: { role, energy, start, end, curve, nextEnergy (null at the song end or when looping a section) }
    */
   function shapeLane(events, o) {
     if (!events.length) return events;
     const role = o.role;
     const e = clamp(o.energy == null ? 0.5 : o.energy, 0, 1);
+    const len = o.end - o.start;
+    const curve = CURVES.includes(o.curve) ? o.curve : 'flat';
+    // energy where an event sits; snapped to the bar so a chord's notes agree
+    const eAt = curve === 'flat' ? () => e : (ev) => {
+      const bar = Math.floor((ev.t - o.start) / BAR);
+      const bars = Math.max(1, Math.round(len / BAR));
+      return curveAt(e, curve, bars > 1 ? bar / (bars - 1) : 1);
+    };
 
     // 1. thin when energy is low
     let kept = events;
-    const cut = Math.max(0, (0.5 - e) * 2) * (MAX_CUT[role] == null ? 0.5 : MAX_CUT[role]);
-    if (cut > 0) {
-      kept = events.filter((ev) => importance(ev, o.start, role) >= cut);
+    const maxCut = MAX_CUT[role] == null ? 0.5 : MAX_CUT[role];
+    const cutAt = (ev) => Math.max(0, (0.5 - eAt(ev)) * 2) * maxCut;
+    if (curve !== 'flat' || cutAt(events[0]) > 0) {
+      kept = events.filter((ev) => { const c = cutAt(ev); return c <= 0 || importance(ev, o.start, role) >= c; });
       if (!kept.length) kept = events.filter((ev) => T.mod(ev.t - o.start, BAR) === 0);
       if (!kept.length) kept = events.filter((ev) => ev.t === events[0].t);
     }
 
     // 2. velocity: energy, phrase swell, ramp into the next section
-    const base = 0.72 + 0.56 * e;
-    const len = o.end - o.start;
-    const delta = o.nextEnergy == null ? 0 : o.nextEnergy - e;
+    const endE = curve === 'flat' ? e : curveAt(e, curve, 1);
+    const delta = o.nextEnergy == null ? 0 : o.nextEnergy - endE;
     const rampLen = Math.abs(delta) < 0.08 ? 0 : Math.min(len / 2, (Math.abs(delta) >= 0.3 ? 2 : 1) * BAR);
     const rampK = clamp(delta, -0.5, 0.5) * 0.6;
     const phrase = 4 * BAR;
     const out = kept.map((ev) => {
       const rel = ev.t - o.start;
+      const base = 0.72 + 0.56 * eAt(ev);
       let m = base * (1 + 0.04 * Math.sin(Math.PI * (T.mod(rel, phrase) / phrase)));
       if (rampLen && rel >= len - rampLen) m *= 1 + rampK * ((rel - (len - rampLen)) / rampLen);
       return Object.assign({}, ev, { v: vel(ev.v * m) });
@@ -5010,7 +5092,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     // 3. high energy doubles the lead an octave up
     if (role === 'lead' && e >= 0.8) {
       const extra = [];
-      for (const ev of out) if (ev.p + 12 <= 108) extra.push(Object.assign({}, ev, { p: ev.p + 12, v: vel(ev.v * 0.55) }));
+      for (const ev of out) if (ev.p + 12 <= 108 && eAt(ev) >= 0.8) extra.push(Object.assign({}, ev, { p: ev.p + 12, v: vel(ev.v * 0.55) }));
       return out.concat(extra);
     }
     return out;
@@ -5169,8 +5251,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   Odd.shape = {
-    DEFAULTS, ENTRIES, ENTRY_LABELS,
-    settings, autoEnergy, energyOf, isAuto, entryOf, resolveEntry, plan,
+    DEFAULTS, ENTRIES, ENTRY_LABELS, CURVES, CURVE_LABELS,
+    settings, curveAt, autoEnergy, energyOf, isAuto, entryOf, resolveEntry, plan,
     shapeLane, transitions, humanize, importance,
   };
 })(globalThis.Odd = globalThis.Odd || {});
@@ -5255,6 +5337,27 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     };
   }
 
+  /**
+   * The windows [start, end) in ticks where a slot plays, inside a rendered
+   * section of `length` ticks. A section rendered longer than itself (the
+   * booth loops it under a longer take) repeats the slot's bars each pass.
+   * null: the slot plays throughout.
+   */
+  function spanWindows(section, slot, length) {
+    const bars = section.bars;
+    const from = Math.max(0, Math.min(bars, Math.round(Number(slot.from) || 0)));
+    const to = slot.to == null ? bars : Math.max(from, Math.min(bars, Math.round(Number(slot.to))));
+    if (from === 0 && to === bars) return null;
+    const out = [];
+    const secLen = bars * T.BAR;
+    for (let k = 0; k * secLen < length; k++) {
+      const a = k * secLen + from * T.BAR;
+      const b = Math.min(length, k * secLen + to * T.BAR);
+      if (b > a) out.push([a, b]);
+    }
+    return out;
+  }
+
   /** song shape is on for this session (and the shape module is loaded) */
   function shaping(session) {
     return !!(Odd.shape && Odd.shape.settings(session).on);
@@ -5278,14 +5381,26 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       if (o.only && lane.id !== o.only) continue;
       const slot = section.slots && section.slots[lane.id];
       if (!slot || !slot.part) continue;
-      let evs = partEvents(slot.part, Object.assign({}, tgt, { oct: slot.oct || 0, refit: slot.refit !== false }));
+      // the bars this slot plays; a part that comes in late starts from its own top
+      const wins = spanWindows(section, slot, tgt.length);
+      const look = { oct: slot.oct || 0, refit: slot.refit !== false };
+      let evs;
+      if (!wins) evs = partEvents(slot.part, Object.assign({}, tgt, look));
+      else {
+        evs = [];
+        for (const [a, b] of wins) {
+          const sub = Object.assign({}, tgt, look, { prog: T.sliceProg(tgt.prog, a, b - a), length: b - a });
+          for (const e of partEvents(slot.part, sub)) { e.t += a; evs.push(e); }
+        }
+      }
+      if (!evs.length) continue;
       for (const e of evs) {
         e.t += offset;
         e.track = lane.id;
       }
       if (shape) {
         evs = Odd.shape.shapeLane(evs, {
-          role: lane.role, energy, start: offset, end: offset + tgt.length,
+          role: lane.role, energy, start: offset, end: offset + tgt.length, curve: section.curve,
           nextEnergy: o.nextEnergy == null ? null : o.nextEnergy,
         });
       }
@@ -5399,7 +5514,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   Odd.render = {
-    partEvents, applySwing, sectionTarget, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
+    partEvents, applySwing, sectionTarget, spanWindows, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
 })(globalThis.Odd = globalThis.Odd || {});
 
@@ -5751,10 +5866,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  * workspace = { version, library: [part], sessions: [session], currentId, prefs }
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
- * section   = { id, name, bars, prog, transpose, energy, entry, slots: { [laneId]: slot } }
+ * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
  *             energy: 0..1 or null (guessed from the name); entry: 'auto' | Odd.shape.ENTRIES
+ *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
+ *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
  * session.shape = { on, humanize, lift } (see Odd.shape)
- * slot      = { part (a copy), sourceId, oct, refit }
+ * slot      = { part (a copy), sourceId, oct, refit, from, to }
+ *             from/to: the bars of the section it plays (from inclusive, to exclusive;
+ *             to null = to the end). from >= to: the part sits this section out.
  * arrangement = [sectionId, ...] in play order (a section may appear many times)
  */
 (function (Odd) {
@@ -5881,6 +6000,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       transpose: 0,
       energy: null,
       entry: 'auto',
+      exit: 'auto',
+      curve: 'flat',
+      recipe: null,
       slots: {},
     };
   }
@@ -5950,8 +6072,31 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       // imported clips already carry their own harmony, so play them as written
       refit: part.imported ? false : prev ? prev.refit !== false : true,
     };
+    // a new part takes over the bars the old one played
+    if (prev && prev.from) slot.from = prev.from;
+    if (prev && prev.to != null) slot.to = prev.to;
     section.slots[laneId] = slot;
     return slot;
+  }
+
+  /** the bars a slot plays in its section: { from, to, full, out } */
+  function slotSpan(section, slot) {
+    const bars = section.bars;
+    const from = Math.max(0, Math.min(bars, Math.round(Number(slot && slot.from) || 0)));
+    const rawTo = slot && slot.to != null ? Math.round(Number(slot.to)) : bars;
+    const to = Math.max(from, Math.min(bars, isFinite(rawTo) ? rawTo : bars));
+    return { from, to, full: from === 0 && to === bars, out: from >= to };
+  }
+
+  /** set the bars a slot plays; to null (or the section length) means to the end */
+  function setSlotSpan(section, laneId, from, to) {
+    const slot = section.slots[laneId];
+    if (!slot) return;
+    const bars = section.bars;
+    const f = Math.max(0, Math.min(bars, Math.round(from || 0)));
+    const t = to == null ? bars : Math.max(f, Math.min(bars, Math.round(to)));
+    if (f) slot.from = f; else delete slot.from;
+    if (t < bars) slot.to = t; else delete slot.to;
   }
 
   function clearSlot(session, sectionId, laneId) {
@@ -6173,6 +6318,16 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         const en = Number(sec.energy);
         sec.energy = sec.energy == null || sec.energy === '' || !isFinite(en) ? null : Math.max(0, Math.min(1, en));
         if (!entries.includes(sec.entry)) sec.entry = 'auto';
+        if (!entries.includes(sec.exit)) sec.exit = 'auto';
+        const curves = (Odd.shape && Odd.shape.CURVES) || ['flat'];
+        if (!curves.includes(sec.curve)) sec.curve = 'flat';
+        if (typeof sec.recipe !== 'string') sec.recipe = null;
+        for (const k in sec.slots) {
+          const slot = sec.slots[k];
+          if (!slot) continue;
+          if (slot.from != null && !(Number(slot.from) >= 0)) delete slot.from;
+          if (slot.to != null && !(Number(slot.to) >= 0)) delete slot.to;
+        }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
       }
       const ids = new Set(s.sections.map((x) => x.id));
@@ -6186,11 +6341,343 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
     newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
-    placePart, clearSlot, moveArrangement, songBars, songSeconds,
+    placePart, clearSlot, slotSpan, setSlotSpan, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
     createWorkspace, fillStarter, migrate,
   };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/recipes.js */
+/* Oddition — section types: ready-made ways for a section to set up or pay off.
+ *
+ * A section type is a gesture that writes ordinary section settings: which
+ * bars each lane plays (slot.from / slot.to), the energy curve, the energy
+ * level, and how the next section is entered (section.exit). Nothing it does
+ * is hidden: after applying one, every setting can still be changed by hand.
+ *
+ * A type is described by waves of roles:
+ *   enter: [{ roles, at }]   lanes come in at fraction `at` of the section
+ *   leave: [{ roles, at }]   lanes drop out at fraction `at`
+ *   rest:  'in' | 'out' | 'last'   lanes no wave names: play throughout,
+ *                                   sit out, or come in with the last wave
+ * Fractions snap to the phrase grid (4 bars in long sections, 2 in 8-bar
+ * ones, 1 below), and `at` may also be { bars: n } for an exact bar.
+ *
+ * When a section has fewer than three parts, too few for its type to mean
+ * anything, the type borrows parts from another section of the song ('next': the one it
+ * leads into, 'peak': the most energetic, 'prev': the one before it).
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+  const M = Odd.model;
+
+  const KINDS = {
+    intro: { label: 'Intro', re: /intro|opening/i },
+    verse: { label: 'Verse', re: /verse/i },
+    pre: { label: 'Pre-chorus', re: /pre.?chorus|build|lift|rise|ramp/i },
+    chorus: { label: 'Chorus', re: /chorus|hook|refrain|drop/i },
+    break: { label: 'Break', re: /break|bridge|interlude|middle/i },
+    outro: { label: 'Outro', re: /outro|end|coda/i },
+  };
+  const KIND_ORDER = ['intro', 'verse', 'pre', 'chorus', 'break', 'outro'];
+
+  const RECIPES = [
+    // ---- intros
+    {
+      id: 'slow-build', kind: 'intro', label: 'Slow build', bars: 16, borrow: 'next',
+      blurb: 'Starts with a few parts and adds the rest phrase by phrase while the energy climbs.',
+      enter: [{ roles: ['pad', 'chords', 'arp'] }, { roles: ['perc'] }, { roles: ['drums'] }, { roles: ['bass', 'lead'] }],
+      rest: 'last', curve: 'rise', energy: 0.6,
+    },
+    {
+      id: 'hook-first', kind: 'intro', label: 'Hook first', bars: 8, borrow: 'peak', needs: ['lead'],
+      blurb: 'Opens on the chorus hook with little under it, then the band crashes in halfway.',
+      enter: [{ roles: ['lead', 'pad', 'chords'], at: 0 }, { roles: ['drums', 'perc', 'bass', 'arp'], at: 0.5 }],
+      rest: 'last', curve: 'flat', energy: 0.65,
+    },
+    {
+      id: 'riff-first', kind: 'intro', label: 'Riff first', borrow: 'next',
+      blurb: 'The bass or arp riff alone, then the drums, then everything else.',
+      enter: [{ roles: ['bass', 'arp'], at: 0 }, { roles: ['drums', 'perc'], at: 0.5 }, { roles: ['chords', 'pad', 'lead'], at: 0.75 }],
+      rest: 'last', curve: 'rise', energy: 0.55,
+    },
+    {
+      id: 'drums-first', kind: 'intro', label: 'Drums first', borrow: 'next',
+      blurb: 'A beat on its own sets the groove; the bass joins, then the rest.',
+      enter: [{ roles: ['drums', 'perc'], at: 0 }, { roles: ['bass'], at: 0.5 }, { roles: ['chords', 'pad', 'arp', 'lead'], at: 0.75 }],
+      rest: 'last', curve: 'rise', energy: 0.55,
+    },
+    {
+      id: 'burst', kind: 'intro', label: 'Burst in', borrow: 'peak',
+      blurb: 'No warm-up: everyone from the first bar, at full tilt.',
+      enter: [], rest: 'in', curve: 'flat', energy: 0.8,
+    },
+    {
+      id: 'atmosphere', kind: 'intro', label: 'Atmosphere', borrow: 'next',
+      blurb: 'Only the pads, chords and arp, swelling and fading. The beat waits for the verse.',
+      enter: [{ roles: ['pad', 'chords', 'arp'], at: 0 }], rest: 'out', curve: 'swell', energy: 0.35,
+    },
+    // ---- verses
+    {
+      id: 'full-groove', kind: 'verse', label: 'Full groove',
+      blurb: 'Everyone plays the whole section at an even level.',
+      enter: [], rest: 'in', curve: 'flat', energy: 0.5,
+    },
+    {
+      id: 'sparse-start', kind: 'verse', label: 'Sparse start',
+      blurb: 'Rhythm section first; chords and melody join halfway.',
+      enter: [{ roles: ['drums', 'perc', 'bass'], at: 0 }, { roles: ['chords', 'pad', 'arp', 'lead'], at: 0.5 }],
+      rest: 'last', curve: 'flat', energy: 0.5,
+    },
+    {
+      id: 'pocket', kind: 'verse', label: 'Pocket',
+      blurb: 'Drums, bass and chords only: room for a vocal or a lead to come later.',
+      enter: [{ roles: ['drums', 'bass', 'chords'], at: 0 }], rest: 'out', curve: 'flat', energy: 0.45,
+    },
+    // ---- pre-choruses
+    {
+      id: 'lift', kind: 'pre', label: 'Lift', borrow: 'prev',
+      blurb: 'Climbs all the way and hands over to the chorus with a snare build.',
+      enter: [], rest: 'in', curve: 'rise', energy: 0.7, exit: 'build',
+    },
+    {
+      id: 'hold-back', kind: 'pre', label: 'Hold back', borrow: 'prev',
+      blurb: 'The bass drops out and the drums wait, so the chorus lands harder.',
+      enter: [{ roles: ['pad', 'chords', 'lead', 'arp'], at: 0 }, { roles: ['drums', 'perc'], at: 0.5 }],
+      rest: 'out', curve: 'rise', energy: 0.6, exit: 'gap',
+    },
+    {
+      id: 'drop-out', kind: 'pre', label: 'Drop out', borrow: 'prev',
+      blurb: 'Full band until the last bar, then the beat and bass vanish before the chorus.',
+      enter: [], leave: [{ roles: ['drums', 'perc', 'bass'], at: { fromEnd: 1 } }],
+      rest: 'in', curve: 'flat', energy: 0.65, exit: 'none',
+    },
+    // ---- choruses
+    {
+      id: 'full-band', kind: 'chorus', label: 'Full band',
+      blurb: 'Everything at once, the payoff.',
+      enter: [], rest: 'in', curve: 'flat', energy: 0.8,
+    },
+    {
+      id: 'hook-alone', kind: 'chorus', label: 'Hook lands alone', needs: ['lead'], borrow: 'peak',
+      blurb: 'The first bar is just the hook over the chords; the band lands on bar two.',
+      enter: [{ roles: ['lead', 'chords', 'pad'], at: 0 }, { roles: ['drums', 'perc', 'bass', 'arp'], at: { bars: 1 } }],
+      rest: 'last', curve: 'flat', energy: 0.8,
+    },
+    {
+      id: 'climb', kind: 'chorus', label: 'Climb',
+      blurb: 'Groove and chords first, the lead and arp take it higher halfway.',
+      enter: [{ roles: ['drums', 'perc', 'bass', 'chords', 'pad'], at: 0 }, { roles: ['lead', 'arp'], at: 0.5 }],
+      rest: 'last', curve: 'rise', energy: 0.85,
+    },
+    // ---- breaks and bridges
+    {
+      id: 'breakdown', kind: 'break', label: 'Breakdown', borrow: 'prev',
+      blurb: 'Drums and bass step out; the harmony and melody hang in the air. Builds back in.',
+      enter: [{ roles: ['pad', 'chords', 'lead', 'arp'], at: 0 }], rest: 'out', curve: 'flat', energy: 0.25, exit: 'build',
+    },
+    {
+      id: 'rebuild', kind: 'break', label: 'Strip and rebuild', borrow: 'prev',
+      blurb: 'Down to the pads, then the parts come back one by one.',
+      enter: [{ roles: ['pad', 'chords'] }, { roles: ['lead', 'arp'] }, { roles: ['perc'] }, { roles: ['drums', 'bass'] }],
+      rest: 'last', curve: 'rise', energy: 0.6, exit: 'build',
+    },
+    // ---- outros
+    {
+      id: 'strip-down', kind: 'outro', label: 'Strip down', borrow: 'prev',
+      blurb: 'Parts leave one at a time until only the pad is left.',
+      enter: [], leave: [{ roles: ['lead', 'arp'], at: 0.25 }, { roles: ['drums', 'perc'], at: 0.5 }, { roles: ['bass', 'chords'], at: 0.75 }],
+      rest: 'in', curve: 'fall', energy: 0.55,
+    },
+    {
+      id: 'fade', kind: 'outro', label: 'Fade out', borrow: 'prev',
+      blurb: 'Everyone keeps playing while the energy drains away.',
+      enter: [], rest: 'in', curve: 'fall', energy: 0.5,
+    },
+  ];
+  const byId = {};
+  for (const r of RECIPES) byId[r.id] = r;
+
+  function kindOf(name) {
+    // in KIND_ORDER, so "Pre-chorus" is tested as a pre-chorus before the chorus pattern sees it
+    for (const k of KIND_ORDER) if (KINDS[k].re.test(String(name || ''))) return k;
+    return 'verse';
+  }
+
+  function get(id) { return byId[id] || null; }
+
+  /** types for a section: those for its kind first, then the rest grouped by kind */
+  function forSection(section) {
+    const kind = kindOf(section.name);
+    const groups = [{ kind, label: KINDS[kind].label, suggested: true, recipes: RECIPES.filter((r) => r.kind === kind) }];
+    for (const k of KIND_ORDER) {
+      if (k === kind) continue;
+      groups.push({ kind: k, label: KINDS[k].label, suggested: false, recipes: RECIPES.filter((r) => r.kind === k) });
+    }
+    return groups;
+  }
+
+  // below this many parts a section borrows from another one for its type
+  const MIN_PARTS = 3;
+
+  function quantum(bars) { return bars >= 16 ? 4 : bars >= 8 ? 2 : 1; }
+
+  /** a wave's position in bars */
+  function barOf(at, bars, fallback) {
+    const q = quantum(bars);
+    let b;
+    if (at && typeof at === 'object') {
+      if (at.bars != null) b = at.bars;
+      else if (at.fromEnd != null) b = bars - at.fromEnd;
+      else b = fallback;
+      return Math.max(0, Math.min(bars, Math.round(b)));
+    }
+    const x = at == null ? fallback : at * bars;
+    b = Math.round(x / q) * q;
+    return Math.max(0, Math.min(bars, b));
+  }
+
+  /** the section whose parts a type borrows from */
+  function sourceFor(session, section, how) {
+    const order = session.arrangement.map((id) => M.findSection(session, id)).filter(Boolean);
+    const at = order.indexOf(section);
+    const filled = (s) => s && s !== section && Object.keys(s.slots).length > 0;
+    if (how === 'next') {
+      for (let i = at + 1; i < order.length; i++) if (filled(order[i])) return order[i];
+    }
+    if (how === 'prev') {
+      for (let i = at - 1; i >= 0; i--) if (filled(order[i])) return order[i];
+    }
+    if (how === 'peak' || how === 'next' || how === 'prev') {
+      let best = null;
+      for (const s of session.sections) {
+        if (!filled(s)) continue;
+        const e = Odd.shape ? Odd.shape.energyOf(s) : 0.5;
+        if (!best || e > best.e || (e === best.e && Object.keys(s.slots).length > Object.keys(best.s.slots).length)) best = { s, e };
+      }
+      return best ? best.s : null;
+    }
+    return null;
+  }
+
+  function rolesIn(waves) {
+    const out = new Set();
+    for (const w of waves || []) for (const r of w.roles) out.add(r);
+    return out;
+  }
+
+  /**
+   * Apply a section type. Returns { borrowed: [lane names] } so the UI can
+   * say what was copied in.
+   */
+  function apply(session, section, id) {
+    const r = byId[id];
+    if (!r) return null;
+    if (r.bars && section.bars < r.bars) M.setSectionBars(session, section, r.bars);
+    const bars = section.bars;
+
+    // borrow parts when the section is too thin for the type to mean anything
+    const borrowed = [];
+    let source = null;
+    if (r.borrow) {
+      const have = session.lanes.filter((l) => section.slots[l.id]);
+      const missingNeed = (r.needs || []).some((role) => !have.some((l) => l.role === role));
+      if (have.length < MIN_PARTS || missingNeed) {
+        const src = sourceFor(session, section, r.borrow);
+        if (src) {
+          source = src.name;
+          const named = rolesIn(r.enter);
+          for (const lane of session.lanes) {
+            if (section.slots[lane.id] || !src.slots[lane.id]) continue;
+            // only roles the type uses, unless it keeps everyone
+            if (r.rest === 'out' && !named.has(lane.role)) continue;
+            if (have.length >= MIN_PARTS && !(r.needs || []).includes(lane.role)) continue;
+            const copy = M.clone(src.slots[lane.id]);
+            delete copy.from;
+            delete copy.to;
+            section.slots[lane.id] = copy;
+            borrowed.push(lane.name);
+          }
+        }
+      }
+    }
+
+    // entries
+    const filled = session.lanes.filter((l) => section.slots[l.id]);
+    const waves = (r.enter || []).map((w) => ({ w, lanes: filled.filter((l) => w.roles.includes(l.role)) })).filter((x) => x.lanes.length);
+    const n = waves.length;
+    const fromOf = new Map();
+    waves.forEach((x, i) => {
+      const b = barOf(x.w.at, bars, (i * bars) / Math.max(1, n));
+      for (const l of x.lanes) if (!fromOf.has(l.id)) fromOf.set(l.id, Math.min(b, bars - 1));
+    });
+    const lastFrom = waves.length ? fromOf.get(waves[waves.length - 1].lanes[0].id) : 0;
+    const named = rolesIn(r.enter);
+    // exits
+    const toOf = new Map();
+    for (const w of r.leave || []) {
+      const b = barOf(w.at, bars, bars);
+      for (const l of filled) if (w.roles.includes(l.role) && !toOf.has(l.id)) toOf.set(l.id, Math.max(1, b));
+    }
+
+    for (const lane of filled) {
+      let from;
+      if (fromOf.has(lane.id)) from = fromOf.get(lane.id);
+      else if (named.has(lane.role) || r.rest === 'in' || !n) from = 0;
+      else if (r.rest === 'out') from = bars;
+      else from = lastFrom;
+      let to = toOf.has(lane.id) ? toOf.get(lane.id) : bars;
+      if (from < bars) to = Math.max(from + 1, to);
+      if (from >= bars) M.setSlotSpan(section, lane.id, bars, bars);
+      else M.setSlotSpan(section, lane.id, from, to);
+    }
+
+    section.curve = r.curve || 'flat';
+    if (r.energy != null) section.energy = r.energy;
+    section.exit = r.exit || 'auto';
+    section.recipe = r.id;
+    return { borrowed: borrowed.length ? borrowed : [], from: borrowed.length ? source : null };
+  }
+
+  /** back to no type: everyone plays throughout, steady energy, automatic exit */
+  function reset(section) {
+    for (const k in section.slots) M.setSlotSpan(section, k, 0, null);
+    section.curve = 'flat';
+    section.exit = 'auto';
+    section.recipe = null;
+  }
+
+  /** a short sentence of what each lane does in a section, for the readout */
+  function describe(session, section) {
+    const parts = [];
+    const bars = section.bars;
+    const out = [];
+
+    const groups = new Map();
+    for (const lane of session.lanes) {
+      const slot = section.slots[lane.id];
+      if (!slot) continue;
+      const sp = M.slotSpan(section, slot);
+      if (sp.out) { out.push(lane.name); continue; }
+      const key = sp.from + ':' + sp.to;
+      if (!groups.has(key)) groups.set(key, { sp, names: [] });
+      groups.get(key).names.push(lane.name);
+    }
+    const list = [...groups.values()].sort((a, b) => a.sp.from - b.sp.from || b.sp.to - a.sp.to);
+    for (const g of list) {
+      const names = g.names.join(', ');
+      if (g.sp.full) parts.push(names + ' throughout');
+      else if (g.sp.to === bars) parts.push(names + ' from bar ' + (g.sp.from + 1));
+      else if (g.sp.from === 0) parts.push(names + ' until bar ' + g.sp.to);
+      else parts.push(names + ' in bars ' + (g.sp.from + 1) + '–' + g.sp.to);
+    }
+    if (out.length) parts.push(out.join(', ') + ' sit out');
+    return parts.join(' · ');
+  }
+
+  Odd.recipes = { KINDS, KIND_ORDER, RECIPES, get, kindOf, forSection, apply, reset, describe, quantum };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/export.js */
@@ -9810,7 +10297,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     grid += '<div class="corner" role="columnheader"><span class="eyebrow">Lanes</span><button type="button" class="btn btn-ghost btn-sm" data-act="add-lane" aria-haspopup="menu" aria-expanded="false">' + icon('plus', 'ico-sm') + 'Lane</button></div>';
     for (const sec of s.sections) {
       const isSel = sec.id === sel.section.id;
-      const bOpts = [1, 2, 4, 8, 16].map((n) => '<option value="' + n + '"' + (n === sec.bars ? ' selected' : '') + '>' + n + '</option>').join('');
+      const sizes = [1, 2, 4, 8, 12, 16, 24, 32];
+      if (!sizes.includes(sec.bars)) sizes.push(sec.bars);
+      sizes.sort((a, b) => a - b);
+      const bOpts = sizes.map((n) => '<option value="' + n + '"' + (n === sec.bars ? ' selected' : '') + '>' + n + '</option>').join('');
       grid += '<div class="sec-head' + (isSel ? ' is-selected' : '') + '" data-section-col="' + sec.id + '" style="--sec-hue:' + sectionHue(s, sec.id) + '" role="columnheader">' +
         '<div class="sec-line">' +
           '<button type="button" class="sec-name" data-act="select-section" data-section="' + sec.id + '">' + esc(sec.name) + '</button>' +
@@ -9824,6 +10314,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(chordNames(s, sec)) + '">' + esc(chordText(s, sec)) + '</button>' +
           '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
         '</div>' +
+        typeLine(sec) +
       '</div>';
     }
 
@@ -9844,11 +10335,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         const slot = sec.slots[lane.id];
         const isSel = sec.id === sel.section.id && sel.lane && lane.id === sel.lane.id;
         let inner;
+        const span = slot && slot.part ? Odd.model.slotSpan(sec, slot) : null;
         if (slot && slot.part) {
           const len = sec.bars * T.BAR;
-          const evs = R.partEvents(slot.part, Object.assign(R.sectionTarget(s, sec, len), { oct: slot.oct || 0, refit: slot.refit !== false }));
+          // as written, but only in the bars the slot plays
+          const evs = R.sectionEvents(s, sec, { only: lane.id, shape: false });
           inner = '<span class="cell-name">' + esc(slot.part.name) + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
         } else {
           inner = '<span class="cell-empty">' + icon('plus', 'ico-sm') + '</span>';
@@ -9862,6 +10356,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="-1" aria-label="Octave down" title="Octave down">' + icon('minus') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
               (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
+              '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-audition" aria-label="Audition another" title="Audition a replacement in the booth">' + icon('booth') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-clear" aria-label="Clear slot" title="Clear">' + icon('trash') + '</button>' +
             '</div>';
@@ -9872,7 +10367,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
             '</div>';
           }
         }
-        grid += '<div class="cell' + (slot ? ' is-filled' : '') + (isSel ? ' is-selected' : '') + (lane.mute ? ' is-muted' : '') +
+        grid += '<div class="cell' + (slot ? ' is-filled' : '') + (span && span.out ? ' is-out' : '') + (isSel ? ' is-selected' : '') + (lane.mute ? ' is-muted' : '') +
           '" data-act="select-cell" data-section="' + sec.id + '" data-lane="' + lane.id + '" data-role="' + lane.role + '" data-drop="cell" tabindex="0" role="gridcell" aria-selected="' + isSel + '"' +
           ' aria-label="' + esc(sec.name + ', ' + lane.name + ': ' + (slot ? slot.part.name : 'empty')) + '">' + inner + tools + '</div>';
       }
@@ -9893,9 +10388,50 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<ol class="arrangement" aria-label="Song order">' + chips + '</ol>' +
         '<button type="button" class="btn btn-ghost btn-sm arr-add" data-act="arr-add" aria-haspopup="menu" aria-expanded="false" title="Add a section to the song order"' + (addOpts.length ? '' : ' disabled') + '>' + icon('plus', 'ico-sm') + '<span>Add</span></button>' +
       '</div>' +
+      storyLine(s, sel.section) +
       '<div class="sheet-wrap">' + grid + '</div>' +
       '<p class="hint">Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
     return { html, rolls };
+  }
+
+  const CURVE_PATHS = {
+    rise: 'M1 11 L21 2', fall: 'M1 2 L21 11', swell: 'M1 11 Q11 -7 21 11', dip: 'M1 2 Q11 20 21 2',
+  };
+  function curveGlyph(curve) {
+    const d = CURVE_PATHS[curve];
+    if (!d) return '';
+    return '<svg class="curve-glyph" viewBox="0 0 22 13" aria-hidden="true"><path d="' + d + '"/></svg>';
+  }
+
+  /** the section's type and energy curve */
+  function typeLine(sec) {
+    if (!Odd.recipes) return '';
+    const r = sec.recipe && Odd.recipes.get(sec.recipe);
+    const curve = sec.curve && sec.curve !== 'flat' ? sec.curve : null;
+    const curveLabel = curve && Odd.shape ? Odd.shape.CURVE_LABELS[curve] : '';
+    return '<div class="sec-line sec-line-3">' +
+      '<button type="button" class="type-btn' + (r ? ' is-set' : '') + '" data-act="section-type" data-section="' + sec.id + '" title="Section type: how this section sets up or pays off">' +
+        (r ? esc(r.label) : 'Choose a type…') + '</button>' +
+      (curve ? '<span class="curve-tag" title="Energy: ' + esc(curveLabel) + '">' + curveGlyph(curve) + '</span>' : '') +
+    '</div>';
+  }
+
+  /** a thin track under a slot's name showing the bars it plays */
+  function spanBar(sec, span) {
+    if (!span || span.full) return '';
+    if (span.out) return '<span class="span-note">Sits out</span>';
+    const a = (span.from / sec.bars) * 100, w = ((span.to - span.from) / sec.bars) * 100;
+    const label = span.to === sec.bars ? 'from bar ' + (span.from + 1) : span.from === 0 ? 'until bar ' + span.to : 'bars ' + (span.from + 1) + '–' + span.to;
+    return '<span class="span-bar" title="Plays ' + label + '"><i style="left:' + a.toFixed(1) + '%;width:' + w.toFixed(1) + '%"></i></span>';
+  }
+
+  /** what the selected section does, in words */
+  function storyLine(s, sec) {
+    if (!sec || !Odd.recipes || !Object.keys(sec.slots).length) return '';
+    const r = sec.recipe && Odd.recipes.get(sec.recipe);
+    const what = Odd.recipes.describe(s, sec);
+    const curve = sec.curve && sec.curve !== 'flat' && Odd.shape ? ' · energy: ' + Odd.shape.CURVE_LABELS[sec.curve].toLowerCase() : '';
+    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + '</p>';
   }
 
   function chordNames(s, sec) {
@@ -10785,15 +11321,22 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const entry = S.entryOf(section);
     const pct = (x) => Math.round(x * 100) + '%';
     const entryOpts = ['auto'].concat(S.ENTRIES).map((k) => '<option value="' + k + '"' + (k === entry ? ' selected' : '') + '>' + esc(S.ENTRY_LABELS[k]) + '</option>').join('');
+    const exit = S.ENTRIES.includes(section.exit) ? section.exit : 'auto';
+    const exitOpts = ['auto'].concat(S.ENTRIES).map((k) => '<option value="' + k + '"' + (k === exit ? ' selected' : '') + '>' + esc(k === 'auto' ? 'Let the next section decide' : S.ENTRY_LABELS[k]) + '</option>').join('');
+    const curve = S.CURVES.includes(section.curve) ? section.curve : 'flat';
+    const curveOpts = S.CURVES.map((k) => '<option value="' + k + '"' + (k === curve ? ' selected' : '') + '>' + esc(S.CURVE_LABELS[k]) + '</option>').join('');
     const result = await D.dialog({
       title: 'Energy and entry for ' + section.name,
       body:
         '<label class="field"><span>Energy <output id="dlg-e-out">' + pct(energy) + '</output></span>' +
         '<input type="range" id="dlg-energy" min="0" max="1" step="0.05" value="' + energy + '"></label>' +
         '<label class="toggle"><input type="checkbox" id="dlg-e-auto"' + (auto ? ' checked' : '') + '><span>Guess from the name (' + esc(section.name) + ': ' + pct(guess) + ')</span></label>' +
+        '<label class="field"><span>Across the section</span><select id="dlg-curve">' + curveOpts + '</select></label>' +
         '<label class="field"><span>Entry</span><select id="dlg-entry">' + entryOpts + '</select></label>' +
+        '<label class="field"><span>Into the next section</span><select id="dlg-exit">' + exitOpts + '</select></label>' +
         '<p class="help">At 50% parts play as written. Lower thins and softens them, higher plays harder, and above 80% the lead doubles an octave up. A section played again later in the song gets a little more energy each time.</p>' +
-        '<p class="help">Entry is how the song gets into this section: straight in, a drum fill, a snare build over the last bars before it, or a build then a beat of silence. Auto picks from the jump in energy.</p>' +
+        '<p class="help">Across the section: Rise starts lower and climbs to this energy by the last bar, Fall away starts here and drains, Swell goes up and back down, Dip drops in the middle.</p>' +
+        '<p class="help">Entry is how the song gets into this section: straight in, a drum fill, a snare build over the last bars before it, or a build then a beat of silence. Auto picks from the jump in energy, unless the section before says how to leave it (Into the next section).</p>' +
         (S.settings(s).on ? '' : '<p class="help help-warn">Shape is off for this session (session settings), so these have no effect until you turn it on.</p>'),
       onOpen: (el) => {
         const r = $('#dlg-energy', el);
@@ -10807,6 +11350,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         { label: 'Apply', primary: true, value: (el) => ({
           energy: $('#dlg-e-auto', el).checked ? null : Number($('#dlg-energy', el).value),
           entry: $('#dlg-entry', el).value,
+          exit: $('#dlg-exit', el).value,
+          curve: $('#dlg-curve', el).value,
         }) },
       ],
     });
@@ -10814,7 +11359,82 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     commit('Change section shape', () => {
       section.energy = result.energy;
       section.entry = result.entry;
+      section.exit = result.exit;
+      section.curve = result.curve;
     }, ['song']);
+  }
+
+  async function typeDialog(section) {
+    const s = app.session();
+    const RC = Odd.recipes;
+    const groups = RC.forSection(section);
+    const option = (r) => '<label class="type-opt"><input type="radio" name="dlg-type" value="' + r.id + '"' + (section.recipe === r.id ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(r.label) + '</strong>' + (r.bars && section.bars < r.bars ? ' <small class="mono">' + r.bars + ' bars</small>' : '') + '<small>' + esc(r.blurb) + '</small></span></label>';
+    const first = groups[0];
+    const others = groups.slice(1);
+    const current = section.recipe && RC.get(section.recipe);
+    const openOthers = current && current.kind !== first.kind;
+    const body =
+      '<p class="help">A type sets which bars each part plays, how the energy moves, and how the song leaves this section. It changes settings you can still adjust afterwards: the Bars button on a part, and Energy and entry.</p>' +
+      '<fieldset class="type-group"><legend>For ' + (/^[aeiou]/i.test(first.label) ? 'an ' : 'a ') + esc(first.label.toLowerCase()) + '</legend>' + first.recipes.map(option).join('') + '</fieldset>' +
+      '<details class="type-more"' + (openOthers ? ' open' : '') + '><summary>Other types</summary>' +
+        others.map((g) => '<fieldset class="type-group"><legend>' + esc(g.label) + '</legend>' + g.recipes.map(option).join('') + '</fieldset>').join('') +
+      '</details>' +
+      '<label class="type-opt type-none"><input type="radio" name="dlg-type" value=""' + (section.recipe ? '' : ' checked') + '><span><strong>No type</strong><small>Every part plays the whole section at a steady level.</small></span></label>';
+    const id = await D.dialog({
+      title: 'Section type for ' + section.name,
+      body,
+      wide: true,
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Apply', primary: true, value: (el) => { const r = $('input[name="dlg-type"]:checked', el); return r ? r.value : null; } },
+      ],
+    });
+    if (id == null) return;
+    let res = null;
+    commit('Section type', () => {
+      if (id) res = RC.apply(s, section, id);
+      else RC.reset(section);
+    }, ['song', 'booth']);
+    if (id) {
+      const r = RC.get(id);
+      let msg = section.name + ': ' + r.label.toLowerCase();
+      if (res && res.borrowed.length) msg += '. Borrowed ' + res.borrowed.join(', ') + ' from ' + res.from;
+      D.toast(msg, { action: { label: 'Undo', run: undo } });
+    }
+  }
+
+  async function spanDialog() {
+    const { section, lane } = app.selectedSlot();
+    const slot = lane && section.slots[lane.id];
+    if (!slot) return;
+    const sp = M.slotSpan(section, slot);
+    const bars = section.bars;
+    let fromOpts = '', toOpts = '';
+    for (let b = 0; b < bars; b++) fromOpts += '<option value="' + b + '"' + (b === Math.min(sp.from, bars - 1) ? ' selected' : '') + '>Bar ' + (b + 1) + '</option>';
+    for (let b = 1; b <= bars; b++) toOpts += '<option value="' + b + '"' + (b === (sp.out ? bars : sp.to) ? ' selected' : '') + '>' + (b === bars ? 'The end (bar ' + b + ')' : 'Bar ' + b) + '</option>';
+    const v = await D.dialog({
+      title: lane.name + ' in ' + section.name,
+      body:
+        '<div class="field-row">' +
+          '<label class="field"><span>Comes in at</span><select id="dlg-from">' + fromOpts + '</select></label>' +
+          '<label class="field"><span>Plays until</span><select id="dlg-to">' + toOpts + '</select></label>' +
+        '</div>' +
+        '<label class="toggle"><input type="checkbox" id="dlg-out"' + (sp.out ? ' checked' : '') + '><span>Sits this section out</span></label>' +
+        '<p class="help">A part that comes in late starts from its own first bar. The part stays in the slot when it sits out, so you can bring it back.</p>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Whole section', value: { from: 0, to: null } },
+        { label: 'Apply', primary: true, value: (el) => {
+          if ($('#dlg-out', el).checked) return { from: bars, to: bars };
+          const f = Number($('#dlg-from', el).value);
+          const t = Math.max(f + 1, Number($('#dlg-to', el).value));
+          return { from: f, to: t };
+        } },
+      ],
+    });
+    if (!v) return;
+    commit('Change the bars a part plays', () => { M.setSlotSpan(section, lane.id, v.from, v.to); }, ['song']);
   }
 
   function sectionMenu(anchor, section) {
@@ -10825,6 +11445,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         if (name) commit('Rename section', () => { section.name = name; });
       } },
       { label: 'Edit chords…', run: () => editChords(section) },
+      { label: 'Section type…', run: () => typeDialog(section) },
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
       { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
@@ -11163,6 +11784,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'play-section': (el) => toggle('section', el.dataset.section),
     'section-menu': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) sectionMenu(el, sec); },
     'section-shape': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) shapeDialog(sec); },
+    'section-type': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) typeDialog(sec); },
+    'cell-span': () => spanDialog(),
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),

@@ -98,6 +98,45 @@ on a section) reaches outside the key: Plain, Some colour, Colourful or Rich.
 Each style has its own default (lo-fi leans colourful, techno plain).
 Repeats of a chord loop are coloured the same way each time.
 
+### Section types: how a section sets up or pays off
+
+Real intros don't all work the same way. Some build for sixteen bars, some
+open on the hook, some start with a lone riff. Click **Choose a type…** under
+a section's name (or **Section type…** in its menu) to pick one:
+
+| Section | Types |
+| --- | --- |
+| Intro | Slow build, Hook first, Riff first, Drums first, Burst in, Atmosphere |
+| Verse | Full groove, Sparse start, Pocket |
+| Pre-chorus | Lift, Hold back, Drop out |
+| Chorus | Full band, Hook lands alone, Climb |
+| Break / bridge | Breakdown, Strip and rebuild |
+| Outro | Strip down, Fade out |
+
+The types for the section's name come first; every other type is under
+**Other types**. A type only writes ordinary settings, which you can change
+afterwards:
+
+- **Which bars each part plays.** Parts come in and drop out on phrase
+  boundaries. Select a slot and use **Bars** to set it by hand: where the
+  part comes in, where it stops, or that it sits the section out. A part
+  that comes in late starts from its own first bar. The thin line under a
+  part's name shows the bars it plays.
+- **How the energy moves across the section**: steady, rise, fall away,
+  swell or dip (also under **Energy and entry…**).
+- **How the song leaves the section**: a pre-chorus set to Lift always
+  hands over with a snare build, Hold back with a build and a gap. The next
+  section's own Entry setting still wins when it isn't Auto.
+
+When a section has fewer than three parts, its type borrows from another
+section: an intro takes parts from the section it leads into, Hook first
+copies the lead from the chorus, an outro from the section before it. The
+message after applying says what was borrowed.
+
+The line above the sheet tells you what the selected section does, for
+example *Intro · Slow build · energy: rise — Pad, Chords throughout · Drums
+from bar 5 · Bass from bar 13*.
+
 ### Song shape
 
 Each section has an **energy** level, shown as the small meter next to its

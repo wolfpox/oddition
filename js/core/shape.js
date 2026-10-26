@@ -16,8 +16,15 @@
  *   humanize     small timing and velocity offsets per role, strummed chords.
  *                Seeded from each note, so playback and export always match.
  *
+ *   curve        how energy moves across a section: flat, rise (builds up to
+ *                the section's energy), fall (starts there and dies away),
+ *                swell (up and back down) or dip (drops in the middle).
+ *
  * session.shape = { on, humanize, lift }    see DEFAULTS
  * section.energy = number | null,  section.entry = 'auto' | ENTRIES
+ * section.exit = 'auto' | ENTRIES: how the next section is entered when its
+ *                own entry is 'auto' (a pre-chorus that always ends in a build)
+ * section.curve = CURVES
  */
 (function (Odd) {
   'use strict';
@@ -29,6 +36,10 @@
   const ENTRY_LABELS = {
     auto: 'Auto', none: 'Straight in', fill: 'Drum fill', build: 'Snare build', gap: 'Build and a gap',
   };
+  const CURVES = ['flat', 'rise', 'fall', 'swell', 'dip'];
+  const CURVE_LABELS = { flat: 'Steady', rise: 'Rise', fall: 'Fall away', swell: 'Swell', dip: 'Dip' };
+  // how far a curve moves below the section's energy
+  const CURVE_DEPTH = 0.4;
 
   // energy guessed from a section's name; first match wins
   const NAME_ENERGY = [
@@ -128,7 +139,10 @@
       const len = section.bars * BAR;
       const prev = out[out.length - 1];
       const delta = prev ? energy - prev.energy : 0;
-      const entry = prev && cfg.on ? resolveEntry(entryOf(section), prev.energy, energy) : 'none';
+      // the section's own entry wins; on 'auto' the previous section's exit decides
+      let setting = entryOf(section);
+      if (setting === 'auto' && prev && ENTRIES.includes(prev.section.exit)) setting = prev.section.exit;
+      const entry = prev && cfg.on ? resolveEntry(setting, prev.energy, energy) : 'none';
       out.push({ index, section, sectionId: sid, start: pos, end: pos + len, energy, entry, delta });
       pos += len;
     });
@@ -162,33 +176,53 @@
     return x;
   }
 
+  /** energy at position x (0..1) through a section of energy e with this curve */
+  function curveAt(e, curve, x) {
+    const k = clamp(x, 0, 1);
+    let drop = 0;
+    if (curve === 'rise') drop = 1 - k;
+    else if (curve === 'fall') drop = k;
+    else if (curve === 'swell') drop = 1 - Math.sin(Math.PI * k);
+    else if (curve === 'dip') drop = Math.sin(Math.PI * k);
+    return clamp(e - CURVE_DEPTH * drop, 0, 1);
+  }
+
   /**
    * Shape one lane's events inside one section (events already at song time).
-   * o: { role, energy, start, end, nextEnergy (null at the song end or when looping a section) }
+   * o: { role, energy, start, end, curve, nextEnergy (null at the song end or when looping a section) }
    */
   function shapeLane(events, o) {
     if (!events.length) return events;
     const role = o.role;
     const e = clamp(o.energy == null ? 0.5 : o.energy, 0, 1);
+    const len = o.end - o.start;
+    const curve = CURVES.includes(o.curve) ? o.curve : 'flat';
+    // energy where an event sits; snapped to the bar so a chord's notes agree
+    const eAt = curve === 'flat' ? () => e : (ev) => {
+      const bar = Math.floor((ev.t - o.start) / BAR);
+      const bars = Math.max(1, Math.round(len / BAR));
+      return curveAt(e, curve, bars > 1 ? bar / (bars - 1) : 1);
+    };
 
     // 1. thin when energy is low
     let kept = events;
-    const cut = Math.max(0, (0.5 - e) * 2) * (MAX_CUT[role] == null ? 0.5 : MAX_CUT[role]);
-    if (cut > 0) {
-      kept = events.filter((ev) => importance(ev, o.start, role) >= cut);
+    const maxCut = MAX_CUT[role] == null ? 0.5 : MAX_CUT[role];
+    const cutAt = (ev) => Math.max(0, (0.5 - eAt(ev)) * 2) * maxCut;
+    if (curve !== 'flat' || cutAt(events[0]) > 0) {
+      kept = events.filter((ev) => { const c = cutAt(ev); return c <= 0 || importance(ev, o.start, role) >= c; });
       if (!kept.length) kept = events.filter((ev) => T.mod(ev.t - o.start, BAR) === 0);
       if (!kept.length) kept = events.filter((ev) => ev.t === events[0].t);
     }
 
     // 2. velocity: energy, phrase swell, ramp into the next section
-    const base = 0.72 + 0.56 * e;
-    const len = o.end - o.start;
-    const delta = o.nextEnergy == null ? 0 : o.nextEnergy - e;
+    const endE = curve === 'flat' ? e : curveAt(e, curve, 1);
+    const delta = o.nextEnergy == null ? 0 : o.nextEnergy - endE;
     const rampLen = Math.abs(delta) < 0.08 ? 0 : Math.min(len / 2, (Math.abs(delta) >= 0.3 ? 2 : 1) * BAR);
     const rampK = clamp(delta, -0.5, 0.5) * 0.6;
     const phrase = 4 * BAR;
     const out = kept.map((ev) => {
       const rel = ev.t - o.start;
+      const base = 0.72 + 0.56 * eAt(ev);
       let m = base * (1 + 0.04 * Math.sin(Math.PI * (T.mod(rel, phrase) / phrase)));
       if (rampLen && rel >= len - rampLen) m *= 1 + rampK * ((rel - (len - rampLen)) / rampLen);
       return Object.assign({}, ev, { v: vel(ev.v * m) });
@@ -197,7 +231,7 @@
     // 3. high energy doubles the lead an octave up
     if (role === 'lead' && e >= 0.8) {
       const extra = [];
-      for (const ev of out) if (ev.p + 12 <= 108) extra.push(Object.assign({}, ev, { p: ev.p + 12, v: vel(ev.v * 0.55) }));
+      for (const ev of out) if (ev.p + 12 <= 108 && eAt(ev) >= 0.8) extra.push(Object.assign({}, ev, { p: ev.p + 12, v: vel(ev.v * 0.55) }));
       return out.concat(extra);
     }
     return out;
@@ -356,8 +390,8 @@
   }
 
   Odd.shape = {
-    DEFAULTS, ENTRIES, ENTRY_LABELS,
-    settings, autoEnergy, energyOf, isAuto, entryOf, resolveEntry, plan,
+    DEFAULTS, ENTRIES, ENTRY_LABELS, CURVES, CURVE_LABELS,
+    settings, curveAt, autoEnergy, energyOf, isAuto, entryOf, resolveEntry, plan,
     shapeLane, transitions, humanize, importance,
   };
 })(globalThis.Odd = globalThis.Odd || {});

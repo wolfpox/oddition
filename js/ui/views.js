@@ -378,7 +378,10 @@
     grid += '<div class="corner" role="columnheader"><span class="eyebrow">Lanes</span><button type="button" class="btn btn-ghost btn-sm" data-act="add-lane" aria-haspopup="menu" aria-expanded="false">' + icon('plus', 'ico-sm') + 'Lane</button></div>';
     for (const sec of s.sections) {
       const isSel = sec.id === sel.section.id;
-      const bOpts = [1, 2, 4, 8, 16].map((n) => '<option value="' + n + '"' + (n === sec.bars ? ' selected' : '') + '>' + n + '</option>').join('');
+      const sizes = [1, 2, 4, 8, 12, 16, 24, 32];
+      if (!sizes.includes(sec.bars)) sizes.push(sec.bars);
+      sizes.sort((a, b) => a - b);
+      const bOpts = sizes.map((n) => '<option value="' + n + '"' + (n === sec.bars ? ' selected' : '') + '>' + n + '</option>').join('');
       grid += '<div class="sec-head' + (isSel ? ' is-selected' : '') + '" data-section-col="' + sec.id + '" style="--sec-hue:' + sectionHue(s, sec.id) + '" role="columnheader">' +
         '<div class="sec-line">' +
           '<button type="button" class="sec-name" data-act="select-section" data-section="' + sec.id + '">' + esc(sec.name) + '</button>' +
@@ -392,6 +395,7 @@
           '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(chordNames(s, sec)) + '">' + esc(chordText(s, sec)) + '</button>' +
           '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
         '</div>' +
+        typeLine(sec) +
       '</div>';
     }
 
@@ -412,11 +416,14 @@
         const slot = sec.slots[lane.id];
         const isSel = sec.id === sel.section.id && sel.lane && lane.id === sel.lane.id;
         let inner;
+        const span = slot && slot.part ? Odd.model.slotSpan(sec, slot) : null;
         if (slot && slot.part) {
           const len = sec.bars * T.BAR;
-          const evs = R.partEvents(slot.part, Object.assign(R.sectionTarget(s, sec, len), { oct: slot.oct || 0, refit: slot.refit !== false }));
+          // as written, but only in the bars the slot plays
+          const evs = R.sectionEvents(s, sec, { only: lane.id, shape: false });
           inner = '<span class="cell-name">' + esc(slot.part.name) + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
         } else {
           inner = '<span class="cell-empty">' + icon('plus', 'ico-sm') + '</span>';
@@ -430,6 +437,7 @@
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="-1" aria-label="Octave down" title="Octave down">' + icon('minus') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
               (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
+              '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-audition" aria-label="Audition another" title="Audition a replacement in the booth">' + icon('booth') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-clear" aria-label="Clear slot" title="Clear">' + icon('trash') + '</button>' +
             '</div>';
@@ -440,7 +448,7 @@
             '</div>';
           }
         }
-        grid += '<div class="cell' + (slot ? ' is-filled' : '') + (isSel ? ' is-selected' : '') + (lane.mute ? ' is-muted' : '') +
+        grid += '<div class="cell' + (slot ? ' is-filled' : '') + (span && span.out ? ' is-out' : '') + (isSel ? ' is-selected' : '') + (lane.mute ? ' is-muted' : '') +
           '" data-act="select-cell" data-section="' + sec.id + '" data-lane="' + lane.id + '" data-role="' + lane.role + '" data-drop="cell" tabindex="0" role="gridcell" aria-selected="' + isSel + '"' +
           ' aria-label="' + esc(sec.name + ', ' + lane.name + ': ' + (slot ? slot.part.name : 'empty')) + '">' + inner + tools + '</div>';
       }
@@ -461,9 +469,50 @@
         '<ol class="arrangement" aria-label="Song order">' + chips + '</ol>' +
         '<button type="button" class="btn btn-ghost btn-sm arr-add" data-act="arr-add" aria-haspopup="menu" aria-expanded="false" title="Add a section to the song order"' + (addOpts.length ? '' : ' disabled') + '>' + icon('plus', 'ico-sm') + '<span>Add</span></button>' +
       '</div>' +
+      storyLine(s, sel.section) +
       '<div class="sheet-wrap">' + grid + '</div>' +
       '<p class="hint">Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
     return { html, rolls };
+  }
+
+  const CURVE_PATHS = {
+    rise: 'M1 11 L21 2', fall: 'M1 2 L21 11', swell: 'M1 11 Q11 -7 21 11', dip: 'M1 2 Q11 20 21 2',
+  };
+  function curveGlyph(curve) {
+    const d = CURVE_PATHS[curve];
+    if (!d) return '';
+    return '<svg class="curve-glyph" viewBox="0 0 22 13" aria-hidden="true"><path d="' + d + '"/></svg>';
+  }
+
+  /** the section's type and energy curve */
+  function typeLine(sec) {
+    if (!Odd.recipes) return '';
+    const r = sec.recipe && Odd.recipes.get(sec.recipe);
+    const curve = sec.curve && sec.curve !== 'flat' ? sec.curve : null;
+    const curveLabel = curve && Odd.shape ? Odd.shape.CURVE_LABELS[curve] : '';
+    return '<div class="sec-line sec-line-3">' +
+      '<button type="button" class="type-btn' + (r ? ' is-set' : '') + '" data-act="section-type" data-section="' + sec.id + '" title="Section type: how this section sets up or pays off">' +
+        (r ? esc(r.label) : 'Choose a type…') + '</button>' +
+      (curve ? '<span class="curve-tag" title="Energy: ' + esc(curveLabel) + '">' + curveGlyph(curve) + '</span>' : '') +
+    '</div>';
+  }
+
+  /** a thin track under a slot's name showing the bars it plays */
+  function spanBar(sec, span) {
+    if (!span || span.full) return '';
+    if (span.out) return '<span class="span-note">Sits out</span>';
+    const a = (span.from / sec.bars) * 100, w = ((span.to - span.from) / sec.bars) * 100;
+    const label = span.to === sec.bars ? 'from bar ' + (span.from + 1) : span.from === 0 ? 'until bar ' + span.to : 'bars ' + (span.from + 1) + '–' + span.to;
+    return '<span class="span-bar" title="Plays ' + label + '"><i style="left:' + a.toFixed(1) + '%;width:' + w.toFixed(1) + '%"></i></span>';
+  }
+
+  /** what the selected section does, in words */
+  function storyLine(s, sec) {
+    if (!sec || !Odd.recipes || !Object.keys(sec.slots).length) return '';
+    const r = sec.recipe && Odd.recipes.get(sec.recipe);
+    const what = Odd.recipes.describe(s, sec);
+    const curve = sec.curve && sec.curve !== 'flat' && Odd.shape ? ' · energy: ' + Odd.shape.CURVE_LABELS[sec.curve].toLowerCase() : '';
+    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + '</p>';
   }
 
   function chordNames(s, sec) {

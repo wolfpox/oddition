@@ -864,15 +864,22 @@
     const entry = S.entryOf(section);
     const pct = (x) => Math.round(x * 100) + '%';
     const entryOpts = ['auto'].concat(S.ENTRIES).map((k) => '<option value="' + k + '"' + (k === entry ? ' selected' : '') + '>' + esc(S.ENTRY_LABELS[k]) + '</option>').join('');
+    const exit = S.ENTRIES.includes(section.exit) ? section.exit : 'auto';
+    const exitOpts = ['auto'].concat(S.ENTRIES).map((k) => '<option value="' + k + '"' + (k === exit ? ' selected' : '') + '>' + esc(k === 'auto' ? 'Let the next section decide' : S.ENTRY_LABELS[k]) + '</option>').join('');
+    const curve = S.CURVES.includes(section.curve) ? section.curve : 'flat';
+    const curveOpts = S.CURVES.map((k) => '<option value="' + k + '"' + (k === curve ? ' selected' : '') + '>' + esc(S.CURVE_LABELS[k]) + '</option>').join('');
     const result = await D.dialog({
       title: 'Energy and entry for ' + section.name,
       body:
         '<label class="field"><span>Energy <output id="dlg-e-out">' + pct(energy) + '</output></span>' +
         '<input type="range" id="dlg-energy" min="0" max="1" step="0.05" value="' + energy + '"></label>' +
         '<label class="toggle"><input type="checkbox" id="dlg-e-auto"' + (auto ? ' checked' : '') + '><span>Guess from the name (' + esc(section.name) + ': ' + pct(guess) + ')</span></label>' +
+        '<label class="field"><span>Across the section</span><select id="dlg-curve">' + curveOpts + '</select></label>' +
         '<label class="field"><span>Entry</span><select id="dlg-entry">' + entryOpts + '</select></label>' +
+        '<label class="field"><span>Into the next section</span><select id="dlg-exit">' + exitOpts + '</select></label>' +
         '<p class="help">At 50% parts play as written. Lower thins and softens them, higher plays harder, and above 80% the lead doubles an octave up. A section played again later in the song gets a little more energy each time.</p>' +
-        '<p class="help">Entry is how the song gets into this section: straight in, a drum fill, a snare build over the last bars before it, or a build then a beat of silence. Auto picks from the jump in energy.</p>' +
+        '<p class="help">Across the section: Rise starts lower and climbs to this energy by the last bar, Fall away starts here and drains, Swell goes up and back down, Dip drops in the middle.</p>' +
+        '<p class="help">Entry is how the song gets into this section: straight in, a drum fill, a snare build over the last bars before it, or a build then a beat of silence. Auto picks from the jump in energy, unless the section before says how to leave it (Into the next section).</p>' +
         (S.settings(s).on ? '' : '<p class="help help-warn">Shape is off for this session (session settings), so these have no effect until you turn it on.</p>'),
       onOpen: (el) => {
         const r = $('#dlg-energy', el);
@@ -886,6 +893,8 @@
         { label: 'Apply', primary: true, value: (el) => ({
           energy: $('#dlg-e-auto', el).checked ? null : Number($('#dlg-energy', el).value),
           entry: $('#dlg-entry', el).value,
+          exit: $('#dlg-exit', el).value,
+          curve: $('#dlg-curve', el).value,
         }) },
       ],
     });
@@ -893,7 +902,82 @@
     commit('Change section shape', () => {
       section.energy = result.energy;
       section.entry = result.entry;
+      section.exit = result.exit;
+      section.curve = result.curve;
     }, ['song']);
+  }
+
+  async function typeDialog(section) {
+    const s = app.session();
+    const RC = Odd.recipes;
+    const groups = RC.forSection(section);
+    const option = (r) => '<label class="type-opt"><input type="radio" name="dlg-type" value="' + r.id + '"' + (section.recipe === r.id ? ' checked' : '') + '>' +
+      '<span><strong>' + esc(r.label) + '</strong>' + (r.bars && section.bars < r.bars ? ' <small class="mono">' + r.bars + ' bars</small>' : '') + '<small>' + esc(r.blurb) + '</small></span></label>';
+    const first = groups[0];
+    const others = groups.slice(1);
+    const current = section.recipe && RC.get(section.recipe);
+    const openOthers = current && current.kind !== first.kind;
+    const body =
+      '<p class="help">A type sets which bars each part plays, how the energy moves, and how the song leaves this section. It changes settings you can still adjust afterwards: the Bars button on a part, and Energy and entry.</p>' +
+      '<fieldset class="type-group"><legend>For ' + (/^[aeiou]/i.test(first.label) ? 'an ' : 'a ') + esc(first.label.toLowerCase()) + '</legend>' + first.recipes.map(option).join('') + '</fieldset>' +
+      '<details class="type-more"' + (openOthers ? ' open' : '') + '><summary>Other types</summary>' +
+        others.map((g) => '<fieldset class="type-group"><legend>' + esc(g.label) + '</legend>' + g.recipes.map(option).join('') + '</fieldset>').join('') +
+      '</details>' +
+      '<label class="type-opt type-none"><input type="radio" name="dlg-type" value=""' + (section.recipe ? '' : ' checked') + '><span><strong>No type</strong><small>Every part plays the whole section at a steady level.</small></span></label>';
+    const id = await D.dialog({
+      title: 'Section type for ' + section.name,
+      body,
+      wide: true,
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Apply', primary: true, value: (el) => { const r = $('input[name="dlg-type"]:checked', el); return r ? r.value : null; } },
+      ],
+    });
+    if (id == null) return;
+    let res = null;
+    commit('Section type', () => {
+      if (id) res = RC.apply(s, section, id);
+      else RC.reset(section);
+    }, ['song', 'booth']);
+    if (id) {
+      const r = RC.get(id);
+      let msg = section.name + ': ' + r.label.toLowerCase();
+      if (res && res.borrowed.length) msg += '. Borrowed ' + res.borrowed.join(', ') + ' from ' + res.from;
+      D.toast(msg, { action: { label: 'Undo', run: undo } });
+    }
+  }
+
+  async function spanDialog() {
+    const { section, lane } = app.selectedSlot();
+    const slot = lane && section.slots[lane.id];
+    if (!slot) return;
+    const sp = M.slotSpan(section, slot);
+    const bars = section.bars;
+    let fromOpts = '', toOpts = '';
+    for (let b = 0; b < bars; b++) fromOpts += '<option value="' + b + '"' + (b === Math.min(sp.from, bars - 1) ? ' selected' : '') + '>Bar ' + (b + 1) + '</option>';
+    for (let b = 1; b <= bars; b++) toOpts += '<option value="' + b + '"' + (b === (sp.out ? bars : sp.to) ? ' selected' : '') + '>' + (b === bars ? 'The end (bar ' + b + ')' : 'Bar ' + b) + '</option>';
+    const v = await D.dialog({
+      title: lane.name + ' in ' + section.name,
+      body:
+        '<div class="field-row">' +
+          '<label class="field"><span>Comes in at</span><select id="dlg-from">' + fromOpts + '</select></label>' +
+          '<label class="field"><span>Plays until</span><select id="dlg-to">' + toOpts + '</select></label>' +
+        '</div>' +
+        '<label class="toggle"><input type="checkbox" id="dlg-out"' + (sp.out ? ' checked' : '') + '><span>Sits this section out</span></label>' +
+        '<p class="help">A part that comes in late starts from its own first bar. The part stays in the slot when it sits out, so you can bring it back.</p>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Whole section', value: { from: 0, to: null } },
+        { label: 'Apply', primary: true, value: (el) => {
+          if ($('#dlg-out', el).checked) return { from: bars, to: bars };
+          const f = Number($('#dlg-from', el).value);
+          const t = Math.max(f + 1, Number($('#dlg-to', el).value));
+          return { from: f, to: t };
+        } },
+      ],
+    });
+    if (!v) return;
+    commit('Change the bars a part plays', () => { M.setSlotSpan(section, lane.id, v.from, v.to); }, ['song']);
   }
 
   function sectionMenu(anchor, section) {
@@ -904,6 +988,7 @@
         if (name) commit('Rename section', () => { section.name = name; });
       } },
       { label: 'Edit chords…', run: () => editChords(section) },
+      { label: 'Section type…', run: () => typeDialog(section) },
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
       { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
@@ -1242,6 +1327,8 @@
     'play-section': (el) => toggle('section', el.dataset.section),
     'section-menu': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) sectionMenu(el, sec); },
     'section-shape': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) shapeDialog(sec); },
+    'section-type': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) typeDialog(sec); },
+    'cell-span': () => spanDialog(),
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),

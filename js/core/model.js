@@ -3,10 +3,14 @@
  * workspace = { version, library: [part], sessions: [session], currentId, prefs }
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
- * section   = { id, name, bars, prog, transpose, energy, entry, slots: { [laneId]: slot } }
+ * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
  *             energy: 0..1 or null (guessed from the name); entry: 'auto' | Odd.shape.ENTRIES
+ *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
+ *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
  * session.shape = { on, humanize, lift } (see Odd.shape)
- * slot      = { part (a copy), sourceId, oct, refit }
+ * slot      = { part (a copy), sourceId, oct, refit, from, to }
+ *             from/to: the bars of the section it plays (from inclusive, to exclusive;
+ *             to null = to the end). from >= to: the part sits this section out.
  * arrangement = [sectionId, ...] in play order (a section may appear many times)
  */
 (function (Odd) {
@@ -133,6 +137,9 @@
       transpose: 0,
       energy: null,
       entry: 'auto',
+      exit: 'auto',
+      curve: 'flat',
+      recipe: null,
       slots: {},
     };
   }
@@ -202,8 +209,31 @@
       // imported clips already carry their own harmony, so play them as written
       refit: part.imported ? false : prev ? prev.refit !== false : true,
     };
+    // a new part takes over the bars the old one played
+    if (prev && prev.from) slot.from = prev.from;
+    if (prev && prev.to != null) slot.to = prev.to;
     section.slots[laneId] = slot;
     return slot;
+  }
+
+  /** the bars a slot plays in its section: { from, to, full, out } */
+  function slotSpan(section, slot) {
+    const bars = section.bars;
+    const from = Math.max(0, Math.min(bars, Math.round(Number(slot && slot.from) || 0)));
+    const rawTo = slot && slot.to != null ? Math.round(Number(slot.to)) : bars;
+    const to = Math.max(from, Math.min(bars, isFinite(rawTo) ? rawTo : bars));
+    return { from, to, full: from === 0 && to === bars, out: from >= to };
+  }
+
+  /** set the bars a slot plays; to null (or the section length) means to the end */
+  function setSlotSpan(section, laneId, from, to) {
+    const slot = section.slots[laneId];
+    if (!slot) return;
+    const bars = section.bars;
+    const f = Math.max(0, Math.min(bars, Math.round(from || 0)));
+    const t = to == null ? bars : Math.max(f, Math.min(bars, Math.round(to)));
+    if (f) slot.from = f; else delete slot.from;
+    if (t < bars) slot.to = t; else delete slot.to;
   }
 
   function clearSlot(session, sectionId, laneId) {
@@ -425,6 +455,16 @@
         const en = Number(sec.energy);
         sec.energy = sec.energy == null || sec.energy === '' || !isFinite(en) ? null : Math.max(0, Math.min(1, en));
         if (!entries.includes(sec.entry)) sec.entry = 'auto';
+        if (!entries.includes(sec.exit)) sec.exit = 'auto';
+        const curves = (Odd.shape && Odd.shape.CURVES) || ['flat'];
+        if (!curves.includes(sec.curve)) sec.curve = 'flat';
+        if (typeof sec.recipe !== 'string') sec.recipe = null;
+        for (const k in sec.slots) {
+          const slot = sec.slots[k];
+          if (!slot) continue;
+          if (slot.from != null && !(Number(slot.from) >= 0)) delete slot.from;
+          if (slot.to != null && !(Number(slot.to) >= 0)) delete slot.to;
+        }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
       }
       const ids = new Set(s.sections.map((x) => x.id));
@@ -438,7 +478,7 @@
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
     newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
-    placePart, clearSlot, moveArrangement, songBars, songSeconds,
+    placePart, clearSlot, slotSpan, setSlotSpan, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
     createWorkspace, fillStarter, migrate,

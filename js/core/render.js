@@ -77,6 +77,27 @@
     };
   }
 
+  /**
+   * The windows [start, end) in ticks where a slot plays, inside a rendered
+   * section of `length` ticks. A section rendered longer than itself (the
+   * booth loops it under a longer take) repeats the slot's bars each pass.
+   * null: the slot plays throughout.
+   */
+  function spanWindows(section, slot, length) {
+    const bars = section.bars;
+    const from = Math.max(0, Math.min(bars, Math.round(Number(slot.from) || 0)));
+    const to = slot.to == null ? bars : Math.max(from, Math.min(bars, Math.round(Number(slot.to))));
+    if (from === 0 && to === bars) return null;
+    const out = [];
+    const secLen = bars * T.BAR;
+    for (let k = 0; k * secLen < length; k++) {
+      const a = k * secLen + from * T.BAR;
+      const b = Math.min(length, k * secLen + to * T.BAR);
+      if (b > a) out.push([a, b]);
+    }
+    return out;
+  }
+
   /** song shape is on for this session (and the shape module is loaded) */
   function shaping(session) {
     return !!(Odd.shape && Odd.shape.settings(session).on);
@@ -100,14 +121,26 @@
       if (o.only && lane.id !== o.only) continue;
       const slot = section.slots && section.slots[lane.id];
       if (!slot || !slot.part) continue;
-      let evs = partEvents(slot.part, Object.assign({}, tgt, { oct: slot.oct || 0, refit: slot.refit !== false }));
+      // the bars this slot plays; a part that comes in late starts from its own top
+      const wins = spanWindows(section, slot, tgt.length);
+      const look = { oct: slot.oct || 0, refit: slot.refit !== false };
+      let evs;
+      if (!wins) evs = partEvents(slot.part, Object.assign({}, tgt, look));
+      else {
+        evs = [];
+        for (const [a, b] of wins) {
+          const sub = Object.assign({}, tgt, look, { prog: T.sliceProg(tgt.prog, a, b - a), length: b - a });
+          for (const e of partEvents(slot.part, sub)) { e.t += a; evs.push(e); }
+        }
+      }
+      if (!evs.length) continue;
       for (const e of evs) {
         e.t += offset;
         e.track = lane.id;
       }
       if (shape) {
         evs = Odd.shape.shapeLane(evs, {
-          role: lane.role, energy, start: offset, end: offset + tgt.length,
+          role: lane.role, energy, start: offset, end: offset + tgt.length, curve: section.curve,
           nextEnergy: o.nextEnergy == null ? null : o.nextEnergy,
         });
       }
@@ -221,6 +254,6 @@
   }
 
   Odd.render = {
-    partEvents, applySwing, sectionTarget, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
+    partEvents, applySwing, sectionTarget, spanWindows, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
 })(globalThis.Odd = globalThis.Odd || {});

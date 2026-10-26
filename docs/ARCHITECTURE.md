@@ -33,6 +33,7 @@ js/core/render.js     part -> playable events (refit)   Odd.render
 js/core/midi-file.js  Standard MIDI File writer/reader  Odd.midiFile
 js/core/zip.js        store-only .zip writer            Odd.zip
 js/core/model.js      workspace, sessions, sections     Odd.model
+js/core/recipes.js    section types (intro builds...)   Odd.recipes
 js/core/export.js     .mid / .zip / project builders    Odd.exporter
 js/core/store.js      localStorage autosave, undo       Odd.store, Odd.history
 js/audio/synth.js     Web Audio instruments + mixer     Odd.audio, Odd.synth
@@ -166,6 +167,34 @@ stream (`listen`), so the rest of the take stays what the seed gives.
 The booth builds the band with `app.boothBand()`, leaving out the lane the
 take is for.
 
+## Song structure: slot spans and section types
+
+A slot can play only some bars of its section:
+
+```js
+slot = { part, sourceId, oct, refit, from?, to? }   // bars; from inclusive, to exclusive
+```
+
+No `from` means bar 0, no `to` means the section end, and `from >= to`
+means the part sits the section out (it stays in the slot).
+`Odd.model.slotSpan(section, slot)` reads it as `{ from, to, full, out }`,
+`setSlotSpan(section, laneId, from, to)` writes it (a full span stores
+nothing). `Odd.render.sectionEvents` renders a late part over the chords
+of its own bars (`T.sliceProg`), so it starts from its own top; a section
+rendered longer than itself (the booth) repeats the span each pass
+(`spanWindows`). `placePart` keeps the span when a part is swapped.
+
+`Odd.recipes` (js/core/recipes.js) holds the section types. A type is
+data: waves of roles that enter (`enter: [{ roles, at }]`) or leave
+(`leave`) at a fraction of the section (snapped to 4-bar phrases in long
+sections, 2 in 8-bar ones), what happens to unnamed lanes (`rest`), and the
+section's `curve`, `energy` and `exit`. `apply(session, section, id)`
+writes those into the section, borrows slots from another section when it
+has fewer than three parts (`borrow: 'next' | 'peak' | 'prev'`, `needs`),
+and records `section.recipe`. `describe()` turns a section's spans into the
+sentence shown above the sheet. `kindOf(name)` picks which types are
+suggested.
+
 ## Song shape (`Odd.shape`)
 
 Shape works on rendered events, never on stored parts, so it re-renders when
@@ -175,11 +204,16 @@ anything changes and kept parts take on the shape of wherever they sit.
 session.shape = { on, humanize, lift }   // on: energy + transitions; humanize 0..1; lift: repeats gain energy
 section.energy = 0..1 | null             // null: guessed from the name (Odd.shape.autoEnergy)
 section.entry  = 'auto' | 'none' | 'fill' | 'build' | 'gap'
+section.exit   = 'auto' | same as entry  // how the next section is entered when its entry is auto
+section.curve  = 'flat' | 'rise' | 'fall' | 'swell' | 'dip'
 ```
 
 - `Odd.shape.plan(session)` resolves the song order into
   `[{ index, section, start, end, energy, entry, delta }]`: repeat lift
   applied, `auto` entries resolved from the energy jump.
+- `curveAt(e, curve, x)` is the energy at fraction x of a section: rise
+  climbs from `e - 0.4` to `e`, fall the reverse, swell and dip move in the
+  middle. `shapeLane` thins and scales each bar by its own energy.
 - `Odd.render.sectionEvents` runs `shapeLane` on each lane: low energy drops
   the least important onsets (by place in the bar, velocity and drum type;
   chord notes go together), velocity scales with energy, each 4-bar phrase
