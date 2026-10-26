@@ -20,6 +20,12 @@ dependencies. It runs offline.
 - **From source:** open `index.html` directly, or serve the folder
   (`python3 -m http.server`) and visit `http://localhost:8000`.
 
+The page opens on the song sheet, with the booth and the shelf below it.
+The top bar holds tempo, key, mode, style and volume; **More settings**
+opens harmony, swing, feel, song shape and sound quality. The **i VI**
+button on the song panel switches chords between roman numerals and chord
+names (Am F C G); you still type numerals to edit them.
+
 Your work saves automatically in the browser. Use **Session › Save project
 file** to keep a copy or move it to another machine.
 

@@ -242,6 +242,7 @@
       role: b.role, bars: b.bars, context: b.context, listen: b.listen,
       shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred },
       loopSong: app.ui.loopSong,
+      moreOpen: !!app.ui.moreOpen,
     });
     persist();
   }
@@ -1345,6 +1346,8 @@
     help: () => helpDialog(),
     undo, redo,
     'toggle-fields': () => { app.ui.fieldsOpen = !app.ui.fieldsOpen; paint(['top']); },
+    'toggle-more': () => { app.ui.moreOpen = !app.ui.moreOpen; savePrefs(); paint(['top']); },
+    'chord-mode': () => { app.ws.prefs.chordNames = !app.ws.prefs.chordNames; persist(); paint(['song', 'booth']); },
     tab: (el) => goTab(el.dataset.tab),
 
     // booth
@@ -1814,6 +1817,7 @@
     if ([1, 2, 4, 8, 16].includes(pr.bars)) b.bars = pr.bars;
     if (pr.context != null) b.context = !!pr.context;
     if (pr.listen != null) b.listen = !!pr.listen;
+    app.ui.moreOpen = !!pr.moreOpen;
     if (pr.shelf) Object.assign(app.ui.shelf, pr.shelf, { query: '' });
     app.ui.loopSong = !!pr.loopSong;
   }

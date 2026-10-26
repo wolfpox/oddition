@@ -30,6 +30,11 @@
     return T.formatProg(mergeProg(section.prog), session.scale);
   }
 
+  /** chords as shown: roman numerals, or chord names when the user prefers them */
+  function chordShown(app, session, section) {
+    return app.ws.prefs.chordNames ? chordNames(session, section) : chordText(session, section);
+  }
+
   // join identical neighbours for display
   function mergeProg(prog) {
     const out = [];
@@ -93,13 +98,16 @@
         '<label class="fld"><span>Key</span><select id="f-tonic" data-change="tonic">' + keys + '</select></label>' +
         '<label class="fld"><span>Mode</span><select id="f-scale" data-change="scale">' + scales + '</select></label>' +
         '<label class="fld"><span>Style</span><select id="f-style" data-change="style">' + styleOpts + '</select></label>' +
-        harmonyField(s) +
-        '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
-          '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
-        shapeFields(s) +
         '<label class="fld fld-range"><span>Volume</span><input type="range" id="f-master" data-input="master" min="0" max="1" step="0.01" value="' + (app.ws.prefs.master != null ? app.ws.prefs.master : 0.8) + '"></label>' +
-        qualityField(app) +
+        '<button type="button" class="btn btn-ghost btn-sm more-btn" data-act="toggle-more" aria-expanded="' + !!app.ui.moreOpen + '" title="Harmony, swing, feel, song shape and sound quality">' + icon('gear', 'ico-sm') + '<span>' + (app.ui.moreOpen ? 'Fewer settings' : 'More settings') + '</span></button>' +
         '<canvas class="meter" id="meter" aria-hidden="true"></canvas>' +
+        '<div class="fields-more' + (app.ui.moreOpen ? ' open' : '') + '">' +
+          harmonyField(s) +
+          '<label class="fld fld-range"><span>Swing <output id="o-swing">' + Math.round(s.swing * 200) + '%</output></span>' +
+            '<input type="range" id="f-swing" data-input="swing" data-change="swing-commit" min="0" max="0.5" step="0.01" value="' + s.swing + '"></label>' +
+          shapeFields(s) +
+          qualityField(app) +
+        '</div>' +
         '<div class="phone-only fields-extra">' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="midi-setup">' + icon('midi', 'ico-sm') + 'MIDI output</button>' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="redo"' + (Odd.history.canRedo ? '' : ' disabled') + '>' + icon('redo', 'ico-sm') + 'Redo</button>' +
@@ -232,8 +240,8 @@
       '<div class="panel-head">' +
         '<h2 class="panel-title">' + icon('booth', 'ico-title') + 'Audition booth</h2>' +
         '<div class="booth-target">' +
-          '<label class="inline-fld"><span>Over</span><select id="b-section" data-change="booth-section">' + sectionOpts + '</select></label>' +
-          '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordText(s, sec)) + '</span>' +
+          '<label class="inline-fld"><span>Section</span><select id="b-section" data-change="booth-section">' + sectionOpts + '</select></label>' +
+          '<span class="chord-line mono" title="Chords of ' + esc(sec.name) + '">' + esc(chordShown(app, s, sec)) + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="roles" role="tablist" aria-label="Stem">' + roles + '</div>' +
@@ -395,7 +403,7 @@
           '<label class="bars-fld"><select id="sb-' + sec.id + '" data-change="section-bars" data-section="' + sec.id + '" aria-label="Bars in ' + esc(sec.name) + '">' + bOpts + '</select><span>bars</span></label>' +
           energyMeter(s, sec) +
           (sec.transpose ? '<span class="pill mono">' + (sec.transpose > 0 ? '+' : '') + sec.transpose + '</span>' : '') +
-          '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(chordNames(s, sec)) + '">' + esc(chordText(s, sec)) + '</button>' +
+          '<button type="button" class="chords-btn mono" data-act="edit-chords" data-section="' + sec.id + '" title="Edit chords: ' + esc(app.ws.prefs.chordNames ? chordText(s, sec) : chordNames(s, sec)) + '">' + esc(chordShown(app, s, sec)) + '</button>' +
           '<button type="button" class="icon-btn icon-btn-xs" data-act="new-chords" data-section="' + sec.id + '" aria-label="New chords for ' + esc(sec.name) + '" title="New chords">' + icon('dice') + '</button>' +
         '</div>' +
         typeLine(sec) +
@@ -472,17 +480,19 @@
         '<h2 class="panel-title">' + icon('song', 'ico-title') + 'Song</h2>' +
         '<span class="song-stats mono">' + bars + ' bars · ' + fmtTime(Odd.model.songSeconds(s)) + '</span>' +
         '<div class="panel-tools">' +
+          '<button type="button" class="btn btn-sm btn-ghost chord-mode" data-act="chord-mode" aria-pressed="' + !!app.ws.prefs.chordNames + '" title="Show chords as ' + (app.ws.prefs.chordNames ? 'roman numerals (i VI III VII)' : 'chord names (Am F C G)') + '"><span class="mono">' + (app.ws.prefs.chordNames ? 'Am F' : 'i VI') + '</span></button>' +
           '<button type="button" class="btn btn-sm' + (app.ui.loopSong ? ' is-on' : ' btn-ghost') + '" data-act="loop-song" aria-pressed="' + !!app.ui.loopSong + '" title="Loop the whole song">' + icon('loop', 'ico-sm') + '<span>Loop</span></button>' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="add-section">' + icon('plus', 'ico-sm') + '<span>Section</span></button>' +
         '</div>' +
       '</div>' +
       '<div class="arr-wrap">' +
+        '<span class="eyebrow arr-label" title="The order sections play in. A section can appear more than once.">Song order</span>' +
         '<ol class="arrangement" aria-label="Song order">' + chips + '</ol>' +
         '<button type="button" class="btn btn-ghost btn-sm arr-add" data-act="arr-add" aria-haspopup="menu" aria-expanded="false" title="Add a section to the song order"' + (addOpts.length ? '' : ' disabled') + '>' + icon('plus', 'ico-sm') + '<span>Add</span></button>' +
       '</div>' +
       storyLine(s, sel.section) +
       '<div class="sheet-wrap">' + grid + '</div>' +
-      '<p class="hint">Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
+      '<p class="hint">Each section appears once on the sheet; the song order above says when it plays. Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
     return { html, rolls };
   }
 
@@ -543,5 +553,5 @@
     return { html: item('booth', 'Booth', 'booth') + item('shelf', 'Shelf', 'shelf', n ? ' <span class="tab-n mono">' + n + '</span>' : '') + item('song', 'Song', 'song'), rolls: [] };
   }
 
-  Odd.views = { top, booth, shelf, song, tabs, keyName, chordText, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
+  Odd.views = { top, booth, shelf, song, tabs, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
 })(globalThis.Odd = globalThis.Odd || {});

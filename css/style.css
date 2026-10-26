@@ -333,13 +333,18 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .fld-num input { width: 76px; font-family: var(--font-mono); }
 .fld-range input { width: 120px; height: 30px; }
 .meter { width: 120px; height: 8px; border-radius: 2px; margin-left: auto; align-self: center; }
+.more-btn { align-self: flex-end; height: 30px; }
+.fields-more { display: none; flex-basis: 100%; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.fields-more.open { display: flex; }
+.arr-label { flex: none; align-self: center; margin-right: 4px; }
+.chord-mode .mono { font-size: var(--fs-xs); }
 .phone-only { display: none; }
 
 /* ---------------- desk ---------------- */
 .desk {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
-  grid-template-areas: "booth shelf" "song song";
+  grid-template-areas: "song song" "booth shelf";
   gap: 14px;
   padding-block: 14px 40px;
   padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
@@ -1059,7 +1064,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 1100px) {
-  .desk { grid-template-columns: minmax(0, 1fr); grid-template-areas: "booth" "shelf" "song"; }
+  .desk { grid-template-columns: minmax(0, 1fr); grid-template-areas: "song" "booth" "shelf"; }
   .shelf { height: auto; min-height: 0; max-height: 640px; }
 }
 
@@ -1087,6 +1092,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   .fields .fld select, .fields .fld input[type="number"] { width: 100%; }
   .meter { display: none; }
   .fields .phone-only { display: flex; gap: 6px; grid-column: 1 / -1; }
+  .fields .more-btn { display: none; }
+  .fields .fields-more { display: contents; }
+  .arr-label { display: none; }
 
   .desk { display: block; padding-block: 12px calc(92px + env(safe-area-inset-bottom, 0px)); }
   .panel { border: 0; background: transparent; padding: 0; }
