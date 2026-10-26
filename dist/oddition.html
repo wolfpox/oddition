@@ -201,8 +201,8 @@ kbd {
 .star.is-on { color: var(--r-lead); }
 
 .when-playing { display: none !important; }
-.is-playing .when-playing { display: inline-flex !important; }
-.is-playing .when-stopped { display: none !important; }
+.is-playing:not(body) .when-playing { display: inline-flex !important; }
+.is-playing:not(body) .when-stopped { display: none !important; }
 .icon-btn.is-playing { color: var(--tally); }
 
 select, input[type="text"], input[type="search"], input[type="number"] {
@@ -602,6 +602,101 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .card-bottom { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .card-meta { font-size: var(--fs-xs); color: var(--faint); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+
+/* parts / ideas switch */
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 999px; gap: 2px; }
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.seg-btn.is-active { background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* ideas */
+.cards.idea-cards { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.idea-card { cursor: default; grid-template-rows: auto auto 1fr auto; }
+.idea-glyph { display: block; width: 100%; border-radius: 5px; }
+.voices { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.voice { display: grid; gap: 1px; min-width: 0; }
+.voice-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.voice-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.voice-btn:hover .voice-name { text-decoration: underline; text-underline-offset: 2px; }
+.voice-desc { font-size: var(--fs-xs); color: var(--faint); line-height: 1.35; padding-left: 2px; }
+.voice.is-off { opacity: 0.45; }
+.voice.is-off .voice-name { text-decoration: line-through; }
+.play-chip { gap: 4px; padding: 0 8px; }
+.play-chip.is-playing { color: var(--tally); border-color: color-mix(in srgb, var(--tally) 55%, var(--line)); }
+.idea-card .card-bottom { flex-wrap: wrap; row-gap: 4px; }
+.idea-card .card-meta { flex-basis: 100%; }
+.idea-card .card-actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.capture-list, .join-list { display: grid; gap: 6px; }
+
+/* the ladder */
+.ladder { display: grid; gap: 10px; }
+.ladder-tools { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.ladder-tools select { height: 32px; }
+.ladder-voices { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip.is-off { opacity: 0.5; text-decoration: line-through; }
+.rungs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rung-group {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 8px 2px 2px;
+}
+.rung { display: grid; gap: 4px; padding: 6px 8px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--raised); }
+.rung.is-current { border-color: var(--ink); }
+.rung.is-live { border-color: var(--tally); box-shadow: inset 3px 0 0 var(--tally); }
+.rung.is-disabled { opacity: 0.55; background: transparent; }
+.rung-btn {
+  display: grid;
+  grid-template-columns: 22px 1fr auto 26px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.rung-btn:disabled { cursor: default; }
+.rung-no { font-size: var(--fs-sm); color: var(--faint); text-align: center; }
+.rung.is-current .rung-no { color: var(--ink); }
+.rung-text { display: grid; gap: 1px; min-width: 0; }
+.rung-text strong { font-size: var(--fs-md); }
+.rung-text small { font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
+.rung-count { font-size: var(--fs-xs); color: var(--faint); white-space: nowrap; }
+.rung-play { display: inline-flex; justify-content: center; color: var(--muted); }
+.rung.is-live .rung-play { color: var(--tally); }
+.rung-roll { display: block; width: 100%; border-radius: 5px; }
+@media (max-width: 560px) {
+  .rung-btn { grid-template-columns: 18px 1fr 22px; }
+  .rung-count { display: none; }
+}
+.capture-row { color: var(--ink); }
+.capture-row > span { display: inline-flex; align-items: center; gap: 6px; }
 
 .empty {
   display: grid;
@@ -1076,6 +1171,8 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
   gap: 14px;
 }
 .dialog-wide { width: min(560px, 100%); }
+.dialog:has(.ladder) { width: min(760px, 100%); }
+.dialog:has(.fit) { width: min(840px, 100%); }
 .dialog-title { margin: 0; font-family: var(--font-display); font-stretch: 115%; font-weight: 700; font-size: var(--fs-xl); text-wrap: balance; }
 .dialog-body { display: grid; gap: 12px; }
 .dialog-body p { margin: 0; }
@@ -1157,6 +1254,144 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* who leads: each part's role in its section */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--focus); }
+.sec-lead { color: var(--ink); }
+.cell-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cell-head .cell-name { flex: 1; min-width: 0; padding-right: 0; }
+.cell-head .cell-oct { position: static; flex: none; }
+.box-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+.box-tag-sm { height: 15px; padding: 0 4px; font-size: 0.55rem; letter-spacing: 0.05em; }
+/* filled: steers the others; strong ink: stands out */
+.box-tag[data-box="hook"] { background: var(--ink); color: var(--panel); }
+.box-tag[data-box="topline"] { border-color: var(--ink); color: var(--ink); }
+.box-tag[data-box="groove"] { background: color-mix(in srgb, var(--muted) 32%, transparent); color: var(--ink); }
+.box-tag[data-box="bed"] { border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent); color: var(--muted); }
+.box-tag[data-box="none"] { color: var(--faint); border-color: var(--line); }
+
+.fit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.fit-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fit-tools select { height: 32px; min-width: 140px; }
+.fit-tools .btn { margin-left: auto; }
+.fit-headline { font-size: var(--fs-md); font-weight: 600; line-height: 1.4; }
+.fit-map-scroll { overflow-x: auto; }
+.fit-map {
+  display: grid;
+  grid-template-columns: 16px minmax(480px, 1fr);
+  grid-template-areas: "up plane" "down plane" ". x";
+  gap: 4px 6px;
+}
+.fit-y {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--faint);
+}
+.fit-y-up { grid-area: up; }
+.fit-y-down { grid-area: down; }
+.fit-x {
+  grid-area: x;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--faint);
+}
+.fit-plane {
+  grid-area: plane;
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--screen);
+}
+.fit-q { fill: color-mix(in srgb, var(--ink) 3%, transparent); }
+.fit-q-hook { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.fit-axis { stroke: var(--line); stroke-width: 1; }
+.fit-quad-name { fill: var(--muted); font-family: var(--font-display); font-stretch: 115%; font-weight: 700; font-size: 15px; }
+.fit-quad-blurb { fill: var(--faint); font-size: 10.5px; }
+.fit-link { fill: none; stroke: var(--muted); stroke-linecap: round; opacity: 0.85; }
+.fit-link.is-logged { stroke: var(--ink); opacity: 1; }
+.fit-arr-head { fill: var(--muted); }
+.fit-arr-head.is-logged { fill: var(--ink); }
+.fit-node circle { fill: var(--role); stroke: var(--screen); stroke-width: 3; }
+.fit-node text {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--screen);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.fit-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.fit-links, .fit-parts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.fit-links li { display: grid; grid-template-columns: 30px 1fr; gap: 8px; align-items: start; font-size: var(--fs-sm); }
+.fit-links strong { display: block; font-weight: 600; }
+.fit-links small, .fit-parts small { display: block; font-size: var(--fs-xs); color: var(--faint); line-height: 1.4; }
+.fit-links .fit-none { grid-template-columns: 1fr; color: var(--muted); }
+.fit-sample { width: 28px; height: 10px; margin-top: 5px; overflow: visible; }
+.fit-sample .fit-link { stroke-width: 1.8; }
+.fit-chords { display: inline-flex; justify-content: center; height: auto; margin-top: 1px; color: var(--muted); }
+.fit-part { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: var(--fs-sm); }
+.fit-part strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fit-part small { grid-column: 2 / -1; }
+.fit-part.is-muted { opacity: 0.6; }
+.ribbon-wrap { overflow-x: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.ribbon { border-collapse: collapse; min-width: 100%; font-size: var(--fs-xs); }
+.ribbon th, .ribbon td { padding: 5px 6px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+.ribbon tr:last-child th, .ribbon tr:last-child td { border-bottom: 0; }
+.ribbon tbody th { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 600; background: var(--panel); }
+.ribbon tbody th .dot { display: inline-block; margin-right: 6px; }
+.ribbon .is-current { background: color-mix(in srgb, var(--ink) 7%, var(--panel)); }
+.ribbon-sec {
+  border: 0;
+  border-bottom: 2px solid hsl(var(--sec-hue) 55% 58%);
+  background: none;
+  padding: 2px 3px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ribbon-sec:hover { color: var(--focus); }
+.ribbon-gap { color: var(--faint); }
+@media (max-width: 640px) {
+  .fit-cols { grid-template-columns: 1fr; }
 }
 
 </style>
@@ -6107,7 +6342,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 /* js/core/model.js */
 /* Oddition — workspace data model.
  *
- * workspace = { version, library: [part], sessions: [session], currentId, prefs }
+ * workspace = { version, library: [part], ideas: [idea], sessions: [session], currentId, prefs }
+ *             ideas: the idea library (see Odd.idea)
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
  * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
@@ -6539,12 +6775,26 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return n;
   }
 
+  // ---------------- ideas ----------------
+
+  function addIdea(ws, idea) {
+    if (!ws.ideas) ws.ideas = [];
+    ws.ideas.unshift(idea);
+    return idea;
+  }
+
+  function findIdea(ws, id) { return (ws.ideas || []).find((x) => x.id === id) || null; }
+
+  function removeIdea(ws, id) {
+    ws.ideas = (ws.ideas || []).filter((x) => x.id !== id);
+  }
+
   // ---------------- workspace ----------------
 
   function createWorkspace(opts) {
     const session = createSession(opts);
     // `fresh` marks a workspace nobody has worked in yet; it never wins a sync
-    return { version: VERSION, library: [], sessions: [session], currentId: session.id, prefs: {}, fresh: true };
+    return { version: VERSION, library: [], ideas: [], sessions: [session], currentId: session.id, prefs: {}, fresh: true };
   }
 
   /** fill a session with starter parts so a first visit makes sound right away */
@@ -6579,6 +6829,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const ws = raw;
     ws.version = VERSION;
     ws.library = Array.isArray(ws.library) ? ws.library.filter((p) => p && p.role && Array.isArray(p.notes)) : [];
+    ws.ideas = Array.isArray(ws.ideas) && Odd.idea ? ws.ideas.map(Odd.idea.repair).filter(Boolean) : Array.isArray(ws.ideas) ? ws.ideas : [];
     ws.prefs = ws.prefs || {};
     ws.sessions = ws.sessions.filter((s) => s && Array.isArray(s.sections) && s.sections.length);
     if (!ws.sessions.length) return null;
@@ -6650,8 +6901,947 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     placePart, clearSlot, slotSpan, setSlotSpan, themes, reuseSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
+    addIdea, findIdea, removeIdea,
     createWorkspace, fillStarter, migrate,
   };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/idea.js */
+/* Oddition — ideas: the core of a piece of music, apart from what shapes it.
+ *
+ * An idea is what is left of some music once its influences are stripped
+ * away: when its notes fall and which of them are strong (rhythm), which way
+ * it moves (contour), and the note it heads for (landing). Key, chords,
+ * exact pitches, register, sound, swing and dynamics are influence. They stay
+ * in the parts the idea was found in, which the idea keeps as source
+ * material.
+ *
+ * An idea has one or more voices, so a lone hook, a kick-and-bass lock or a
+ * whole riff section can each be one idea. Voices can be split off into ideas
+ * of their own, and ideas can be joined.
+ *
+ *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags }
+ *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split')
+ *   voice = { role, name, sourceId, part, oct, form, core }
+ *           part: a copy of the part as found (null for a voice that is only a core)
+ *           oct, form: how the part was played where it was found (slot octave and form)
+ *   core  = { len, drum, hits: [{ t, d, w, h }], land, root }
+ *           t, d  onset and length in ticks
+ *           w     weight: 0 ghost, 1 normal, 2 accent (from velocity, place in the bar, length)
+ *           h     height. Pitched: scale steps from the first note (+2 is a third up).
+ *                 Drums: 0 low (kicks, low toms, low congas), 1 mid (snares, claps,
+ *                 hand drums), 2 high (hats, cymbals, shakers, bells)
+ *           land  index of the hit the idea heads for
+ *           root  pitched only: the first note's scale degree, used to sound the
+ *                 bones in a key. It is not part of the idea's identity.
+ *
+ * A pitched voice is one line. Where several notes start together (a chord)
+ * the top note is the line, as the ear hears it, except for bass, where the
+ * lowest is.
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+
+  const MAX_BARS = 16;
+
+  // ---------------- extraction ----------------
+
+  const LOW_DRUMS = new Set([35, 36, 41, 43, 45, 47, 64, 66]);
+  const HIGH_DRUMS = new Set([42, 44, 46, 49, 51, 52, 53, 54, 55, 56, 57, 59, 67, 68, 69, 70, 73, 74, 75, 76, 77, 80, 81]);
+
+  /** 0 low, 1 mid, 2 high */
+  function drumClass(p) {
+    if (LOW_DRUMS.has(p)) return 0;
+    if (HIGH_DRUMS.has(p)) return 2;
+    return 1;
+  }
+
+  /** how strong a place in the bar is: 1 the downbeat, 0.75 beat 3, 0.5 other beats, 0.25 off-beat 8ths, 0 the rest */
+  function metric(t) {
+    const x = T.mod(t, T.BAR);
+    if (x === 0) return 1;
+    if (x === 2 * T.BEAT) return 0.75;
+    if (x % T.BEAT === 0) return 0.5;
+    if (x % (T.BEAT / 2) === 0) return 0.25;
+    return 0;
+  }
+
+  /** a note's place in semitones above the tonic, for picking the top or bottom of a chord */
+  function height(n) {
+    return Math.floor(n.deg / 7) * 12 + [0, 2, 4, 5, 7, 9, 11][T.mod(n.deg, 7)] + (n.acc || 0);
+  }
+
+  /** the notes a part plays where it was found: its form applied, cut to its length */
+  function heardNotes(part, form) {
+    const len = Math.max(1, part.bars || 1) * T.BAR;
+    const drum = T.isDrumRole(part.role);
+    const notes = form && form !== 'full' && Odd.render ? Odd.render.formNotes(part.notes || [], form, len, drum) : part.notes || [];
+    return notes.filter((n) => n.t >= 0 && n.t < len);
+  }
+
+  /**
+   * The pure core of one part: rhythm, weight, contour and landing.
+   * opts: { form } plays the part in a form first (Odd.render.FORMS).
+   */
+  function extract(part, opts) {
+    const o = opts || {};
+    const len = Math.max(1, Math.min(MAX_BARS, part.bars || 1)) * T.BAR;
+    const drum = T.isDrumRole(part.role);
+    const notes = heardNotes(part, o.form);
+    let raw = [];
+    if (drum) {
+      // one hit per onset and height: kick and floor tom together are one low hit
+      const at = new Map();
+      for (const n of notes) {
+        if (n.p == null) continue;
+        const h = drumClass(n.p);
+        const key = n.t + ':' + h;
+        const cur = at.get(key);
+        if (!cur) at.set(key, { t: n.t, d: n.d, v: n.v || 90, h });
+        else { cur.v = Math.max(cur.v, n.v || 90); cur.d = Math.max(cur.d, n.d); }
+      }
+      raw = [...at.values()];
+    } else {
+      // one note per onset: the top of a chord, or the bottom for bass
+      const low = part.role === 'bass';
+      const at = new Map();
+      for (const n of notes) {
+        if (n.deg == null) continue;
+        const cur = at.get(n.t);
+        if (!cur || (low ? height(n) < height(cur.n) : height(n) > height(cur.n))) at.set(n.t, { n, v: Math.max(n.v || 90, cur ? cur.v : 0) });
+        else cur.v = Math.max(cur.v, n.v || 90);
+      }
+      raw = [...at.values()].map(({ n, v }) => ({ t: n.t, d: n.d, v, deg: n.deg }));
+    }
+    raw.sort((a, b) => a.t - b.t || (a.h || 0) - (b.h || 0));
+    if (!raw.length) return { len, drum, hits: [], land: -1, root: drum ? null : 0 };
+
+    let vmin = 127, vmax = 1;
+    for (const r of raw) { vmin = Math.min(vmin, r.v); vmax = Math.max(vmax, r.v); }
+    const spread = vmax - vmin;
+    const root = drum ? null : raw[0].deg;
+    const hits = raw.map((r) => {
+      const vel = spread >= 10 ? (r.v - vmin) / spread : 0.5;
+      const m = metric(r.t);
+      const score = drum ? 0.65 * vel + 0.35 * m : 0.55 * vel + 0.3 * m + 0.15 * Math.min(1, r.d / T.BEAT);
+      const w = score >= 0.6 ? 2 : score < 0.28 ? 0 : 1;
+      const d = Math.max(1, Math.min(r.d, len - r.t));
+      return { t: r.t, d, w, h: drum ? r.h : r.deg - root };
+    });
+    return { len, drum, hits, land: landing(hits, len, drum), root };
+  }
+
+  /**
+   * The hit an idea heads for. Pitched: a long note on a strong beat, late in
+   * the idea. Drums: a strong hit late in the cycle, low or mid before high.
+   */
+  function landing(hits, len, drum) {
+    let best = -1, bestScore = -1;
+    hits.forEach((x, i) => {
+      if (x.w === 0) return;
+      const pos = x.t / len;
+      const score = drum
+        ? 0.4 * (x.w / 2) + 0.3 * metric(x.t) + 0.2 * pos + (x.h < 2 ? 0.1 : 0)
+        : 0.45 * Math.min(1, x.d / (2 * T.BEAT)) + 0.3 * metric(x.t) + 0.25 * pos;
+      if (score >= bestScore) { best = i; bestScore = score; }
+    });
+    return best >= 0 ? best : hits.length - 1;
+  }
+
+  // ---------------- building ideas ----------------
+
+  function uid() { return Odd.model ? Odd.model.uid('i') : 'i_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /** source: { part, oct, form, sourceId } */
+  function voiceFrom(src) {
+    const part = clone(src.part);
+    const form = src.form && src.form !== 'full' ? src.form : null;
+    const v = {
+      role: part.role,
+      name: part.name || roleLabel(part.role),
+      sourceId: src.sourceId != null ? String(src.sourceId) : part.id != null ? String(part.id) : null,
+      part,
+      oct: Math.max(-3, Math.min(3, Math.round(Number(src.oct) || 0))),
+      form,
+      core: extract(part, { form }),
+    };
+    return v;
+  }
+
+  function barsOf(voices) {
+    let bars = 1;
+    for (const v of voices) bars = Math.max(bars, Math.round(v.core.len / T.BAR));
+    return Math.min(MAX_BARS, bars);
+  }
+
+  function nameFor(voices) {
+    const names = [...new Set(voices.map((v) => v.name))];
+    if (!names.length) return 'Idea';
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return names[0] + ' & ' + names[1];
+    return names[0] + ' & ' + (names.length - 1) + ' more';
+  }
+
+  /**
+   * A new idea from parts heard together.
+   * sources: [{ part, oct, form, sourceId }]; opts: { name, style, from }
+   */
+  function fromParts(sources, opts) {
+    const o = opts || {};
+    const voices = sources.filter((s) => s && s.part && Array.isArray(s.part.notes)).map(voiceFrom);
+    if (!voices.length) return null;
+    return make(voices, {
+      name: o.name || nameFor(voices),
+      style: o.style || voices[0].part.style || null,
+      from: o.from || 'booth',
+    });
+  }
+
+  function make(voices, o) {
+    return {
+      id: uid(),
+      name: o.name || nameFor(voices),
+      bars: barsOf(voices),
+      voices,
+      style: o.style || null,
+      from: o.from || 'booth',
+      created: Date.now(),
+      starred: false,
+      tags: [],
+    };
+  }
+
+  /** a new idea holding one voice of another */
+  function split(idea, index) {
+    const v = idea.voices[index];
+    if (!v) return null;
+    return make([clone(v)], { name: v.name, style: idea.style, from: 'split' });
+  }
+
+  /** a new idea holding every voice of the given ideas, in order */
+  function join(ideas, opts) {
+    const voices = [];
+    for (const idea of ideas) for (const v of idea.voices) voices.push(clone(v));
+    if (!voices.length) return null;
+    const o = opts || {};
+    return make(voices, {
+      name: o.name || [...new Set(ideas.map((i) => i.name))].join(' & '),
+      style: ideas[0].style,
+      from: 'join',
+    });
+  }
+
+  /** remove a voice in place; returns it (an idea keeps at least one) */
+  function removeVoice(idea, index) {
+    if (idea.voices.length <= 1 || !idea.voices[index]) return null;
+    const [v] = idea.voices.splice(index, 1);
+    idea.bars = barsOf(idea.voices);
+    return v;
+  }
+
+  // ---------------- words ----------------
+
+  const INTERVALS = ['a unison', 'a 2nd', 'a 3rd', 'a 4th', 'a 5th', 'a 6th', 'a 7th', 'an octave'];
+
+  /** which way a line moves: 'repeats' | 'climbs' | 'falls' | 'arches' | 'dips' | 'hovers' */
+  function contourOf(core) {
+    const hs = core.hits.map((x) => x.h);
+    if (!hs.length) return null;
+    const first = hs[0], last = hs[hs.length - 1];
+    const hi = Math.max(...hs), lo = Math.min(...hs);
+    if (hi === lo) return 'repeats';
+    const net = last - first;
+    const peak = hi - Math.max(first, last);
+    const trough = Math.min(first, last) - lo;
+    if (peak >= 2 && peak >= Math.abs(net)) return 'arches';
+    if (trough >= 2 && trough >= Math.abs(net)) return 'dips';
+    if (net >= 2) return 'climbs';
+    if (net <= -2) return 'falls';
+    return 'hovers';
+  }
+
+  const CONTOUR_WORDS = {
+    repeats: 'repeats one note', climbs: 'climbs', falls: 'falls', arches: 'rises and falls back', dips: 'dips and comes back', hovers: 'hovers',
+  };
+
+  /** "beat 3", "the and of 2", "just after beat 4", with the bar when the idea is longer than one */
+  function placeName(t, len) {
+    const bar = Math.floor(t / T.BAR) + 1;
+    const x = T.mod(t, T.BAR);
+    const beat = Math.floor(x / T.BEAT) + 1;
+    const off = x % T.BEAT;
+    const where = off === 0 ? 'beat ' + beat : off === T.BEAT / 2 ? 'the and of ' + beat : 'just after beat ' + beat;
+    return len > T.BAR ? 'bar ' + bar + ', ' + where : where;
+  }
+
+  /** share of the hits that matter (not ghosts) that fall off the beat */
+  function offBeat(core) {
+    const real = core.hits.filter((x) => x.w > 0);
+    if (!real.length) return 0;
+    return real.filter((x) => x.t % T.BEAT !== 0).length / real.length;
+  }
+
+  /** a short description of one voice's core, e.g. "9 notes · rises and falls back within a 5th · lands on bar 2, beat 1" */
+  function describe(voice) {
+    const c = voice.core;
+    const n = c.hits.length;
+    if (!n) return 'silent';
+    const parts = [];
+    const accents = c.hits.filter((x) => x.w === 2).length;
+    if (c.drum) {
+      parts.push(n + (n === 1 ? ' hit' : ' hits') + (accents ? ', ' + accents + ' strong' : ''));
+      const used = [0, 1, 2].filter((h) => c.hits.some((x) => x.h === h)).map((h) => ['low', 'mid', 'high'][h]);
+      parts.push(used.length === 3 ? 'low, mid and high' : used.join(' and ') + ' only');
+    } else {
+      parts.push(n + (n === 1 ? ' note' : ' notes'));
+      const shape = contourOf(c);
+      const hs = c.hits.map((x) => x.h);
+      const range = Math.max(...hs) - Math.min(...hs);
+      if (shape === 'repeats') parts.push(CONTOUR_WORDS.repeats);
+      else parts.push(CONTOUR_WORDS[shape] + ' ' + (range > 7 ? 'over more than an octave' : 'within ' + INTERVALS[range]));
+    }
+    const off = offBeat(c);
+    parts.push(off < 0.25 ? 'on the beat' : off < 0.55 ? 'some off-beats' : 'syncopated');
+    const land = c.hits[c.land];
+    if (land && n > 1) parts.push('lands on ' + placeName(land.t, c.len));
+    return parts.join(' · ');
+  }
+
+  function roleLabel(role) {
+    return Odd.model ? Odd.model.roleInfo(role).label : role;
+  }
+
+  // ---------------- sounding ----------------
+
+  const BONES_VEL = [52, 84, 112];
+  const BONES_DRUMS = [36, 38, 42]; // kick, snare, closed hat
+
+  /** the register a voice plays in: its part's, moved by the octave it had where it was found */
+  function baseOf(voice) {
+    const info = Odd.model ? Odd.model.roleInfo(voice.role) : null;
+    const b = voice.part && voice.part.base != null ? voice.part.base : info && info.base != null ? info.base : 60;
+    return b + 12 * (voice.oct || 0);
+  }
+
+  /**
+   * The bones of one voice: only its core, sounded plainly. Pitched voices
+   * play their contour as plain scale steps from where they start (no chords,
+   * no accidentals); drums play kick, snare and hat for low, mid and high.
+   * Velocity comes only from the weight. Loops to `length`.
+   * target: { tonic, scale, length }
+   */
+  function bonesEvents(voice, target) {
+    const c = voice.core;
+    const tg = target || {};
+    const len = c.len || T.BAR;
+    const length = tg.length || len;
+    const base = baseOf(voice);
+    const out = [];
+    for (let start = 0; start < length; start += len) {
+      for (const x of c.hits) {
+        const t = start + x.t;
+        if (t >= length) continue;
+        const v = BONES_VEL[x.w] || 84;
+        if (c.drum) out.push({ t, d: 60, p: BONES_DRUMS[x.h] || 38, v });
+        else {
+          const d = Math.max(30, Math.min(x.d, length - t));
+          out.push({ t, d, p: T.pitchOf((c.root || 0) + x.h, 0, tg.tonic || 0, tg.scale || 'major', base), v });
+        }
+      }
+    }
+    return out.sort((a, b) => a.t - b.t || a.p - b.p);
+  }
+
+  /** a voice as it was found: its part, in its form and octave, over its own chords, in the target key */
+  function fullEvents(voice, target) {
+    const tg = target || {};
+    return voiceAt(voice, 'notes', { tonic: tg.tonic, scale: tg.scale, length: tg.length || voice.core.len });
+  }
+
+  // ---------------- the ladder ----------------
+
+  /*
+   * The ladder: one idea heard from its bones up to a full mix, each step
+   * adding one layer of influence. The first three are the idea on its own;
+   * the last three fit it into a section.
+   *   rhythm   when the notes fall and how strong they are: one sound, no pitch
+   *   shape    + which way it moves: plain scale steps (the bones)
+   *   notes    + the notes as written: chords, accidentals, lengths, dynamics,
+   *            over the chords it was written on
+   *   harmony  + bent to the target's chords (refit)
+   *   sound    + lane sounds, swing and human timing (the app's job)
+   *   band     + the target's other parts and its energy (the app's job)
+   * Events for harmony, sound and band are the same notes; what changes on
+   * the last two is how they are played and what plays with them.
+   */
+  const RUNGS = [
+    { id: 'rhythm', label: 'Rhythm', group: 'idea' },
+    { id: 'shape', label: 'Shape', group: 'idea' },
+    { id: 'notes', label: 'Notes', group: 'idea' },
+    { id: 'harmony', label: 'Harmony', group: 'fit' },
+    { id: 'sound', label: 'Sound and feel', group: 'fit' },
+    { id: 'band', label: 'Band', group: 'fit' },
+  ];
+  const RUNG_IDS = RUNGS.map((r) => r.id);
+  const RHYTHM_DRUM = 37; // side stick: a tap on the table
+
+  function rungIndex(id) { return Math.max(0, RUNG_IDS.indexOf(id)); }
+
+  /** rhythm alone: every hit on one sound (the first note's pitch, or a side stick), velocity from weight */
+  function rhythmEvents(voice, target) {
+    const c = voice.core;
+    const tg = target || {};
+    const len = c.len || T.BAR;
+    const length = tg.length || len;
+    const p = c.drum ? RHYTHM_DRUM : T.pitchOf(c.root || 0, 0, tg.tonic || 0, tg.scale || 'major', baseOf(voice));
+    const out = [];
+    const seen = new Set();
+    for (let start = 0; start < length; start += len) {
+      for (const x of c.hits) {
+        const t = start + x.t;
+        if (t >= length || seen.has(t)) continue; // drums hit low and high together: one tap
+        seen.add(t);
+        out.push({ t, d: c.drum ? 60 : Math.max(30, Math.min(x.d, length - t)), p, v: BONES_VEL[x.w] || 84 });
+      }
+      seen.clear();
+    }
+    return out.sort((a, b) => a.t - b.t);
+  }
+
+  /**
+   * One voice at a step of the ladder.
+   * target: { tonic, scale, length, prog } (prog: the chords to fit to; none = its own)
+   * A voice with no part (a core alone) plays its bones from 'notes' up.
+   */
+  function voiceAt(voice, rung, target) {
+    const tg = target || {};
+    const i = rungIndex(rung);
+    if (i === 0) return rhythmEvents(voice, tg);
+    if (i === 1 || !voice.part || !Odd.render) return bonesEvents(voice, tg);
+    const part = voice.part;
+    const ctx = part.ctx || {};
+    const fit = i >= 3 && tg.prog && tg.prog.length && !part.imported;
+    return Odd.render.partEvents(part, {
+      tonic: tg.tonic != null ? tg.tonic : ctx.tonic,
+      scale: tg.scale || ctx.scale,
+      prog: fit ? tg.prog : ctx.prog, // over its own chords, refitting changes nothing
+      length: tg.length || voice.core.len,
+      oct: voice.oct || 0,
+      form: voice.form || undefined,
+    });
+  }
+
+  /**
+   * Events for a whole idea at a step, one track per voice ("<prefix><index>").
+   * opts: { rung, tonic, scale, prog, length (default the idea's), mute: [voice indices], prefix }
+   */
+  function rungEvents(idea, opts) {
+    const o = opts || {};
+    const length = o.length || idea.bars * T.BAR;
+    const prefix = o.prefix || '__v';
+    const mute = new Set(o.mute || []);
+    const out = [];
+    idea.voices.forEach((v, i) => {
+      if (mute.has(i)) return;
+      for (const e of voiceAt(v, o.rung, { tonic: o.tonic, scale: o.scale, prog: o.prog, length })) {
+        e.track = prefix + i;
+        out.push(e);
+      }
+    });
+    return out.sort((a, b) => a.t - b.t || a.p - b.p);
+  }
+
+  /**
+   * Events for a whole idea, one track per voice ("<prefix><index>").
+   * opts: { mode: 'bones' (the shape step) | 'full' (the notes step), tonic, scale, mute, prefix }
+   */
+  function events(idea, opts) {
+    const o = opts || {};
+    return rungEvents(idea, Object.assign({}, o, { rung: o.mode === 'full' ? 'notes' : 'shape', prog: null }));
+  }
+
+  // ---------------- loading ----------------
+
+  /** repair a loaded idea, or null when nothing usable is left */
+  function repair(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.voices)) return null;
+    const voices = [];
+    for (const v of raw.voices) {
+      if (!v || typeof v !== 'object') continue;
+      const part = v.part && typeof v.part === 'object' && v.part.role && Array.isArray(v.part.notes) ? v.part : null;
+      const role = part ? part.role : v.role;
+      if (!role) continue;
+      let core = v.core;
+      const coreOk = core && Array.isArray(core.hits) && core.len > 0;
+      if (!coreOk && !part) continue;
+      if (!coreOk) core = extract(part, { form: v.form });
+      voices.push({
+        role,
+        name: String(v.name || (part && part.name) || roleLabel(role)),
+        sourceId: v.sourceId != null ? String(v.sourceId) : null,
+        part,
+        oct: Math.max(-3, Math.min(3, Math.round(Number(v.oct) || 0))),
+        form: typeof v.form === 'string' && v.form !== 'full' ? v.form : null,
+        core,
+      });
+    }
+    if (!voices.length) return null;
+    return {
+      id: raw.id != null ? String(raw.id) : uid(),
+      name: String(raw.name || nameFor(voices)),
+      bars: barsOf(voices),
+      voices,
+      style: raw.style || null,
+      from: raw.from || 'booth',
+      created: Number(raw.created) || Date.now(),
+      starred: !!raw.starred,
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+    };
+  }
+
+  Odd.idea = {
+    MAX_BARS, drumClass, metric, extract, landing,
+    fromParts, voiceFrom, split, join, removeVoice, nameFor,
+    contourOf, describe, placeName, offBeat,
+    bonesEvents, fullEvents, events, repair,
+    RUNGS, rungIndex, rhythmEvents, voiceAt, rungEvents,
+  };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/relate.js */
+/* Oddition — who leads: how the parts of a section fit to each other.
+ *
+ * Primacy has two sides, measured separately:
+ *   salience   does a part stand out? Height, movement, playing where the
+ *              others leave space; a part that repeats itself bar after bar
+ *              sinks back a little. It is relative: in a section of drums and
+ *              a pad, the drums are what you hear.
+ *   authority  are other parts shaped by it? It comes from links.
+ * At most half the parts stand out: the foreground is a minority.
+ * Together they put each part in one of four boxes:
+ *
+ *                   steers others   fits to others
+ *     stands out    hook            topline
+ *     background    groove          bed
+ *
+ * A link points from a follower to the part it fits to:
+ *   logged    what a take did when it listened to its section (part.heard)
+ *   measured  what the notes show: onsets that land on another part's hits
+ *             (lock) or keep off them (avoid), notes in another part's gaps
+ *             (answer). Both ways at once is a pair (move together, trade).
+ * Pitched parts that refit follow the section's chords; that link goes to
+ * the harmony, which is not a lane, and does not count as a lane steering.
+ *
+ * Only what is heard counts: muted lanes are left out, and with any lane
+ * soloed only the soloed ones count.
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+  const STEP = T.STEP, BAR = T.BAR;
+  const SPB = BAR / STEP; // steps per bar
+
+  const BOXES = {
+    hook: { label: 'Hook', stands: true, steers: true, blurb: 'Stands out, and other parts are built around it.' },
+    topline: { label: 'Topline', stands: true, steers: false, blurb: 'Stands out, and fits itself over the others.' },
+    groove: { label: 'Groove', stands: false, steers: true, blurb: 'Sits back, and other parts lock to it.' },
+    bed: { label: 'Bed', stands: false, steers: false, blurb: 'Sits back, filling and supporting.' },
+  };
+  const BOX_ORDER = ['hook', 'topline', 'groove', 'bed'];
+
+  /** how much a role tends to be heard as foreground, before its notes are looked at */
+  const PRIOR = { lead: 0.75, arp: 0.45, chords: 0.35, bass: 0.3, pad: 0.12, drums: 0.35, perc: 0.2 };
+  /** salience, relative to the most salient part, needed to stand out */
+  const STAND = 0.85;
+  /** authority needed to steer */
+  const STEER = 0.45;
+  const LOCK = 0.55, PAIR = 0.6, ANSWER = 0.5, AVOID = 0.75;
+  /** how much each kind of link shapes the part it points to */
+  const PULL = { lock: 1, avoid: 0.9, answer: 0.9, clear: 0.4, pair: 0.6, trade: 0.4 };
+  const ROLE_OF = { drums: 'drums', percussion: 'perc', bass: 'bass', chords: 'chords', pad: 'pad', lead: 'lead', arp: 'arp' };
+
+  /** what part.heard says, as links. `to` is a role. */
+  const HEARD = [
+    { re: /^Locks to the kick$/, to: 'drums', kind: 'lock', kick: true },
+    { re: /^Plays between the kicks$/, to: 'drums', kind: 'avoid', kick: true },
+    { re: /^Kick leans on the bass$/, to: 'bass', kind: 'lock' },
+    { re: /^Kick keeps clear of the bass$/, to: 'bass', kind: 'avoid' },
+    { re: /^Leaves the kick room$/, to: 'drums', kind: 'avoid', kick: true },
+    { re: /^Leaves room for the lead/, to: 'lead', kind: 'answer' },
+    { re: /^Moved (?:up|down) an octave to clear the (\w+)$/, to: (m) => ROLE_OF[m[1]], kind: 'clear' },
+    { re: /^Plays (?:sparser|a little busier)/, to: null, kind: 'balance' },
+  ];
+
+  function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
+
+  /** the verb that agrees with a lane name: "Bass locks", "Drums lock" */
+  function verb(name, one, many) { return /[^s]s$/i.test(String(name || '').trim()) ? many : one; }
+
+  /** one heard line as { to (role or null), kind, kick }, or null */
+  function readHeard(line) {
+    for (const h of HEARD) {
+      const m = h.re.exec(String(line || ''));
+      if (!m) continue;
+      return { to: typeof h.to === 'function' ? h.to(m) : h.to, kind: h.kind, kick: !!h.kick };
+    }
+    return null;
+  }
+
+  // ---------------- one part's profile ----------------
+
+  function profile(lane, steps) {
+    const drum = T.isDrumRole(lane.role);
+    const on = new Set(), kick = new Set(), hits = new Set();
+    const sound = new Uint8Array(steps);
+    const line = new Map(); // step -> the pitch the ear follows
+    for (const e of lane.events || []) {
+      const s = Math.round(e.t / STEP);
+      if (s < 0 || s >= steps) continue;
+      on.add(s);
+      if (drum) {
+        const c = Odd.idea ? Odd.idea.drumClass(e.p) : e.p === 35 || e.p === 36 ? 0 : 1;
+        if (c === 0) kick.add(s);
+        if (c < 2) hits.add(s);
+        sound[s] = 1;
+        continue;
+      }
+      const end = Math.min(steps, Math.max(s + 1, Math.round((e.t + e.d) / STEP)));
+      for (let j = s; j < end; j++) sound[j] = 1;
+      const cur = line.get(s);
+      if (cur == null || (lane.role === 'bass' ? e.p < cur : e.p > cur)) line.set(s, e.p);
+    }
+    // what the part follows with, and what others can lock to
+    const follows = drum && lane.role === 'drums' && kick.size >= 2 ? kick : on;
+    const offers = drum ? [kick.size >= 2 ? { set: kick, kick: true } : null, hits.size ? { set: hits, kick: false } : null].filter(Boolean) : [{ set: on, kick: false }];
+    let sounding = 0;
+    for (let j = 0; j < steps; j++) sounding += sound[j];
+    return { lane, drum, on, kick, hits, sound, sounding, line, follows, offers };
+  }
+
+  /** bars that repeat an earlier bar exactly, as a fraction of the bars after the first */
+  function repetition(P, bars) {
+    if (bars < 2) return 0;
+    const sig = [];
+    for (let b = 0; b < bars; b++) {
+      const bits = [];
+      for (let s = b * SPB; s < (b + 1) * SPB; s++) if (P.on.has(s)) bits.push((s - b * SPB) + ':' + (P.line.get(s) != null ? P.line.get(s) : ''));
+      sig.push(bits.join(','));
+    }
+    let same = 0;
+    for (let b = 1; b < bars; b++) if (sig[b] && sig.slice(0, b).includes(sig[b])) same++;
+    return same / (bars - 1);
+  }
+
+  /**
+   * How much a part stands out, before comparing it with the others.
+   * others: onsets of the section's other melodic parts (not pads or drums).
+   */
+  function salienceOf(P, others, bars) {
+    const n = P.on.size;
+    const role = P.lane.role;
+    if (!n) return { score: 0, height: 0, motion: 0, space: 0, repeat: 0 };
+    const perBar = n / bars;
+    let height, motion;
+    if (P.drum) {
+      height = role === 'perc' ? 0.35 : 0.25;
+      motion = 0.3;
+    } else {
+      const ps = [...P.line.entries()].sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+      const mean = ps.reduce((a, b) => a + b, 0) / ps.length;
+      height = clamp((mean - 45) / 35, 0, 1);
+      let changes = 0;
+      for (let i = 1; i < ps.length; i++) if (ps[i] !== ps[i - 1]) changes++;
+      motion = (ps.length > 1 ? changes / (ps.length - 1) : 0) * Math.sqrt(Math.min(1, perBar / 6));
+    }
+    let alone = 0;
+    for (const s of P.on) if (!others.has(s)) alone++;
+    const space = alone / n;
+    const repeat = repetition(P, bars);
+    let score = 0.4 * (PRIOR[role] != null ? PRIOR[role] : 0.3) + 0.2 * height + 0.2 * motion + 0.2 * space - 0.1 * repeat;
+    if (perBar < 0.5) score *= perBar / 0.5;
+    return { score: Math.max(0, score), height, motion, space, repeat };
+  }
+
+  // ---------------- measured links ----------------
+
+  const SPBEAT = T.BEAT / STEP;
+
+  /**
+   * How much A's off-beat onsets land on `set`, beyond chance: 1 always, 0
+   * chance. Notes on the beat are left out, since every part plays there.
+   * Sure only with enough notes: the score shrinks below 8 of them.
+   */
+  function lockOf(A, set, steps) {
+    const off = [...A.follows].filter((s) => s % SPBEAT !== 0);
+    if (off.length < 4 || !set.size) return null;
+    let hit = 0, bOff = 0;
+    for (const s of off) if (set.has(s)) hit++;
+    for (const s of set) if (s % SPBEAT !== 0) bOff++;
+    const room = steps - steps / SPBEAT;
+    const chance = room > 0 ? bOff / room : 0;
+    if (!bOff || chance > 0.6) return null;
+    const ratio = hit / off.length;
+    const sure = Math.min(1, off.length / 8);
+    return { lock: ((ratio - chance) / (1 - chance)) * sure, ratio, chance, n: off.length };
+  }
+
+  /** how much A keeps off B's kicks, beyond chance (house bass between a four-on-the-floor kick) */
+  function avoidOf(A, B, steps) {
+    if (!B.drum || B.kick.size < 2 || A.lane.role === 'drums' || A.on.size < 6) return null;
+    const chance = B.kick.size / steps;
+    if (chance < 0.12) return null;
+    let hit = 0;
+    for (const s of A.on) if (B.kick.has(s)) hit++;
+    const ratio = hit / A.on.size;
+    return { avoid: clamp(1 - ratio / chance, 0, 1) * Math.min(1, A.on.size / 12), ratio };
+  }
+
+  /** how much of A's sound falls in B's gaps, beyond chance */
+  function answerOf(A, B, steps) {
+    if (A.drum || B.drum || A.lane.role === 'pad' || B.lane.role === 'pad') return null;
+    const rest = 1 - B.sounding / steps;
+    if (rest < 0.2 || rest > 0.75 || A.on.size < 4 || !A.sounding) return null;
+    let inRest = 0;
+    for (let j = 0; j < steps; j++) if (A.sound[j] && !B.sound[j]) inRest++;
+    const ratio = inRest / A.sounding;
+    return { answer: ((ratio - rest) / (1 - rest)) * Math.min(1, A.on.size / 8), ratio };
+  }
+
+  /** the strongest lock of A onto B: { lock, kick, ratio } */
+  function rhythmOf(A, B, steps) {
+    let best = null;
+    for (const o of B.offers) {
+      const r = lockOf(A, o.set, steps);
+      if (r && (!best || r.lock > best.lock)) best = Object.assign({ kick: o.kick }, r);
+    }
+    return best;
+  }
+
+  // ---------------- a section ----------------
+
+  /**
+   * lanes: [{ id, role, name, events: [{ t, d, p, v }] (ticks from the
+   *          section start), heard: [string], fits (pitched: follows the
+   *          section's chords; null for drums) }]
+   * opts: { length (ticks) }
+   * Returns { lanes: [{ id, role, name, salience, rel, authority, box, stands,
+   *           steers, why, notes }], links: [{ from, to, kind, strength,
+   *           logged, measured, mutual, kick, text }], harmony: { follow, own },
+   *           top (lane id of the part with the most primacy, or null) }
+   */
+  function analyse(lanes, opts) {
+    const length = Math.max(STEP, (opts && opts.length) || BAR);
+    const steps = Math.max(1, Math.round(length / STEP));
+    const bars = Math.max(1, length / BAR);
+    const list = (lanes || []).filter((l) => l && l.events && l.events.length);
+    const P = list.map((l) => profile(l, steps));
+    const byId = new Map(P.map((p) => [p.lane.id, p]));
+    const name = (id) => byId.get(id).lane.name;
+
+    // salience, then relative to the most salient part
+    const melodic = (p) => !p.drum && p.lane.role !== 'pad';
+    const sal = P.map((p) => {
+      const others = new Set();
+      for (const q of P) if (q !== p && melodic(q)) for (const s of q.on) others.add(s);
+      return salienceOf(p, others, bars);
+    });
+    const top = Math.max(1e-6, ...sal.map((x) => x.score));
+    const topPart = P[sal.findIndex((x) => x.score === top)] || null;
+
+    // links, keyed by pair
+    const links = new Map();
+    const key = (a, b) => a + '>' + b;
+    const add = (l) => {
+      for (const f in l) if (l[f] === undefined) delete l[f];
+      const k = key(l.from, l.to);
+      const cur = links.get(k);
+      if (!cur || l.strength > cur.strength) links.set(k, Object.assign({}, cur || {}, l, { logged: !!((cur && cur.logged) || l.logged) }));
+      else if (l.logged) cur.logged = true;
+    };
+    const notes = new Map(P.map((p) => [p.lane.id, []]));
+
+    // measured
+    for (const A of P) {
+      for (const B of P) {
+        if (A === B) continue;
+        const r = rhythmOf(A, B, steps);
+        const back = rhythmOf(B, A, steps);
+        if (r && back && r.lock >= PAIR && back.lock >= PAIR) {
+          if (A.lane.id < B.lane.id) add({ from: A.lane.id, to: B.lane.id, kind: 'pair', strength: Math.min(r.lock, back.lock), measured: Math.min(r.ratio, back.ratio), mutual: true });
+          continue;
+        }
+        if (r && r.lock >= LOCK) add({ from: A.lane.id, to: B.lane.id, kind: 'lock', strength: clamp(r.lock, 0, 1), measured: r.ratio, kick: r.kick });
+        const v = avoidOf(A, B, steps);
+        if (v && v.avoid >= AVOID) add({ from: A.lane.id, to: B.lane.id, kind: 'avoid', strength: v.avoid, measured: 1 - v.ratio, kick: true });
+        const a = answerOf(A, B, steps);
+        const b = answerOf(B, A, steps);
+        if (a && b && a.answer >= ANSWER && b.answer >= ANSWER) {
+          if (A.lane.id < B.lane.id) add({ from: A.lane.id, to: B.lane.id, kind: 'trade', strength: Math.min(a.answer, b.answer), measured: Math.min(a.ratio, b.ratio), mutual: true });
+        } else if (a && a.answer >= ANSWER && !(r && r.lock >= LOCK)) {
+          add({ from: A.lane.id, to: B.lane.id, kind: 'answer', strength: clamp(a.answer, 0, 1), measured: a.ratio });
+        }
+      }
+    }
+
+    // logged: what the take did when it listened
+    for (const A of P) {
+      for (const line of A.lane.heard || []) {
+        const h = readHeard(line);
+        if (!h) continue;
+        if (h.kind === 'balance') { notes.get(A.lane.id).push(line); continue; }
+        for (const B of P) {
+          if (B === A || B.lane.role !== h.to) continue;
+          const pair = links.get(key(A.lane.id, B.lane.id)) || links.get(key(B.lane.id, A.lane.id));
+          // a take that listened says who adapted: a trade becomes an answer
+          if (pair && pair.mutual && !(pair.kind === 'trade' && h.kind === 'answer')) { pair.logged = true; continue; }
+          if (pair && pair.mutual) links.delete(key(pair.from, pair.to));
+          add({ from: A.lane.id, to: B.lane.id, kind: h.kind, strength: 0.85, logged: true, kick: h.kick, measured: pair && pair.mutual ? pair.measured : undefined });
+        }
+      }
+    }
+
+    // a follower draws at most its two strongest links (pairs are kept)
+    const out = [];
+    for (const A of P) {
+      const mine = [...links.values()].filter((l) => l.from === A.lane.id && !l.mutual).sort((x, y) => y.strength - x.strength);
+      for (const l of mine.slice(0, 2)) out.push(l);
+    }
+    for (const l of links.values()) if (l.mutual) out.push(l);
+    for (const l of out) { l.text = linkText(l, name); l.detail = detailOf(l); }
+
+    // authority: chance that at least one follower is shaped by the part
+    const auth = new Map(P.map((p) => [p.lane.id, 1]));
+    for (const l of out) {
+      const pull = clamp(l.strength * (PULL[l.kind] || 0.5), 0, 0.98);
+      auth.set(l.to, auth.get(l.to) * (1 - pull));
+      if (l.mutual) auth.set(l.from, auth.get(l.from) * (1 - pull));
+    }
+
+    const follow = [], own = [];
+    for (const p of P) {
+      if (p.drum || p.lane.fits == null) continue;
+      (p.lane.fits ? follow : own).push(p.lane.id);
+    }
+
+    // the foreground is a minority: at most half the parts stand out
+    const order = sal.map((x, i) => i).sort((a, b) => sal[b].score - sal[a].score);
+    const room = Math.max(1, Math.floor(P.length / 2));
+    const res = P.map((p, i) => {
+      const id = p.lane.id;
+      const rel = sal[i].score / top;
+      const authority = 1 - auth.get(id);
+      const stands = rel >= STAND && order.indexOf(i) < room;
+      const steers = authority >= STEER;
+      const box = stands ? (steers ? 'hook' : 'topline') : steers ? 'groove' : 'bed';
+      return {
+        id, role: p.lane.role, name: p.lane.name, part: p.lane.part,
+        salience: sal[i].score, rel, authority, stands, steers, box,
+        why: whyOf(sal[i], stands, steers, out.filter((l) => l.to === id || (l.mutual && l.from === id)), id, name, topPart),
+        follows: out.filter((l) => l.from === id || (l.mutual && l.to === id)).length + (follow.includes(id) ? 1 : 0),
+        notes: notes.get(id),
+      };
+    });
+    // the part with the most primacy: a hook, else what stands out most, else what steers most
+    const rank = (r) => (r.box === 'hook' ? 3 : r.box === 'topline' ? 2 : r.box === 'groove' ? 1 : 0);
+    let lead = null;
+    for (const r of res) {
+      if (!lead) { lead = r; continue; }
+      const d = rank(r) - rank(lead);
+      if (d > 0 || (d === 0 && (r.box === 'groove' ? r.authority > lead.authority : r.rel > lead.rel))) lead = r;
+    }
+    return { lanes: res, links: out, harmony: { follow, own }, top: lead ? lead.id : null, length };
+  }
+
+  function linkText(l, name) {
+    const a = name(l.from), b = name(l.to);
+    switch (l.kind) {
+      case 'lock': return a + verb(a, ' locks to ', ' lock to ') + (l.kick ? 'the kick in ' + b : b);
+      case 'avoid': return a + verb(a, ' plays between ', ' play between ') + (l.kick ? 'the kicks in ' + b : b + '\'s notes');
+      case 'answer': return a + verb(a, ' answers ', ' answer ') + b + ' in ' + verb(b, 'its', 'their') + ' gaps';
+      case 'clear': return a + ' moved an octave to clear ' + b;
+      case 'pair': return a + ' and ' + b + ' move together';
+      case 'trade': return a + ' and ' + b + ' trade phrases';
+      default: return a + verb(a, ' fits to ', ' fit to ') + b;
+    }
+  }
+
+  /** the evidence for a link, in words */
+  function detailOf(l) {
+    const pct = l.measured != null ? Math.round(l.measured * 100) + '%' : '';
+    const said = l.logged ? 'It listened for this when it was made' : '';
+    let seen = '';
+    if (pct) {
+      if (l.kind === 'lock') seen = pct + ' of its off-beat notes land with it';
+      else if (l.kind === 'avoid') seen = pct + ' of its notes miss the kick';
+      else if (l.kind === 'answer') seen = pct + ' of the time it sounds, the other is resting';
+      else if (l.kind === 'pair') seen = pct + ' of their off-beat notes land together';
+      else if (l.kind === 'trade') seen = 'Each plays mostly while the other rests';
+    }
+    return [seen, said].filter(Boolean).join('. ');
+  }
+
+  /** a part's box in words: why it stands out or sits back, and who it steers */
+  function whyOf(s, stands, steers, incoming, id, name, topP) {
+    const out = [];
+    if (stands) {
+      const bits = [];
+      if (s.height >= 0.6) bits.push('high');
+      if (s.motion >= 0.45) bits.push('moving');
+      if (s.space >= 0.5) bits.push('in the gaps');
+      out.push(bits.length ? 'Stands out: ' + bits.join(', ') : 'Stands out: the most present part here');
+    } else {
+      const bits = [];
+      if (s.repeat >= 0.6) bits.push('repeats');
+      if (s.space < 0.3) bits.push('plays with the others');
+      if (s.height < 0.35) bits.push('low');
+      out.push(bits.length ? 'Sits back: ' + bits.join(', ') : topP && topP.lane.id !== id ? 'Sits back behind ' + topP.lane.name : 'Sits back');
+    }
+    const who = [...new Set(incoming.map((l) => name(l.from === id ? l.to : l.from)))];
+    if (steers && who.length) out.push('Shapes ' + who.join(', '));
+    return out;
+  }
+
+  /** the lanes a section plays, as heard: muted lanes out, and only soloed ones if any are */
+  function sectionLanes(session, section) {
+    const R = Odd.render;
+    const solo = session.lanes.some((l) => l.solo);
+    const out = [];
+    for (const lane of session.lanes) {
+      const slot = section.slots && section.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      if (lane.mute || (solo && !lane.solo)) continue;
+      const events = R.sectionEvents(session, section, { only: lane.id, shape: false });
+      if (!events.length) continue;
+      const drum = T.isDrumRole(lane.role);
+      out.push({
+        id: lane.id, role: lane.role, name: lane.name, part: slot.part.name, events,
+        heard: slot.part.heard || [],
+        fits: drum ? null : slot.refit !== false && !slot.part.imported,
+      });
+    }
+    return out;
+  }
+
+  function forSection(session, section) {
+    return analyse(sectionLanes(session, section), { length: section.bars * BAR });
+  }
+
+  /** every section of the song order, in order: [{ index, section, fit }] (each section measured once) */
+  function song(session) {
+    const seen = new Map();
+    const out = [];
+    session.arrangement.forEach((sid, index) => {
+      const section = session.sections.find((x) => x.id === sid);
+      if (!section) return;
+      if (!seen.has(sid)) seen.set(sid, forSection(session, section));
+      out.push({ index, section, fit: seen.get(sid) });
+    });
+    return out;
+  }
+
+  Odd.relate = { BOXES, BOX_ORDER, HEARD, readHeard, verb, analyse, sectionLanes, forSection, song, STAND, STEER };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/recipes.js */
@@ -9750,7 +10940,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   let lastFocus = null;
 
   /**
-   * dialog({ title, body (html), actions: [{ label, value, kind, primary }], onOpen(el), wide })
+   * dialog({ title, body (html), actions: [{ label, value, kind, primary }], onOpen(el), onKey(e, el), wide })
    * resolves with the chosen action value (or null when dismissed). Actions may
    * return false from `validate(el)` to keep the dialog open.
    */
@@ -9785,6 +10975,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         close(typeof a.value === 'function' ? a.value(dlg) : a.value);
       }
       function onKey(e) {
+        // the dialog's own keys first (opts.onKey returns true when it used the key)
+        if (opts.onKey && e.key !== 'Escape' && e.key !== 'Tab' && opts.onKey(e, dlg)) { e.preventDefault(); e.stopPropagation(); return; }
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
         else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
           const pi = actions.findIndex((a) => a.primary);
@@ -9988,6 +11180,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     midi: '<circle cx="12" cy="12" r="8.5"/><circle cx="7.7" cy="12" r=".9" fill="currentColor"/><circle cx="16.3" cy="12" r=".9" fill="currentColor"/><circle cx="9" cy="8.2" r=".9" fill="currentColor"/><circle cx="15" cy="8.2" r=".9" fill="currentColor"/><circle cx="12" cy="7" r=".9" fill="currentColor"/><path d="M10.5 18.2h3"/>',
     headphones: '<path d="M4 15v-3a8 8 0 0116 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/>',
     file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+    leads: '<circle cx="16" cy="7.5" r="3"/><circle cx="5.5" cy="17.5" r="2"/><circle cx="17" cy="19.5" r="1.6"/><path d="M7.2 15.8l6.3-6"/><path d="M9.8 9.8h3.9v3.9"/><path d="M17 17.6v-5.4M15 14l2-2 2 2"/>',
+    ladder: '<path d="M7 3v18M17 3v18M7 7.5h10M7 12h10M7 16.5h10"/>',
+    idea: '<circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9L18 18M18 6l-2.1 2.1M8.1 15.9L6 18"/>',
   };
 
   function icon(name, cls) {
@@ -10276,7 +11471,174 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     ctx.stroke();
   }
 
-  Odd.roll = { draw, head, hit, roleColor, resetTokens, DRUM_ROWS };
+  /**
+   * An idea's glyph: one row per voice, drawn from its core alone. Pitched
+   * voices show their contour (each note a short dash at its height, joined
+   * by a thin line); drums show low, mid and high hits on three rows. Dot size
+   * is weight, a ring marks where the voice lands, and a voice shorter than
+   * the idea repeats faintly.
+   * opts: { idea, mute: [voice indices drawn dimmed] }
+   */
+  function glyph(canvas, opts) {
+    if (!canvas || !canvas.getContext) return;
+    const o = opts || {};
+    const idea = o.idea;
+    if (!idea) return;
+    const { w, h, dpr } = fit(canvas);
+    const ctx = canvas.getContext('2d');
+    const tk = tokens();
+    const length = Math.max(1, idea.bars) * T.BAR;
+    const mute = new Set(o.mute || []);
+    const rows = Math.max(1, idea.voices.length);
+    const rh = h / rows;
+    const padX = 6 * dpr;
+    const xOf = (t) => padX + (t / length) * (w - 2 * padX);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = tk.screen;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = tk.grid;
+    ctx.lineWidth = 1;
+    for (let b = 1; b < idea.bars; b++) {
+      const x = Math.round(xOf(b * T.BAR)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    const radius = [1.3, 2.1, 3.1].map((r) => r * dpr);
+    idea.voices.forEach((v, vi) => {
+      const c = v.core;
+      if (!c || !c.hits.length) return;
+      const top = vi * rh;
+      const pad = Math.min(6 * dpr, rh * 0.22);
+      const span = Math.max(1, rh - 2 * pad);
+      let yOf;
+      if (c.drum) yOf = (x) => top + pad + ((2 - x.h) / 2) * span;
+      else {
+        let lo = Infinity, hi = -Infinity;
+        for (const x of c.hits) { lo = Math.min(lo, x.h); hi = Math.max(hi, x.h); }
+        yOf = hi === lo ? () => top + rh / 2 : (x) => top + pad + ((hi - x.h) / (hi - lo)) * span;
+      }
+      const color = roleColor(v.role);
+      const dim = mute.has(vi) ? 0.25 : 1;
+      if (vi > 0) {
+        ctx.strokeStyle = tk.line;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(top) + 0.5); ctx.lineTo(w, Math.round(top) + 0.5); ctx.stroke();
+      }
+      const len = c.len || length;
+      for (let start = 0, pass = 0; start < length; start += len, pass++) {
+        const a = dim * (pass ? 0.4 : 1);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        if (!c.drum) {
+          // the line between notes
+          ctx.globalAlpha = a * 0.35;
+          ctx.lineWidth = Math.max(1, dpr);
+          ctx.beginPath();
+          c.hits.forEach((x, i) => {
+            const px = xOf(start + x.t), py = yOf(x);
+            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+            ctx.lineTo(Math.min(xOf(start + x.t + x.d), xOf(length)), py);
+          });
+          ctx.stroke();
+          // each note as a dash
+          ctx.globalAlpha = a * 0.8;
+          ctx.lineWidth = Math.max(1.5, 1.6 * dpr);
+          ctx.lineCap = 'round';
+          for (const x of c.hits) {
+            if (start + x.t >= length) continue;
+            const py = yOf(x);
+            ctx.beginPath();
+            ctx.moveTo(xOf(start + x.t), py);
+            ctx.lineTo(Math.min(xOf(start + x.t + x.d), xOf(length)), py);
+            ctx.stroke();
+          }
+          ctx.lineCap = 'butt';
+        }
+        ctx.globalAlpha = a * (c.drum ? 0.9 : 1);
+        for (const x of c.hits) {
+          if (start + x.t >= length) continue;
+          ctx.beginPath();
+          ctx.arc(xOf(start + x.t), yOf(x), radius[x.w] || radius[1], 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // where it lands
+        const land = c.hits[c.land];
+        if (!pass && land && c.hits.length > 1) {
+          ctx.globalAlpha = dim;
+          ctx.strokeStyle = tk.ink;
+          ctx.lineWidth = Math.max(1, 1.2 * dpr);
+          ctx.beginPath();
+          ctx.arc(xOf(land.t), yOf(land), 5 * dpr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  /**
+   * Several parts in one picture, one band per lane, each with its own pitch
+   * range (drums: the rows they use). For the ladder, where every step draws
+   * the same lanes so the eye can follow what each layer adds.
+   * opts: { length, lanes: [{ role, drums, events, dim }] }
+   */
+  function stack(canvas, opts) {
+    if (!canvas || !canvas.getContext) return;
+    const o = opts || {};
+    const { w, h, dpr } = fit(canvas);
+    const ctx = canvas.getContext('2d');
+    const tk = tokens();
+    const length = Math.max(T.BEAT, o.length || T.BAR);
+    const lanes = o.lanes || [];
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = tk.screen;
+    ctx.fillRect(0, 0, w, h);
+    const xOf = (t) => (t / length) * w;
+    ctx.strokeStyle = tk.grid;
+    ctx.lineWidth = 1;
+    for (let b = 1; b * T.BAR < length; b++) {
+      const x = Math.round(xOf(b * T.BAR)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    if (!lanes.length) return;
+    const bh = h / lanes.length;
+    lanes.forEach((lane, li) => {
+      const top = li * bh;
+      if (li) {
+        ctx.strokeStyle = tk.line;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(top) + 0.5); ctx.lineTo(w, Math.round(top) + 0.5); ctx.stroke();
+      }
+      const evs = lane.events || [];
+      if (!evs.length) return;
+      let rowOf, rows;
+      if (lane.drums) {
+        const used = [...new Set(evs.map((e) => (DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER)))].sort((a, b) => a - b);
+        rows = used.length;
+        rowOf = (p) => used.indexOf(DRUM_INDEX[p] != null ? DRUM_INDEX[p] : OTHER);
+      } else {
+        let lo = 127, hi = 0;
+        for (const e of evs) { lo = Math.min(lo, e.p); hi = Math.max(hi, e.p); }
+        if (hi - lo < 6) { const pad = Math.ceil((6 - (hi - lo)) / 2); lo -= pad; hi += pad; }
+        rows = hi - lo + 1;
+        rowOf = (p) => hi - p;
+      }
+      const pad = Math.min(3 * dpr, bh * 0.1);
+      const rh = (bh - 2 * pad) / Math.max(1, rows);
+      const nh = Math.max(1, Math.min(rh - (rh > 3 ? 0.5 * dpr : 0), 6 * dpr));
+      ctx.fillStyle = roleColor(lane.role);
+      for (const e of evs) {
+        const r = rowOf(e.p);
+        if (r < 0) continue;
+        const x = xOf(e.t);
+        const nw = lane.drums ? Math.max(1.5 * dpr, Math.min(xOf(e.t + T.STEP) - x, 5 * dpr)) : Math.max(1.5 * dpr, xOf(e.t + e.d) - x - 0.5 * dpr);
+        ctx.globalAlpha = (lane.dim ? 0.35 : 1) * (0.4 + 0.6 * Math.min(1, (e.v || 100) / 127));
+        ctx.fillRect(x, top + pad + r * rh + (rh - nh) / 2, nw, nh);
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  Odd.roll = { draw, glyph, stack, head, hit, roleColor, resetTokens, DRUM_ROWS };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/ui/views.js */
@@ -10290,10 +11652,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   const icon = (n, c) => Odd.icon(n, c);
 
   let rollSeq = 0;
-  function rollSlot(rolls, opts, cls) {
+  function rollSlot(rolls, opts, cls, style) {
     const id = 'roll-' + (++rollSeq);
     rolls.push({ id, opts });
-    return '<canvas class="' + (cls || 'mini-roll') + '" id="' + id + '" aria-hidden="true"></canvas>';
+    return '<canvas class="' + (cls || 'mini-roll') + '" id="' + id + '" aria-hidden="true"' + (style ? ' style="' + style + '"' : '') + '></canvas>';
   }
 
   function roleLabel(role) { return Odd.model.roleInfo(role).label; }
@@ -10565,6 +11927,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<label class="toggle"><input type="checkbox" id="b-context" data-change="booth-context"' + (b.context ? ' checked' : '') + '><span>Play with the section</span></label>' +
         '<label class="toggle" title="New takes hear the parts already in the section: bass locks to the kick, busy sections get sparser takes, crowded octaves are avoided, the arp leaves room for the lead"><input type="checkbox" id="b-listen" data-change="booth-listen"' + (b.listen ? ' checked' : '') + '><span>Listen to the section</span></label>' +
         '<label class="inline-fld"><span class="sr-only">Length</span><select id="b-bars" data-change="booth-bars">' + barsOpts + '</select></label>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-act="capture-idea"' + (take ? '' : ' disabled') + ' title="Save the rhythm and shape of this take as an idea, with any parts you hear it with (I)">' + icon('idea', 'ico-sm') + '<span>Capture idea</span><kbd>I</kbd></button>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-act="take-midi"' + (take ? '' : ' disabled') + ' title="Download this take as a MIDI file">' + icon('download', 'ico-sm') + '<span>.mid</span></button>' +
       '</div>' +
       '<div class="params">' + params +
@@ -10592,67 +11955,368 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   // ======================= shelf =======================
   function shelf(app) {
-    const s = app.session();
     const f = app.ui.shelf;
+    const ideasView = f.view === 'ideas';
     const rolls = [];
-    const all = app.ws.library;
+    const ideas = app.ws.ideas || [];
+    const all = ideasView ? ideas : app.ws.library;
     const counts = {};
-    for (const p of all) counts[p.role] = (counts[p.role] || 0) + 1;
-    const parts = app.shelfParts();
+    if (ideasView) for (const idea of ideas) for (const r of new Set(idea.voices.map((v) => v.role))) counts[r] = (counts[r] || 0) + 1;
+    else for (const p of all) counts[p.role] = (counts[p.role] || 0) + 1;
 
     const chips = ['all'].concat(Odd.gen.ROLES).map((r) =>
       '<button type="button" class="chip' + (f.role === r ? ' is-active' : '') + '" data-act="shelf-role" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' +
       (r === 'all' ? 'All' : '<span class="dot" data-role="' + r + '"></span>' + esc(roleLabel(r))) +
       '<span class="chip-n">' + (r === 'all' ? all.length : counts[r] || 0) + '</span></button>').join('');
 
-    const sel = app.selectedSlot();
-    const cards = parts.map((p) => {
-      const used = Odd.model.usageCount(app.ws, p.id);
-      const len = p.bars * T.BAR;
-      const evs = R.partEvents(p, { tonic: s.tonic, scale: s.scale, prog: p.ctx.prog, length: len });
-      const playing = app.isPlaying('preview', p.id);
-      return '<li class="card" data-part="' + p.id + '" data-role="' + p.role + '" draggable="true">' +
-        '<div class="card-top">' + tag(p.role) +
-          '<span class="card-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
-          '<button type="button" class="icon-btn icon-btn-sm star' + (p.starred ? ' is-on' : '') + '" data-act="part-star" data-id="' + p.id + '" aria-pressed="' + !!p.starred + '" aria-label="Favourite">' + icon(p.starred ? 'starFill' : 'star') + '</button>' +
-        '</div>' +
-        rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(p.role), role: p.role, mini: true }) +
-        '<div class="card-bottom">' +
-          '<span class="card-meta">' + p.bars + (p.bars === 1 ? ' bar' : ' bars') + ' · ' + esc(Odd.model.styleOf(p.style).label) + (used ? ' · in ' + used + (used === 1 ? ' slot' : ' slots') : '') + '</span>' +
-          '<span class="card-actions">' +
-            '<button type="button" class="icon-btn icon-btn-sm' + (playing ? ' is-playing' : '') + '" data-act="part-preview" data-id="' + p.id + '" data-play-key="preview:' + p.id + '" aria-label="Preview in ' + esc(app.boothSection().name) + '" title="Preview in ' + esc(app.boothSection().name) + '"><span class="when-stopped">' + icon('play') + '</span><span class="when-playing">' + icon('stop') + '</span></button>' +
-            '<button type="button" class="btn btn-ghost btn-sm" data-act="part-place" data-id="' + p.id + '" title="Put it in ' + esc(sel.section.name) + '">Place</button>' +
-            '<button type="button" class="icon-btn icon-btn-sm" data-act="part-menu" data-id="' + p.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More">' + icon('dots') + '</button>' +
-          '</span>' +
-        '</div>' +
-      '</li>';
-    }).join('');
-
-    let empty = '';
-    if (!all.length) {
-      empty = '<div class="empty"><p class="empty-title">The shelf is empty</p><p>Parts you keep in the booth land here. Press <kbd>K</kbd> on a take you like.</p></div>';
-    } else if (!parts.length) {
-      empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+    let list, empty = '';
+    if (ideasView) {
+      const shown = app.shelfIdeas();
+      list = '<ul class="cards idea-cards">' + shown.map((idea) => ideaCard(app, idea, rolls)).join('') + '</ul>';
+      if (!ideas.length) {
+        empty = '<div class="empty"><p class="empty-title">No ideas yet</p><p>An idea is the rhythm and shape of a part, or of parts heard together, kept apart from key, chords and sound. Press <kbd>I</kbd> in the booth to capture one, or use <strong>Capture an idea</strong> on a section or a shelf part.</p></div>';
+      } else if (!shown.length) {
+        empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+      }
+    } else {
+      const parts = app.shelfParts();
+      list = '<ul class="cards">' + parts.map((p) => partCard(app, p, rolls)).join('') + '</ul>';
+      if (!all.length) {
+        empty = '<div class="empty"><p class="empty-title">The shelf is empty</p><p>Parts you keep in the booth land here. Press <kbd>K</kbd> on a take you like.</p></div>';
+      } else if (!parts.length) {
+        empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+      }
     }
 
     const sorts = [['new', 'Newest'], ['old', 'Oldest'], ['name', 'Name'], ['role', 'Stem']].map(([v, l]) =>
       '<option value="' + v + '"' + (f.sort === v ? ' selected' : '') + '>' + l + '</option>').join('');
+    const seg = (v, label, n) => '<button type="button" class="seg-btn' + ((v === 'ideas') === ideasView ? ' is-active' : '') + '" data-act="shelf-view" data-view="' + v + '" aria-pressed="' + ((v === 'ideas') === ideasView) + '">' + label + ' <span class="chip-n">' + n + '</span></button>';
 
     const html =
       '<div class="panel-head">' +
-        '<h2 class="panel-title">' + icon('shelf', 'ico-title') + 'Shelf <span class="count mono">' + all.length + '</span></h2>' +
+        '<h2 class="panel-title">' + icon('shelf', 'ico-title') + 'Shelf</h2>' +
+        '<div class="seg" role="group" aria-label="Show">' + seg('parts', 'Parts', app.ws.library.length) + seg('ideas', 'Ideas', ideas.length) + '</div>' +
         '<div class="panel-tools">' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="import-midi" title="Add a MIDI file to the shelf">' + icon('upload', 'ico-sm') + '<span>Import MIDI</span></button>' +
+          (ideasView ? '' : '<button type="button" class="btn btn-ghost btn-sm" data-act="import-midi" title="Add a MIDI file to the shelf">' + icon('upload', 'ico-sm') + '<span>Import MIDI</span></button>') +
         '</div>' +
       '</div>' +
       '<div class="chips" role="toolbar" aria-label="Filter by stem">' + chips + '</div>' +
       '<div class="shelf-tools">' +
-        '<input type="search" id="shelf-q" data-input="shelf-query" placeholder="Find a part by name" value="' + esc(f.query) + '" aria-label="Find a part">' +
+        '<input type="search" id="shelf-q" data-input="shelf-query" placeholder="' + (ideasView ? 'Find an idea by name' : 'Find a part by name') + '" value="' + esc(f.query) + '" aria-label="' + (ideasView ? 'Find an idea' : 'Find a part') + '">' +
         '<button type="button" class="icon-btn star' + (f.starred ? ' is-on' : '') + '" data-act="shelf-starred" aria-pressed="' + !!f.starred + '" aria-label="Only favourites" title="Only favourites">' + icon(f.starred ? 'starFill' : 'star') + '</button>' +
         '<select id="shelf-sort" data-change="shelf-sort" aria-label="Sort">' + sorts + '</select>' +
       '</div>' +
-      (empty || '<ul class="cards">' + cards + '</ul>');
+      (empty || list);
     return { html, rolls };
+  }
+
+  function partCard(app, p, rolls) {
+    const s = app.session();
+    const sel = app.selectedSlot();
+    const used = Odd.model.usageCount(app.ws, p.id);
+    const len = p.bars * T.BAR;
+    const evs = R.partEvents(p, { tonic: s.tonic, scale: s.scale, prog: p.ctx.prog, length: len });
+    const playing = app.isPlaying('preview', p.id);
+    return '<li class="card" data-part="' + p.id + '" data-role="' + p.role + '" draggable="true">' +
+      '<div class="card-top">' + tag(p.role) +
+        '<span class="card-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
+        '<button type="button" class="icon-btn icon-btn-sm star' + (p.starred ? ' is-on' : '') + '" data-act="part-star" data-id="' + p.id + '" aria-pressed="' + !!p.starred + '" aria-label="Favourite">' + icon(p.starred ? 'starFill' : 'star') + '</button>' +
+      '</div>' +
+      rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(p.role), role: p.role, mini: true }) +
+      '<div class="card-bottom">' +
+        '<span class="card-meta">' + p.bars + (p.bars === 1 ? ' bar' : ' bars') + ' · ' + esc(Odd.model.styleOf(p.style).label) + (used ? ' · in ' + used + (used === 1 ? ' slot' : ' slots') : '') + '</span>' +
+        '<span class="card-actions">' +
+          '<button type="button" class="icon-btn icon-btn-sm' + (playing ? ' is-playing' : '') + '" data-act="part-preview" data-id="' + p.id + '" data-play-key="preview:' + p.id + '" aria-label="Preview in ' + esc(app.boothSection().name) + '" title="Preview in ' + esc(app.boothSection().name) + '"><span class="when-stopped">' + icon('play') + '</span><span class="when-playing">' + icon('stop') + '</span></button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="part-place" data-id="' + p.id + '" title="Put it in ' + esc(sel.section.name) + '">Place</button>' +
+          '<button type="button" class="icon-btn icon-btn-sm" data-act="part-menu" data-id="' + p.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More">' + icon('dots') + '</button>' +
+        '</span>' +
+      '</div>' +
+    '</li>';
+  }
+
+  /**
+   * An idea: its voices drawn from their cores, each voice in words, and two
+   * ways to hear it: the bones (the core alone, plain sounds, no chords or
+   * feel) and in full (the parts as they were found). A voice can be left
+   * out of playback by clicking it.
+   */
+  function ideaCard(app, idea, rolls) {
+    const sel = app.selectedSlot();
+    const mute = app.ideaMute(idea.id);
+    const n = idea.voices.length;
+    const voices = idea.voices.map((v, i) => {
+      const off = mute.includes(i);
+      return '<li class="voice' + (off ? ' is-off' : '') + '" data-role="' + v.role + '">' +
+        '<button type="button" class="voice-btn" data-act="idea-voice" data-id="' + idea.id + '" data-index="' + i + '" aria-pressed="' + !off + '" title="' + esc((off ? 'Bring back ' : 'Leave out ') + v.name + ' when this idea plays') + '">' +
+          tag(v.role) + '<span class="voice-name">' + esc(v.name) + '</span></button>' +
+        '<span class="voice-desc">' + esc(Odd.idea.describe(v)) + '</span>' +
+      '</li>';
+    }).join('');
+    const playBtn = (kind, label, title) => {
+      const on = app.isPlaying(kind, idea.id);
+      return '<button type="button" class="btn btn-ghost btn-sm play-chip' + (on ? ' is-playing' : '') + '" data-act="idea-play" data-kind="' + kind + '" data-id="' + idea.id + '" data-play-key="' + kind + ':' + idea.id + '" title="' + esc(title) + '">' +
+        '<span class="when-stopped">' + icon('play', 'ico-xs') + '</span><span class="when-playing">' + icon('stop', 'ico-xs') + '</span>' + label + '</button>';
+    };
+    const style = idea.style ? ' · ' + esc(Odd.model.styleOf(idea.style).label) : '';
+    return '<li class="card idea-card" data-idea="' + idea.id + '" data-role="' + idea.voices[0].role + '">' +
+      '<div class="card-top">' +
+        '<span class="card-name" title="' + esc(idea.name) + '">' + esc(idea.name) + '</span>' +
+        '<button type="button" class="icon-btn icon-btn-sm star' + (idea.starred ? ' is-on' : '') + '" data-act="idea-star" data-id="' + idea.id + '" aria-pressed="' + !!idea.starred + '" aria-label="Favourite">' + icon(idea.starred ? 'starFill' : 'star') + '</button>' +
+      '</div>' +
+      rollSlot(rolls, { glyph: true, idea, mute }, 'idea-glyph', 'height:' + (12 + 22 * n) + 'px') +
+      '<ul class="voices">' + voices + '</ul>' +
+      '<div class="card-bottom">' +
+        '<span class="card-meta">' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars') + ' · ' + n + (n === 1 ? ' voice' : ' voices') + style + '</span>' +
+        '<span class="card-actions">' +
+          playBtn('bones', 'Bones', 'Hear only the rhythm and shape: plain sounds, no chords, no swing') +
+          playBtn('idea', 'Full', 'Hear the parts as they were found') +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="idea-ladder" data-id="' + idea.id + '" title="Hear it step by step, from the bare rhythm up to a full mix in a section">' + icon('ladder', 'ico-xs') + 'Ladder</button>' +
+          '<button type="button" class="icon-btn icon-btn-sm" data-act="idea-menu" data-id="' + idea.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More" title="Place in ' + esc(sel.section.name) + ', split, join…">' + icon('dots') + '</button>' +
+        '</span>' +
+      '</div>' +
+    '</li>';
+  }
+
+  // ======================= ladder =======================
+  /** the ladder dialog's body: a target, the voices, and one row per step with its picture */
+  function ladder(app) {
+    const d = app.ladderData();
+    if (!d) return { html: '', rolls: [] };
+    const rolls = [];
+    const playing = app.isPlaying('ladder');
+    const targets = '<option value=""' + (d.sec ? '' : ' selected') + '>Where it was found (its own chords)</option>' +
+      d.sections.map((x) => '<option value="' + x.id + '"' + (d.sec && d.sec.id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('');
+    const voices = d.idea.voices.length > 1
+      ? '<span class="ladder-voices" title="Click a voice to leave it out">' + d.idea.voices.map((v, i) => {
+        const off = d.mute.includes(i);
+        return '<button type="button" class="chip' + (off ? ' is-off' : ' is-active') + '" data-ladder-voice="' + i + '" aria-pressed="' + !off + '"><span class="dot" data-role="' + v.role + '"></span>' + esc(v.name) + '</button>';
+      }).join('') + '</span>'
+      : '';
+    let rows = '';
+    let group = null;
+    d.rungs.forEach((r, i) => {
+      if (r.group !== group) {
+        group = r.group;
+        const head = group === 'idea' ? 'The idea on its own' : d.sec ? 'Fitting into ' + esc(d.sec.name) : 'Fitting in';
+        rows += '<li class="rung-group">' + head + '</li>';
+      }
+      const cur = r.id === d.rung;
+      const lanes = r.lanes.length;
+      rows += '<li class="rung' + (cur ? ' is-current' : '') + (cur && playing ? ' is-live' : '') + (r.disabled ? ' is-disabled' : '') + '">' +
+        '<button type="button" class="rung-btn" data-ladder-rung="' + r.id + '" aria-pressed="' + cur + '"' + (r.disabled ? ' disabled' : '') +
+          ' aria-label="' + esc((i + 1) + '. ' + r.label + ': ' + r.text) + '">' +
+          '<span class="rung-no mono">' + (i + 1) + '</span>' +
+          '<span class="rung-text"><strong>' + esc(r.label) + '</strong><small>' + esc(r.text) + '</small></span>' +
+          '<span class="rung-count mono">' + (r.disabled ? '' : r.count + (r.count === 1 ? ' note' : ' notes')) + '</span>' +
+          '<span class="rung-play" aria-hidden="true">' + (r.disabled ? '' : icon(cur && playing ? 'stop' : 'play', 'ico-sm')) + '</span>' +
+        '</button>' +
+        (r.disabled ? '' : rollSlot(rolls, { stack: true, length: d.length, lanes: r.lanes }, 'rung-roll', 'height:' + Math.max(30, Math.min(96, 14 * lanes + 10)) + 'px')) +
+      '</li>';
+    });
+    const html =
+      '<div class="ladder-tools">' +
+        '<label class="inline-fld"><span>Fit into</span><select data-ladder-target aria-label="Section to fit the idea into">' + targets + '</select></label>' +
+        voices +
+      '</div>' +
+      '<ol class="rungs">' + rows + '</ol>' +
+      '<p class="help">Click a step to hear it loop. While it plays, click another step or press <kbd>↑</kbd> <kbd>↓</kbd>: the music changes on the spot, so you hear exactly what each layer adds. <kbd>Space</kbd> plays or stops.</p>';
+    return { html, rolls };
+  }
+
+  // ======================= who leads =======================
+
+  function boxTag(box, cls) {
+    const b = Odd.relate.BOXES[box];
+    if (!b) return '';
+    return '<span class="box-tag' + (cls ? ' ' + cls : '') + '" data-box="' + box + '" title="' + esc(b.label + ': ' + b.blurb) + '">' + esc(b.label) + '</span>';
+  }
+
+  /** names as "A", "A and B", "A, B and C" */
+  function listNames(names) {
+    if (names.length < 2) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  /** one sentence: who leads this section, and how */
+  function fitHeadline(res) {
+    if (!res || !res.lanes.length) return '';
+    const V = Odd.relate.verb;
+    const many = (list, one, more) => (list.length > 1 || V(list[0], false, true) ? more : one);
+    const top = res.lanes.find((l) => l.id === res.top);
+    const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
+    const shaped = (id) => [...new Set(res.links.filter((k) => k.to === id || (k.mutual && k.from === id)).map((k) => nameOf(k.to === id ? k.from : k.to)))];
+    if (res.lanes.length === 1) return top.name + V(top.name, ' plays', ' play') + ' alone.';
+    if (top.box === 'hook') {
+      const f = shaped(top.id);
+      if (!f.length) return top.name + V(top.name, ' leads: it stands out and steers.', ' lead: they stand out and steer.');
+      return top.name + V(top.name, ' leads: it stands out, and ', ' lead: they stand out, and ') + listNames(f) + many(f, ' is', ' are') + ' built around ' + V(top.name, 'it', 'them') + '.';
+    }
+    const groove = res.lanes.filter((l) => l.box === 'groove' && l.id !== top.id).sort((a, b) => b.authority - a.authority)[0];
+    if (top.box === 'topline') {
+      const g = groove ? shaped(groove.id) : [];
+      return top.name + V(top.name, ' is out front, fitting itself over the others.', ' are out front, fitting themselves over the others.') +
+        (groove ? ' ' + groove.name + V(groove.name, ' steers', ' steer') + ' underneath' + (g.length ? ': ' + listNames(g) + many(g, ' locks', ' lock') + ' to ' + V(groove.name, 'it', 'them') : '') + '.' : '');
+    }
+    if (top.box === 'groove') {
+      const g = shaped(top.id);
+      return 'Nothing stands out. ' + top.name + V(top.name, ' steers', ' steer') + ' from underneath' + (g.length ? ': ' + listNames(g) + many(g, ' locks', ' lock') + ' to ' + V(top.name, 'it', 'them') : '') + '.';
+    }
+    return 'No part takes the lead: everything sits back together.';
+  }
+
+  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3' };
+
+  /** the plane: stands out (up) against steers others (right), with who fits to whom */
+  function fitPlane(res) {
+    const X = Odd.relate;
+    const W = 640, H = 330, MX = W / 2, MY = H / 2;
+    const rect = (stands, steers) => ({
+      x0: (steers ? MX : 0) + 26, x1: (steers ? W : MX) - 26,
+      y0: (stands ? 0 : MY) + 58, y1: (stands ? MY : H) - 16,
+    });
+    const nodes = res.lanes.map((l) => {
+      const r = rect(l.stands, l.steers);
+      const fx = l.steers ? (l.authority - X.STEER) / (1 - X.STEER) : l.authority / X.STEER;
+      const fy = l.stands ? (l.rel - X.STAND) / (1 - X.STAND) : l.rel / X.STAND;
+      return { l, r, x: r.x0 + Math.max(0, Math.min(1, fx)) * (r.x1 - r.x0), y: r.y1 - Math.max(0, Math.min(1, fy)) * (r.y1 - r.y0), w: 26 + 7.2 * l.name.length };
+    });
+    // keep labels apart: push overlapping nodes apart, inside their own box
+    for (let it = 0; it < 60; it++) {
+      let moved = false;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const needX = (a.w + b.w) / 2, needY = 26;
+          if (Math.abs(dx) >= needX || Math.abs(dy) >= needY) continue;
+          const push = (needY - Math.abs(dy)) / 2 + 0.5;
+          const dir = dy === 0 ? (i % 2 ? 1 : -1) : Math.sign(dy);
+          a.y -= dir * push; b.y += dir * push;
+          moved = true;
+        }
+      }
+      for (const n of nodes) {
+        n.y = Math.max(n.r.y0, Math.min(n.r.y1, n.y));
+        n.x = Math.max(n.r.x0, Math.min(n.r.x1, n.x));
+      }
+      if (!moved) break;
+    }
+    const at = new Map(nodes.map((n) => [n.l.id, n]));
+    const quad = (box, x, y, anchor) => {
+      const b = X.BOXES[box];
+      return '<g class="fit-quad" data-box="' + box + '"><text x="' + x + '" y="' + y + '" text-anchor="' + anchor + '" class="fit-quad-name">' + esc(b.label) + '</text>' +
+        '<text x="' + x + '" y="' + (y + 15) + '" text-anchor="' + anchor + '" class="fit-quad-blurb">' + esc(b.blurb) + '</text></g>';
+    };
+    let svg = '<svg class="fit-plane" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Where each part sits: standing out against steering the others">' +
+      '<defs>' +
+        '<marker id="fit-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" class="fit-arr-head"/></marker>' +
+        '<marker id="fit-arr-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" class="fit-arr-head is-logged"/></marker>' +
+      '</defs>' +
+      '<rect class="fit-q fit-q-hook" x="' + MX + '" y="0" width="' + MX + '" height="' + MY + '"/>' +
+      '<rect class="fit-q fit-q-groove" x="' + MX + '" y="' + MY + '" width="' + MX + '" height="' + MY + '"/>' +
+      '<line class="fit-axis" x1="' + MX + '" y1="0" x2="' + MX + '" y2="' + H + '"/>' +
+      '<line class="fit-axis" x1="0" y1="' + MY + '" x2="' + W + '" y2="' + MY + '"/>' +
+      quad('topline', 12, 20, 'start') + quad('hook', W - 12, 20, 'end') + quad('bed', 12, MY + 20, 'start') + quad('groove', W - 12, MY + 20, 'end');
+    // links under the nodes
+    for (const k of res.links) {
+      const a = at.get(k.from), b = at.get(k.to);
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const gap = 13;
+      const x1 = a.x + ux * gap, y1 = a.y + uy * gap, x2 = b.x - ux * gap, y2 = b.y - uy * gap;
+      const bend = Math.min(40, len * 0.18);
+      const cx = (x1 + x2) / 2 - uy * bend, cy = (y1 + y2) / 2 + ux * bend;
+      const mk = k.logged ? 'url(#fit-arr-ink)' : 'url(#fit-arr)';
+      const dash = LINK_DASH[k.kind] || '';
+      svg += '<path class="fit-link' + (k.logged ? ' is-logged' : '') + '" data-kind="' + k.kind + '" d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' Q' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '"' +
+        ' style="stroke-width:' + (1.2 + 1.6 * k.strength).toFixed(2) + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') +
+        ' marker-end="' + mk + '"' + (k.mutual ? ' marker-start="' + mk + '"' : '') + '><title>' + esc(k.text + (k.detail ? '. ' + k.detail : '')) + '</title></path>';
+    }
+    for (const n of nodes) {
+      const left = n.x + n.w > W - 8;
+      svg += '<g class="fit-node" data-role="' + n.l.role + '"><title>' + esc(n.l.name + (n.l.part ? ' (' + n.l.part + ')' : '') + ' · ' + X.BOXES[n.l.box].label + '. ' + n.l.why.join('. ')) + '</title>' +
+        '<circle cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="8"/>' +
+        '<text x="' + (left ? n.x - 14 : n.x + 14).toFixed(1) + '" y="' + (n.y + 4).toFixed(1) + '" text-anchor="' + (left ? 'end' : 'start') + '">' + esc(n.l.name) + '</text></g>';
+    }
+    return svg + '</svg>';
+  }
+
+  /** the dialog body: app.ui.fit = { sectionId } */
+  function fit(app) {
+    const X = Odd.relate;
+    const s = app.session();
+    const st = app.ui.fit;
+    const sec = st && Odd.model.findSection(s, st.sectionId);
+    if (!sec) return { html: '', rolls: [] };
+    const song = X.song(s);
+    const res = song.find((e) => e.section.id === sec.id) ? song.find((e) => e.section.id === sec.id).fit : X.forSection(s, sec);
+    const order = app.fitOrder();
+    const at = order.findIndex((x) => x.id === sec.id);
+    const opts = order.map((x) => '<option value="' + x.id + '"' + (x.id === sec.id ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('');
+    const tools =
+      '<div class="fit-tools">' +
+        '<button type="button" class="icon-btn icon-btn-sm" data-fit-step="-1" aria-label="Previous section"' + (at > 0 ? '' : ' disabled') + '>' + icon('back') + '</button>' +
+        '<select data-fit-section aria-label="Section">' + opts + '</select>' +
+        '<button type="button" class="icon-btn icon-btn-sm" data-fit-step="1" aria-label="Next section"' + (at < order.length - 1 ? '' : ' disabled') + '>' + icon('fwd') + '</button>' +
+        '<button type="button" class="btn btn-sm btn-ghost" data-act="play-section" data-section="' + sec.id + '" data-play-key="section:' + sec.id + '"><span class="when-stopped">' + icon('play', 'ico-sm') + '</span><span class="when-playing">' + icon('stop', 'ico-sm') + '</span><span>Loop ' + esc(sec.name) + '</span></button>' +
+      '</div>';
+
+    if (!res.lanes.length) {
+      const muted = s.lanes.filter((ln) => (ln.mute || ln.solo) && sec.slots[ln.id] && sec.slots[ln.id].part);
+      return { html: tools + '<div class="empty"><p class="empty-title">Nothing plays in ' + esc(sec.name) + '</p><p>' + (muted.length ? 'Its lanes are muted, or another lane is soloed. Unmute them on the song sheet to see how they fit.' : 'Put some parts in it to see how they fit.') + '</p></div>', rolls: [] };
+    }
+
+    const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
+    const sample = (k) => '<svg class="fit-sample" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5 L24 5" class="fit-link' + (k.logged ? ' is-logged' : '') + '"' + (LINK_DASH[k.kind] ? ' stroke-dasharray="' + LINK_DASH[k.kind] + '"' : '') + ' marker-end="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' + (k.mutual ? ' marker-start="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' : '') + '/></svg>';
+    let links = res.links.map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
+    if (res.harmony.follow.length) {
+      const fl = res.harmony.follow.map(nameOf);
+      links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(fl)) + (fl.length > 1 || Odd.relate.verb(fl[0], false, true) ? ' follow' : ' follows') + ' the chords</strong><small>' + esc(chordShown(app, s, sec)) + '. The chords steer every part that fits to them.</small></span></li>';
+    }
+    if (res.harmony.own.length) {
+      links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(res.harmony.own.map(nameOf))) + ' ' + (res.harmony.own.length > 1 || Odd.relate.verb(nameOf(res.harmony.own[0]), false, true) ? 'keep their' : 'keeps its') + ' own harmony</strong><small>Fit is off, so the section\'s chords don\'t bend it.</small></span></li>';
+    }
+    if (!res.links.length) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
+
+    const parts = res.lanes.slice().sort((a, b) => X.BOX_ORDER.indexOf(a.box) - X.BOX_ORDER.indexOf(b.box) || b.rel - a.rel).map((l) =>
+      '<li class="fit-part" data-role="' + l.role + '"><span class="dot"></span><strong>' + esc(l.name) + '</strong>' + boxTag(l.box) +
+      '<button type="button" class="ms" data-act="lane-mute" data-lane="' + l.id + '" aria-pressed="false" title="Mute ' + esc(l.name) + ' to hear who takes over">M</button>' +
+      '<small>' + esc(l.why.join(' · ')) + (l.notes.length ? ' · ' + esc(l.notes.join(' · ').toLowerCase()) : '') + '</small></li>').join('') +
+      s.lanes.filter((ln) => ln.mute && sec.slots[ln.id] && sec.slots[ln.id].part).map((ln) =>
+        '<li class="fit-part is-muted" data-role="' + ln.role + '"><span class="dot"></span><strong>' + esc(ln.name) + '</strong><span class="box-tag" data-box="none">Muted</span>' +
+        '<button type="button" class="ms is-on" data-act="lane-mute" data-lane="' + ln.id + '" aria-pressed="true" title="Unmute ' + esc(ln.name) + '">M</button></li>').join('');
+
+    // across the song: every lane's box in each section of the song order
+    const used = s.lanes.filter((ln) => song.some((e) => e.fit.lanes.some((x) => x.id === ln.id)));
+    let ribbon = '';
+    if (song.length > 1 && used.length) {
+      ribbon = '<div class="ribbon-wrap"><table class="ribbon"><thead><tr><th scope="col"><span class="sr-only">Lane</span></th>' +
+        song.map((e) => '<th scope="col"' + (e.section.id === sec.id ? ' class="is-current"' : '') + '><button type="button" class="ribbon-sec" data-fit-pick="' + e.section.id + '" style="--sec-hue:' + sectionHue(s, e.section.id) + '" title="' + esc(e.section.name + ': ' + fitHeadline(e.fit)) + '">' + esc(e.section.name) + '</button></th>').join('') +
+        '</tr></thead><tbody>' +
+        used.map((ln) => '<tr data-role="' + ln.role + '"><th scope="row"><span class="dot"></span>' + esc(ln.name) + '</th>' +
+          song.map((e) => {
+            const l = e.fit.lanes.find((x) => x.id === ln.id);
+            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
+          }).join('') + '</tr>').join('') +
+        '</tbody></table></div>';
+    }
+
+    const html = tools +
+      '<p class="fit-headline">' + esc(fitHeadline(res)) + '</p>' +
+      '<div class="fit-map-scroll"><div class="fit-map">' +
+        '<span class="fit-y fit-y-up" aria-hidden="true">Stands out</span><span class="fit-y fit-y-down" aria-hidden="true">Sits back</span>' +
+        fitPlane(res) +
+        '<span class="fit-x" aria-hidden="true"><span>← Fits to others</span><span>Steers others →</span></span>' +
+      '</div></div>' +
+      '<div class="fit-cols">' +
+        '<section><h3 class="eyebrow">Who fits to whom</h3><ul class="fit-links">' + links + '</ul></section>' +
+        '<section><h3 class="eyebrow">Each part</h3><ul class="fit-parts">' + parts + '</ul></section>' +
+      '</div>' +
+      (ribbon ? '<section><h3 class="eyebrow">Across the song</h3>' + ribbon + '</section>' : '') +
+      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Bold arrows were heard when the take was made; the others are measured from the notes. Mute a lane to see who takes over.</p>';
+    return { html, rolls: [] };
   }
 
   // ======================= song =======================
@@ -10696,6 +12360,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
     // material that recurs across sections gets a letter
     const themes = Odd.model.themes ? Odd.model.themes(s) : new Map();
+
+    // each part's role in its section: hook, topline, groove or bed
+    const showRoles = !!Odd.relate && app.ws.prefs.roles !== false;
+    const fits = new Map();
+    const fitOf = (sec) => {
+      if (!Odd.relate) return null;
+      if (!fits.has(sec.id)) fits.set(sec.id, Odd.relate.forSection(s, sec));
+      return fits.get(sec.id);
+    };
 
     // grid
     const cols = s.sections.length;
@@ -10749,11 +12422,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const th = slot.sourceId ? themes.get(slot.sourceId) : null;
           const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
           const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
-          inner = '<span class="cell-name">' +
+          const fl = showRoles ? fitOf(sec).lanes.find((x) => x.id === lane.id) : null;
+          inner = '<span class="cell-head"><span class="cell-name">' +
               (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
               esc(slot.part.name) +
               (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            (fl ? boxTag(fl.box, 'box-tag-sm') : '') + '</span>' +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
         } else {
@@ -10795,6 +12470,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<span class="song-stats mono">' + bars + ' bars · ' + fmtTime(Odd.model.songSeconds(s)) + '</span>' +
         '<div class="panel-tools">' +
           '<button type="button" class="btn btn-sm btn-ghost chord-mode" data-act="chord-mode" aria-pressed="' + !!app.ws.prefs.chordNames + '" title="Show chords as ' + (app.ws.prefs.chordNames ? 'roman numerals (i VI III VII)' : 'chord names (Am F C G)') + '"><span class="mono">' + (app.ws.prefs.chordNames ? 'Am F' : 'i VI') + '</span></button>' +
+          (Odd.relate ? '<button type="button" class="btn btn-sm' + (showRoles ? ' is-on' : ' btn-ghost') + '" data-act="roles-toggle" aria-pressed="' + showRoles + '" title="Show each part\'s role in its section: hook, topline, groove or bed">' + icon('leads', 'ico-sm') + '<span>Roles</span></button>' : '') +
           '<button type="button" class="btn btn-sm' + (app.ui.loopSong ? ' is-on' : ' btn-ghost') + '" data-act="loop-song" aria-pressed="' + !!app.ui.loopSong + '" title="Loop the whole song">' + icon('loop', 'ico-sm') + '<span>Loop</span></button>' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="add-section">' + icon('plus', 'ico-sm') + '<span>Section</span></button>' +
         '</div>' +
@@ -10804,7 +12480,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<ol class="arrangement" aria-label="Song order">' + chips + '</ol>' +
         '<button type="button" class="btn btn-ghost btn-sm arr-add" data-act="arr-add" aria-haspopup="menu" aria-expanded="false" title="Add a section to the song order"' + (addOpts.length ? '' : ' disabled') + '>' + icon('plus', 'ico-sm') + '<span>Add</span></button>' +
       '</div>' +
-      storyLine(s, sel.section) +
+      storyLine(s, sel.section, fitOf(sel.section)) +
       '<div class="sheet-wrap">' + grid + '</div>' +
       '<p class="hint">Each section appears once on the sheet; the song order above says when it plays. Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
     return { html, rolls };
@@ -10842,12 +12518,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   /** what the selected section does, in words */
-  function storyLine(s, sec) {
+  function storyLine(s, sec, res) {
     if (!sec || !Odd.recipes || !Object.keys(sec.slots).length) return '';
     const r = sec.recipe && Odd.recipes.get(sec.recipe);
     const what = Odd.recipes.describe(s, sec);
     const curve = sec.curve && sec.curve !== 'flat' && Odd.shape ? ' · energy: ' + Odd.shape.CURVE_LABELS[sec.curve].toLowerCase() : '';
-    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + '</p>';
+    const lead = res && res.lanes.length ? ' <span class="sec-lead">' + esc(fitHeadline(res)) + '</span> <button type="button" class="link-btn" data-act="fit-open" data-section="' + sec.id + '">Who leads?</button>' : '';
+    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + lead + '</p>';
   }
 
   function chordNames(s, sec) {
@@ -10862,12 +12539,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   function tabs(app) {
     const t = app.ui.tab;
-    const n = app.ws.library.length;
+    const n = app.ws.library.length + (app.ws.ideas ? app.ws.ideas.length : 0);
     const item = (id, label, ic, extra) => '<button type="button" class="tab' + (t === id ? ' is-active' : '') + '" data-act="tab" data-tab="' + id + '" aria-pressed="' + (t === id) + '">' + icon(ic) + '<span>' + label + (extra || '') + '</span></button>';
     return { html: item('booth', 'Booth', 'booth') + item('shelf', 'Shelf', 'shelf', n ? ' <span class="tab-n mono">' + n + '</span>' : '') + item('song', 'Song', 'song'), rolls: [] };
   }
 
-  Odd.views = { top, booth, shelf, song, tabs, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
+  Odd.views = { top, booth, shelf, song, tabs, ladder, fit, fitHeadline, boxTag, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/app.js */
@@ -10894,7 +12571,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       playing: null,
       lastPlay: { kind: 'booth', id: null },
       booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {}, edit: false, locks: [] },
-      shelf: { role: 'all', query: '', starred: false, sort: 'new' },
+      shelf: { role: 'all', query: '', starred: false, sort: 'new', view: 'parts' },
+      ideaMute: {}, // idea id -> voice indices left out of playback
     },
   };
   Odd.app = app;
@@ -10982,6 +12660,24 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     return list;
   };
 
+  /** ideas shown in the shelf: same filters as parts (a stem filter shows ideas with that voice) */
+  app.shelfIdeas = () => {
+    const f = app.ui.shelf;
+    const q = f.query.trim().toLowerCase();
+    let list = (app.ws.ideas || []).filter((idea) =>
+      (f.role === 'all' || idea.voices.some((v) => v.role === f.role)) &&
+      (!f.starred || idea.starred) &&
+      (!q || idea.name.toLowerCase().includes(q) || idea.voices.some((v) => v.name.toLowerCase().includes(q))));
+    const order = M.ROLE_ORDER;
+    if (f.sort === 'old') list = list.slice().sort((a, b) => a.created - b.created);
+    else if (f.sort === 'name') list = list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    else if (f.sort === 'role') list = list.slice().sort((a, b) => order.indexOf(a.voices[0].role) - order.indexOf(b.voices[0].role) || b.created - a.created);
+    else list = list.slice().sort((a, b) => b.created - a.created);
+    return list;
+  };
+
+  app.ideaMute = (id) => app.ui.ideaMute[id] || [];
+
   app.isPlaying = (kind, id) => {
     const p = app.ui.playing;
     return !!p && p.kind === kind && (id == null || p.id === id);
@@ -11039,7 +12735,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function drawRolls(rolls) {
     for (const r of rolls) {
       const c = document.getElementById(r.id);
-      if (c && c.clientWidth) Odd.roll.draw(c, r.opts);
+      if (!c || !c.clientWidth) continue;
+      if (r.opts.glyph) Odd.roll.glyph(c, r.opts);
+      else if (r.opts.stack) Odd.roll.stack(c, r.opts);
+      else Odd.roll.draw(c, r.opts);
     }
   }
 
@@ -11113,7 +12812,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const b = app.ui.booth;
     Object.assign(app.ws.prefs, {
       role: b.role, bars: b.bars, context: b.context, listen: b.listen,
-      shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred },
+      shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred, view: app.ui.shelf.view },
       loopSong: app.ui.loopSong,
       moreOpen: !!app.ui.moreOpen,
     });
@@ -11122,6 +12821,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   // ======================= playback =======================
   const TAKE_TRACK = '__take';
+  const IDEA_TRACK = '__v'; // one track per voice: __v0, __v1...
+  const BONES_PATCH = { drum: 'kit-acoustic', pitched: 'keys' };
 
   function laneForPart(part) {
     const s = app.session();
@@ -11158,6 +12859,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       seq.partLength = partLen;
       return seq;
     }
+    if (kind === 'bones' || kind === 'idea') return ideaSeq(kind, id);
+    if (kind === 'ladder') return ladderSeq();
     if (kind === 'section') {
       const sec = M.findSection(s, id);
       if (!sec) return null;
@@ -11171,6 +12874,336 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       return seq;
     }
     return null;
+  }
+
+  /**
+   * An idea on its own. Bones: the cores in plain sounds, straight (no swing,
+   * no human feel), in the session's key. Full: the parts as they were found,
+   * over their own chords, through the lane sounds, with the session's feel.
+   */
+  function ideaSeq(kind, id) {
+    const s = app.session();
+    const idea = M.findIdea(app.ws, id);
+    if (!idea) return null;
+    const bones = kind === 'bones';
+    const length = idea.bars * T.BAR;
+    const events = Odd.idea.events(idea, { mode: bones ? 'bones' : 'full', tonic: s.tonic, scale: s.scale, mute: app.ideaMute(id), prefix: IDEA_TRACK });
+    const { tracks } = ideaTracks(idea, bones);
+    if (bones) return { bpm: s.bpm, length, loop: true, events: events.sort(R.byTime), tracks };
+    const seq = R.sequence(s, events, length, true, tracks);
+    for (const k in seq.tracks) seq.tracks[k].solo = false; // solo is for the song sheet
+    return seq;
+  }
+
+  /**
+   * A transport track per voice of an idea. plain: the neutral bones sounds;
+   * otherwise each voice sounds like a lane of its stem (a second voice of the
+   * same stem takes the second lane, if there is one).
+   * Returns { tracks, lanes: Set of the lane ids the voices sound like }.
+   */
+  function ideaTracks(idea, plain) {
+    const s = app.session();
+    const tracks = {};
+    const lanes = new Set();
+    idea.voices.forEach((v, i) => {
+      const drum = T.isDrumRole(v.role);
+      const lane = s.lanes.find((l) => l.role === v.role && !lanes.has(l.id)) || M.laneForRole(s, v.role);
+      if (lane) lanes.add(lane.id);
+      tracks[IDEA_TRACK + i] = {
+        role: v.role,
+        patch: plain ? (drum ? BONES_PATCH.drum : BONES_PATCH.pitched) : lane ? lane.patch : M.roleInfo(v.role).defaultPatch,
+        volume: plain ? 0.75 : lane ? lane.volume : 0.75,
+        mute: false,
+        solo: false,
+        channel: drum ? 9 : lane ? lane.channel : i,
+      };
+    });
+    return { tracks, lanes };
+  }
+
+  // ======================= the ladder =======================
+  /*
+   * One idea heard step by step from its bones to a full mix (Odd.idea.RUNGS).
+   * app.ui.ladder = { ideaId, rung, target } while the ladder is open;
+   * target is a section id, or '' for where the idea was found (its own chords).
+   * Steps up to harmony play plain and straight; sound and feel switches to
+   * the lane sounds with swing and human timing; band adds the section's other
+   * parts and shapes everything with the section's energy.
+   */
+  const RUNG_TEXT = {
+    rhythm: () => 'When the notes fall and which are strong. One sound, no pitch.',
+    shape: () => 'Adds which way it moves: plain steps up and down the scale. These are the bones.',
+    notes: () => 'Adds the notes as written: chords, passing notes, sharps and flats, lengths and dynamics.',
+    harmony: (sec) => (sec ? 'Bends every note to the chords of ' + sec.name + '.' : 'Plays over the chords it was written on. Pick a section above to fit it somewhere.'),
+    sound: () => 'Adds the lane sounds, swing and human timing.',
+    band: (sec) => (sec ? 'Adds what else ' + sec.name + ' plays, and the section\'s energy.' : ''),
+  };
+
+  function ladderCtx() {
+    const L = app.ui.ladder;
+    if (!L) return null;
+    const s = app.session();
+    const idea = M.findIdea(app.ws, L.ideaId);
+    if (!idea) return null;
+    const sec = L.target ? M.findSection(s, L.target) : null;
+    const length = Math.max(idea.bars, sec ? sec.bars : 0) * T.BAR;
+    const tgt = sec ? R.sectionTarget(s, sec, length) : { tonic: s.tonic, scale: s.scale, prog: null, length };
+    // the voices take over their stems' lanes; the band is everything else the section plays
+    const taken = ideaTracks(idea, false).lanes;
+    const band = sec ? s.lanes.filter((l) => sec.slots[l.id] && sec.slots[l.id].part && !taken.has(l.id)) : [];
+    return { s, idea, sec, length, tgt, band };
+  }
+
+  /** a step's events: { events (voices, one track each), band: [{ lane, events }] } */
+  function ladderEvents(c, rung, mute) {
+    const top = rung === 'band' && c.sec && c.band.length;
+    let events = Odd.idea.rungEvents(c.idea, {
+      rung, tonic: c.tgt.tonic, scale: c.tgt.scale, prog: c.sec ? c.sec.prog : null, length: c.length, mute, prefix: IDEA_TRACK,
+    });
+    const band = [];
+    if (top) {
+      if (Odd.shape && Odd.shape.settings(c.s).on) {
+        const energy = Odd.shape.energyOf(c.sec);
+        const shaped = [];
+        c.idea.voices.forEach((v, i) => {
+          const evs = events.filter((e) => e.track === IDEA_TRACK + i);
+          if (evs.length) for (const e of Odd.shape.shapeLane(evs, { role: v.role, energy, start: 0, end: c.length, curve: c.sec.curve, nextEnergy: null })) shaped.push(e);
+        });
+        events = shaped.sort(R.byTime);
+      }
+      for (const lane of c.band) band.push({ lane, events: R.sectionEvents(c.s, c.sec, { only: lane.id, length: c.length }) });
+    }
+    return { events, band };
+  }
+
+  function ladderSeq() {
+    const c = ladderCtx();
+    if (!c) return null;
+    const rung = app.ui.ladder.rung;
+    const i = Odd.idea.rungIndex(rung);
+    const plain = i <= Odd.idea.rungIndex('harmony');
+    const { events, band } = ladderEvents(c, rung, app.ideaMute(c.idea.id));
+    const { tracks } = ideaTracks(c.idea, plain);
+    let all = events;
+    for (const b of band) all = all.concat(b.events);
+    if (plain) return { bpm: c.s.bpm, length: c.length, loop: true, events: all.sort(R.byTime), tracks };
+    const seq = R.sequence(c.s, all, c.length, true, tracks);
+    for (const k in seq.tracks) seq.tracks[k].solo = false; // solo is for the song sheet
+    return seq;
+  }
+
+  /** what the ladder view draws */
+  app.ladderData = () => {
+    const c = ladderCtx();
+    if (!c) return null;
+    const mute = app.ideaMute(c.idea.id);
+    const rungs = Odd.idea.RUNGS.map((r) => {
+      const disabled = r.id === 'band' && (!c.sec || !c.band.length);
+      // draw every voice (left-out ones dimmed), count only what plays
+      const { events, band } = ladderEvents(c, disabled ? 'sound' : r.id, []);
+      const lanes = c.idea.voices.map((v, vi) => ({
+        role: v.role, drums: T.isDrumRole(v.role), dim: mute.includes(vi), events: events.filter((e) => e.track === IDEA_TRACK + vi),
+      }));
+      for (const b of band) lanes.push({ role: b.lane.role, drums: T.isDrumRole(b.lane.role), dim: true, events: b.events });
+      let count = lanes.filter((l) => !l.dim).reduce((n, l) => n + l.events.length, 0);
+      if (band.length) count += band.reduce((n, b) => n + b.events.length, 0);
+      return {
+        id: r.id, label: r.label, group: r.group, lanes, count, disabled,
+        text: disabled ? (c.sec ? c.sec.name + ' has nothing else playing.' : 'Pick a section above to hear it with a band.') : RUNG_TEXT[r.id](c.sec),
+      };
+    });
+    return { idea: c.idea, sec: c.sec, length: c.length, rungs, rung: app.ui.ladder.rung, sections: c.s.sections, mute, bandSize: c.band.length };
+  };
+
+  async function ladderDialog(idea) {
+    const sel = app.selectedSection();
+    app.ui.ladder = { ideaId: idea.id, rung: 'shape', target: sel ? sel.id : '' };
+    let host = null;
+    let dlgEl = null;
+    const enabled = () => (app.ladderData() || { rungs: [] }).rungs.filter((r) => !r.disabled).map((r) => r.id);
+    const render = () => {
+      if (!host) return;
+      const hadFocus = host.contains(document.activeElement);
+      const out = Odd.views.ladder(app);
+      host.innerHTML = out.html;
+      drawRolls(out.rolls);
+      const L = app.ui.ladder;
+      const sec = L.target ? M.findSection(app.session(), L.target) : null;
+      const place = $('.dialog-actions button[data-i="0"]', dlgEl);
+      if (place) { place.textContent = sec ? 'Place in ' + sec.name : 'Place'; place.disabled = !sec; }
+      if (hadFocus) { const b = $('[data-ladder-rung="' + L.rung + '"]', host); if (b) b.focus({ preventScroll: true }); }
+    };
+    const pick = (rung) => {
+      const L = app.ui.ladder;
+      if (!L || !enabled().includes(rung)) return;
+      if (L.rung === rung && app.isPlaying('ladder')) stop();
+      else {
+        L.rung = rung;
+        if (app.isPlaying('ladder')) refreshPlayback();
+        else play('ladder');
+      }
+      render();
+      syncPlayState();
+    };
+    const res = await D.dialog({
+      title: 'Ladder · ' + idea.name,
+      wide: true,
+      body: '<div class="ladder" id="ladder"></div>',
+      onOpen: (el) => {
+        dlgEl = el;
+        host = $('#ladder', el);
+        render();
+        host.addEventListener('click', (e) => {
+          const r = e.target.closest('[data-ladder-rung]');
+          if (r && !r.disabled) { pick(r.dataset.ladderRung); return; }
+          const v = e.target.closest('[data-ladder-voice]');
+          if (v) {
+            const i = Number(v.dataset.ladderVoice);
+            const cur = app.ideaMute(idea.id);
+            let next = cur.includes(i) ? cur.filter((x) => x !== i) : cur.concat(i);
+            if (next.length >= idea.voices.length) next = [];
+            app.ui.ideaMute[idea.id] = next;
+            render();
+            paint(['shelf']);
+            if (app.isPlaying('ladder')) refreshPlayback();
+          }
+        });
+        host.addEventListener('change', (e) => {
+          const t = e.target.closest('[data-ladder-target]');
+          if (!t) return;
+          app.ui.ladder.target = t.value;
+          if (!enabled().includes(app.ui.ladder.rung)) app.ui.ladder.rung = 'sound';
+          render();
+          if (app.isPlaying('ladder')) refreshPlayback();
+        });
+      },
+      onKey: (e) => {
+        if (e.target && e.target.tagName === 'SELECT') return false;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const list = enabled();
+          const at = list.indexOf(app.ui.ladder.rung);
+          const next = list[Math.max(0, Math.min(list.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
+          if (next && next !== app.ui.ladder.rung) {
+            app.ui.ladder.rung = next;
+            if (app.isPlaying('ladder')) refreshPlayback();
+            render();
+            syncPlayState();
+          }
+          return true;
+        }
+        if (e.key === ' ') {
+          if (app.isPlaying('ladder')) stop(); else play('ladder');
+          render();
+          return true;
+        }
+        return false;
+      },
+      actions: [
+        { label: 'Place', value: 'place' },
+        { label: 'Done', primary: true, value: null },
+      ],
+    });
+    const target = app.ui.ladder && app.ui.ladder.target;
+    if (app.isPlaying('ladder')) stop();
+    app.ui.ladder = null;
+    if (res === 'place' && target) {
+      const sec = M.findSection(app.session(), target);
+      if (sec) placeIdea(idea, sec);
+    }
+  }
+
+  /**
+   * Who leads: how the parts of a section fit to each other (Odd.relate).
+   * app.ui.fit = { sectionId } while the dialog is open. Sections step in song
+   * order (each once), then any the song doesn't play.
+   */
+  app.fitOrder = () => {
+    const s = app.session();
+    const out = [];
+    for (const id of s.arrangement) {
+      const sec = M.findSection(s, id);
+      if (sec && !out.includes(sec)) out.push(sec);
+    }
+    for (const sec of s.sections) if (!out.includes(sec)) out.push(sec);
+    return out;
+  };
+
+  async function fitDialog(sectionId) {
+    const s = app.session();
+    if (!Odd.relate || !M.findSection(s, sectionId)) return;
+    app.ui.fit = { sectionId };
+    let host = null, dlgEl = null;
+    const render = () => {
+      if (!host || !app.ui.fit) return;
+      const sec = M.findSection(app.session(), app.ui.fit.sectionId);
+      // keep focus on the same control across the redraw
+      const f = document.activeElement;
+      let again = null;
+      if (f && host.contains(f)) {
+        if (f.dataset.fitStep) again = '[data-fit-step="' + f.dataset.fitStep + '"]';
+        else if (f.matches('[data-fit-section]')) again = '[data-fit-section]';
+        else if (f.dataset.fitPick) again = '[data-fit-pick="' + f.dataset.fitPick + '"]';
+        else if (f.dataset.act) again = '[data-act="' + f.dataset.act + '"]' + (f.dataset.lane ? '[data-lane="' + f.dataset.lane + '"]' : '');
+      }
+      host.innerHTML = Odd.views.fit(app).html;
+      const back = again && ($(again, host) || $('[data-act="play-section"]', host));
+      if (back && !back.disabled) back.focus({ preventScroll: true });
+      const t = $('#dlg-title', dlgEl);
+      if (t && sec) t.textContent = 'Who leads · ' + sec.name;
+      syncPlayState();
+    };
+    const go = (id) => {
+      const L = app.ui.fit;
+      if (!L || !id || id === L.sectionId) return;
+      const was = app.isPlaying('section', L.sectionId);
+      L.sectionId = id;
+      app.ui.sectionId = id;
+      render();
+      paint(['song']);
+      if (was) play('section', id);
+    };
+    const step = (dir) => {
+      const order = app.fitOrder();
+      const at = order.findIndex((x) => x.id === app.ui.fit.sectionId);
+      const next = order[at + dir];
+      if (next) go(next.id);
+    };
+    await D.dialog({
+      title: 'Who leads · ' + M.findSection(s, sectionId).name,
+      wide: true,
+      body: '<div class="fit" id="fit"></div>',
+      onOpen: (el) => {
+        dlgEl = el;
+        host = $('#fit', el);
+        render();
+        // start on the play button: keys typed into the section list belong to it
+        setTimeout(() => { const p = $('[data-act="play-section"]', host); if (p) p.focus({ preventScroll: true }); }, 0);
+        host.addEventListener('click', (e) => {
+          const st = e.target.closest('[data-fit-step]');
+          if (st && !st.disabled) { step(Number(st.dataset.fitStep)); return; }
+          const pk = e.target.closest('[data-fit-pick]');
+          if (pk) { go(pk.dataset.fitPick); return; }
+          // muting runs in the page's own click handler, after this one
+          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"]')) setTimeout(render, 0);
+        });
+        host.addEventListener('change', (e) => {
+          const t = e.target.closest('[data-fit-section]');
+          if (t) go(t.value);
+        });
+      },
+      onKey: (e) => {
+        if (e.target && e.target.tagName === 'SELECT') return false;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { step(e.key === 'ArrowLeft' ? -1 : 1); return true; }
+        if (e.key === ' ') {
+          const id = app.ui.fit.sectionId;
+          if (app.isPlaying('section', id)) stop(); else play('section', id);
+          return true;
+        }
+        return false;
+      },
+      actions: [{ label: 'Done', primary: true, value: null }],
+    });
+    app.ui.fit = null;
   }
 
   let currentSeq = null;
@@ -11265,6 +13298,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         } else if (p.kind === 'preview') {
           const part = M.findPart(app.ws, p.id);
           text = 'Shelf · ' + (part ? part.name : '');
+        } else if (p.kind === 'ladder') {
+          const r = app.ui.ladder && Odd.idea.RUNGS.find((x) => x.id === app.ui.ladder.rung);
+          text = 'Ladder · ' + (r ? r.label : '');
+        } else if (p.kind === 'bones' || p.kind === 'idea') {
+          const idea = M.findIdea(app.ws, p.id);
+          text = 'Idea · ' + (idea ? idea.name : '') + (p.kind === 'bones' ? ' (bones)' : '');
         } else if (p.kind === 'section') {
           const sec = M.findSection(s, p.id);
           text = 'Loop · ' + (sec ? sec.name : '');
@@ -11673,6 +13712,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       } },
       { label: 'Open in the booth', run: () => loadIntoBooth(part) },
       { label: 'Make a variation in the booth', run: () => loadIntoBooth(part, true) },
+      { label: 'Capture as an idea', run: () => captureIdea([{ part, sourceId: part.id }], { from: 'shelf' }) },
       { label: 'Download MIDI', run: () => downloadPart(part) },
       '-',
       { label: 'Remove from shelf', kind: 'danger', run: () => {
@@ -11952,6 +13992,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       { label: 'Edit chords…', run: () => editChords(section) },
       { label: 'Section type…', run: () => typeDialog(section) },
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
+      { label: 'Who leads…', disabled: !Object.keys(section.slots).length, run: () => fitDialog(section.id) },
+      { label: 'Capture an idea from this section…', disabled: !Object.keys(section.slots).length, run: () => captureFromSection(section) },
       { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
       { label: 'Key down a semitone', run: () => commit('Change section key', () => { section.transpose = Math.max(-11, (section.transpose || 0) - 1); }) },
@@ -11997,6 +14039,178 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       actions: [{ label: 'Cancel', value: null }, { label: 'Save', primary: true, value: (el) => Number($('#dlg-ch', el).value) }],
     });
     if (v != null) commit('Change MIDI channel', () => { lane.channel = v; }, ['song']);
+  }
+
+  // ======================= ideas =======================
+  /**
+   * Save parts heard together as an idea. sources: [{ part, oct, form,
+   * sourceId, label, checked }]. With more than one source (or opts.ask), a
+   * dialog asks which belong in the idea.
+   */
+  async function captureIdea(sources, opts) {
+    const o = opts || {};
+    const s = app.session();
+    let chosen = sources;
+    let name = '';
+    if (sources.length > 1 || o.ask) {
+      const rows = sources.map((src, i) =>
+        '<label class="toggle capture-row" data-role="' + src.part.role + '"><input type="checkbox" data-i="' + i + '"' + (src.checked !== false ? ' checked' : '') + '>' +
+        '<span><span class="tag" data-role="' + src.part.role + '">' + esc(M.roleInfo(src.part.role).short || src.part.role) + '</span> ' + esc(src.label || src.part.name) + '</span></label>').join('');
+      const v = await D.dialog({
+        title: o.title || 'Capture an idea',
+        body:
+          '<p class="help">An idea keeps the rhythm and shape of each part: when the notes fall, which are strong, which way the line moves and where it lands. The parts themselves come along as source material. Pick the parts that belong together; you can split them apart later.</p>' +
+          '<div class="capture-list">' + rows + '</div>' +
+          '<label class="field"><span>Name</span><input type="text" id="dlg-idea-name" maxlength="80" placeholder="Named after its parts"></label>',
+        actions: [
+          { label: 'Cancel', value: null },
+          { label: 'Capture', primary: true, validate: (el) => $$('input[data-i]:checked', el).length > 0, value: (el) => ({
+            picks: $$('input[data-i]:checked', el).map((x) => Number(x.dataset.i)),
+            name: $('#dlg-idea-name', el).value.trim(),
+          }) },
+        ],
+      });
+      if (!v) return null;
+      chosen = v.picks.map((i) => sources[i]);
+      name = v.name;
+    }
+    const idea = Odd.idea.fromParts(chosen, { name: name || undefined, style: s.style, from: o.from });
+    if (!idea) { D.toast('Those parts have no notes to make an idea from.'); return null; }
+    // show the ideas, with filters that let the new one through
+    const f = app.ui.shelf;
+    f.view = 'ideas';
+    if (f.role !== 'all' && !idea.voices.some((v) => v.role === f.role)) f.role = 'all';
+    f.starred = false;
+    f.query = '';
+    savePrefs();
+    commit('Capture idea', (ss, ws) => { M.addIdea(ws, idea); }, ['shelf', 'tabs']);
+    const n = idea.voices.length;
+    D.toast('Captured idea “' + idea.name + '”' + (n > 1 ? ' (' + n + ' voices)' : ''), {
+      action: app.ui.tab !== 'shelf' && window.innerWidth <= 900 ? { label: 'Show', run: () => goTab('shelf') } : { label: 'Undo', run: undo },
+    });
+    return idea;
+  }
+
+  /** the booth take, plus whatever the section plays with it (ticked when you hear them together) */
+  function captureFromBooth() {
+    const take = app.currentTake();
+    if (!take) return;
+    const s = app.session();
+    const sec = app.selectedSection();
+    const target = app.boothLane();
+    const sources = [{ part: take, sourceId: take.id, label: 'This take: ' + take.name, checked: true }];
+    for (const lane of s.lanes) {
+      if (target && lane.id === target.id) continue;
+      const slot = sec.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      sources.push({
+        part: slot.part, oct: slot.oct, form: slot.form, sourceId: slot.sourceId,
+        label: lane.name + ': ' + slot.part.name, checked: !!app.ui.booth.context,
+      });
+    }
+    captureIdea(sources, { from: 'booth', title: 'Capture an idea from take ' + String(take.take || 1).padStart(3, '0') });
+  }
+
+  function captureFromSection(section) {
+    const s = app.session();
+    const sources = [];
+    for (const lane of s.lanes) {
+      const slot = section.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      sources.push({
+        part: slot.part, oct: slot.oct, form: slot.form, sourceId: slot.sourceId,
+        label: lane.name + ': ' + slot.part.name, checked: !M.slotSpan(section, slot).out,
+      });
+    }
+    if (!sources.length) { D.toast(section.name + ' has no parts yet.'); return; }
+    captureIdea(sources, { from: 'section', ask: true, title: 'Capture an idea from ' + section.name });
+  }
+
+  /** put each voice's part in a section (the selected one by default), in a lane of its stem */
+  function placeIdea(idea, section) {
+    const s = app.session();
+    const sec = section || app.selectedSection();
+    const voices = idea.voices.filter((v) => v.part);
+    if (!voices.length) { D.toast('This idea has no parts to place.'); return; }
+    const where = [];
+    commit('Place idea', () => {
+      const used = new Set();
+      for (const v of voices) {
+        let lane = s.lanes.find((l) => l.role === v.role && !used.has(l.id));
+        if (!lane) lane = M.addLane(s, v.role);
+        used.add(lane.id);
+        const part = Object.assign(M.clone(v.part), { id: v.sourceId || v.part.id });
+        const slot = M.placePart(s, sec.id, lane.id, part);
+        if (!slot) continue;
+        slot.oct = v.oct || 0;
+        if (v.form) slot.form = v.form; else delete slot.form;
+        where.push(lane.name);
+      }
+      app.ui.sectionId = sec.id;
+    }, ['song', 'shelf', 'booth']);
+    D.toast('Placed “' + idea.name + '” in ' + sec.name + ': ' + where.join(', '), { action: { label: 'Undo', run: undo } });
+  }
+
+  function splitVoice(idea, index) {
+    const v = idea.voices[index];
+    if (!v || idea.voices.length < 2) return;
+    let made = null;
+    commit('Split idea', (s, ws) => {
+      made = Odd.idea.split(idea, index);
+      Odd.idea.removeVoice(idea, index);
+      M.addIdea(ws, made);
+    }, ['shelf', 'tabs']);
+    delete app.ui.ideaMute[idea.id];
+    D.toast(v.name + ' is now an idea of its own', { action: { label: 'Undo', run: undo } });
+  }
+
+  async function joinDialog(idea) {
+    const others = (app.ws.ideas || []).filter((x) => x.id !== idea.id);
+    if (!others.length) { D.toast('Capture another idea first.'); return; }
+    const rows = others.map((x, i) =>
+      '<label class="type-opt"><input type="radio" name="dlg-join" value="' + esc(x.id) + '"' + (i ? '' : ' checked') + '>' +
+      '<span><strong>' + esc(x.name) + '</strong><small>' + esc(x.voices.map((v) => M.roleInfo(v.role).label).join(', ')) + ' · ' + x.bars + (x.bars === 1 ? ' bar' : ' bars') + '</small></span></label>').join('');
+    const id = await D.dialog({
+      title: 'Join “' + idea.name + '” with…',
+      body: '<p class="help">Makes a new idea with the voices of both, so you can hear them together. Both ideas stay as they are.</p><div class="join-list">' + rows + '</div>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Join', primary: true, value: (el) => { const r = $('input[name="dlg-join"]:checked', el); return r ? r.value : null; } },
+      ],
+    });
+    const other = id && M.findIdea(app.ws, id);
+    if (!other) return;
+    const joined = Odd.idea.join([idea, other]);
+    commit('Join ideas', (s, ws) => { M.addIdea(ws, joined); }, ['shelf', 'tabs']);
+    D.toast('Joined into “' + joined.name + '”', { action: { label: 'Undo', run: undo } });
+  }
+
+  function ideaMenu(anchor, idea) {
+    const sec = app.selectedSection();
+    const items = [
+      { label: 'Rename…', run: async () => {
+        const name = await D.prompt('Rename idea', 'Name', idea.name);
+        if (name) commit('Rename idea', () => { idea.name = name; }, ['shelf']);
+      } },
+      { label: 'Ladder: hear it step by step…', run: () => ladderDialog(idea) },
+      { label: 'Place in ' + sec.name, disabled: !idea.voices.some((v) => v.part), run: () => placeIdea(idea) },
+      { label: 'Join with another idea…', disabled: (app.ws.ideas || []).length < 2, run: () => joinDialog(idea) },
+    ];
+    if (idea.voices.length > 1) {
+      items.push('-', { heading: 'Split off' });
+      idea.voices.forEach((v, i) => items.push({ label: v.name, hint: M.roleInfo(v.role).short, run: () => splitVoice(idea, i) }));
+    }
+    const openable = idea.voices.filter((v) => v.part);
+    if (openable.length) {
+      items.push('-', { heading: 'Open in the booth' });
+      for (const v of openable) items.push({ label: v.name, hint: M.roleInfo(v.role).short, run: () => loadIntoBooth(v.part) });
+    }
+    items.push('-', { label: 'Delete idea', kind: 'danger', run: () => {
+      if (app.isPlaying('bones', idea.id) || app.isPlaying('idea', idea.id)) stop();
+      commit('Delete idea', (s, ws) => M.removeIdea(ws, idea.id), ['shelf', 'tabs']);
+      D.toast('Deleted idea “' + idea.name + '”', { action: { label: 'Undo', run: undo } });
+    } });
+    D.menu(anchor, items, { align: 'right' });
   }
 
   // ======================= sessions =======================
@@ -12141,7 +14355,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const incoming = data.workspace;
     const choice = await D.dialog({
       title: 'Open project',
-      body: '<p>This file has ' + incoming.sessions.length + (incoming.sessions.length === 1 ? ' session' : ' sessions') + ' and ' + incoming.library.length + ' shelf parts.</p><p class="help">Adding keeps everything you have now. Replacing swaps your whole workspace for the file. Either can be undone.</p>',
+      body: '<p>This file has ' + incoming.sessions.length + (incoming.sessions.length === 1 ? ' session' : ' sessions') + ', ' + incoming.library.length + ' shelf parts and ' + (incoming.ideas || []).length + ' ideas.</p><p class="help">Adding keeps everything you have now. Replacing swaps your whole workspace for the file. Either can be undone.</p>',
       actions: [
         { label: 'Cancel', value: null },
         { label: 'Replace everything', value: 'replace', kind: 'danger' },
@@ -12153,10 +14367,14 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       if (choice === 'replace') {
         ws.sessions = incoming.sessions;
         ws.library = incoming.library;
+        ws.ideas = incoming.ideas || [];
         ws.currentId = incoming.currentId;
       } else {
         const ids = new Set(ws.library.map((p) => p.id));
         for (const p of incoming.library) if (!ids.has(p.id)) ws.library.push(p);
+        ws.ideas = ws.ideas || [];
+        const iids = new Set(ws.ideas.map((x) => x.id));
+        for (const x of incoming.ideas || []) if (!iids.has(x.id)) ws.ideas.push(x);
         const sids = new Set(ws.sessions.map((x) => x.id));
         for (const ss of incoming.sessions) { if (sids.has(ss.id)) ss.id = M.uid('ss'); ws.sessions.push(ss); }
         ws.currentId = incoming.sessions[0].id;
@@ -12226,6 +14444,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const rows = [
       ['Space', 'Play or stop'], ['X', 'Reject and hear a new take'], ['K', 'Keep the take on the shelf'],
       ['P', 'Keep and place it in the selected section'], ['V', 'Make a variation of the take'],
+      ['I', 'Capture the take as an idea (with the parts you hear it with)'],
+      ['W', 'Who leads: how the parts of the selected section fit to each other'],
       ['← →', 'Step through takes'], ['1 – 7', 'Switch stem: drums, percussion, bass, chords, pad, lead, arp'],
       ['Esc', 'Stop'], ['Ctrl Z', 'Undo'], ['Ctrl Shift Z', 'Redo'],
     ];
@@ -12256,6 +14476,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     undo, redo,
     'toggle-fields': () => { app.ui.fieldsOpen = !app.ui.fieldsOpen; paint(['top']); },
     'toggle-more': () => { app.ui.moreOpen = !app.ui.moreOpen; savePrefs(); paint(['top']); },
+    'roles-toggle': () => { app.ws.prefs.roles = app.ws.prefs.roles === false; persist(); paint(['song']); },
+    'fit-open': (el) => fitDialog(el.dataset.section || app.selectedSection().id),
     'chord-mode': () => { app.ws.prefs.chordNames = !app.ws.prefs.chordNames; persist(); paint(['song', 'booth']); },
     tab: (el) => goTab(el.dataset.tab),
 
@@ -12270,6 +14492,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'take-next': () => stepTake(1),
     'take-goto': (el) => { const tk = app.takesFor(app.ui.booth.role); tk.index = Number(el.dataset.index); paint(['booth']); autoPlayBooth(); },
     'take-midi': () => { const t = app.currentTake(); if (t) downloadPart(t); },
+    'capture-idea': () => captureFromBooth(),
     'params-reset': () => {
       if (app.ws.prefs.params) delete app.ws.prefs.params[app.ui.booth.role];
       persist();
@@ -12284,6 +14507,29 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'part-place': (el) => { const p = M.findPart(app.ws, el.dataset.id); if (p) placeFromShelf(p); },
     'part-menu': (el) => { const p = M.findPart(app.ws, el.dataset.id); if (p) partMenu(el, p); },
     'import-midi': () => importMidi(),
+    'shelf-view': (el) => {
+      const view = el.dataset.view === 'ideas' ? 'ideas' : 'parts';
+      if (app.ui.shelf.view === view) return;
+      app.ui.shelf.view = view;
+      savePrefs();
+      paint(['shelf']);
+    },
+    'idea-play': (el) => toggle(el.dataset.kind === 'bones' ? 'bones' : 'idea', el.dataset.id),
+    'idea-voice': (el) => {
+      const id = el.dataset.id;
+      const i = Number(el.dataset.index);
+      const idea = M.findIdea(app.ws, id);
+      if (!idea) return;
+      const cur = app.ideaMute(id);
+      let next = cur.includes(i) ? cur.filter((x) => x !== i) : cur.concat(i);
+      if (next.length >= idea.voices.length) next = []; // leaving every voice out means hear them all again
+      app.ui.ideaMute[id] = next;
+      paint(['shelf']);
+      if (app.isPlaying('bones', id) || app.isPlaying('idea', id)) refreshPlayback();
+    },
+    'idea-ladder': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) ladderDialog(x); },
+    'idea-star': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) commit(x.starred ? 'Unfavourite' : 'Favourite', () => { x.starred = !x.starred; }, ['shelf']); },
+    'idea-menu': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) ideaMenu(el, x); },
 
     // song
     'select-cell': (el) => selectCell(el.dataset.section, el.dataset.lane),
@@ -12705,6 +14951,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       case 'k': case 'K': keep(false); break;
       case 'p': case 'P': keep(true); break;
       case 'v': case 'V': vary(); break;
+      case 'i': case 'I': captureFromBooth(); break;
+      case 'w': case 'W': fitDialog(app.selectedSection().id); break;
       case 'ArrowLeft': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(-1); } break;
       case 'ArrowRight': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(1); } break;
       case 'Escape': stop(); break;
@@ -12788,6 +15036,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (pr.listen != null) b.listen = !!pr.listen;
     app.ui.moreOpen = !!pr.moreOpen;
     if (pr.shelf) Object.assign(app.ui.shelf, pr.shelf, { query: '' });
+    if (app.ui.shelf.view !== 'ideas') app.ui.shelf.view = 'parts';
     app.ui.loopSong = !!pr.loopSong;
   }
 

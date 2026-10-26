@@ -54,17 +54,17 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.waitForTimeout(200);
   ok(await page.evaluate((b) => Odd.app.currentTake().parent === b, before), 'vary makes a child take');
 
-  // switch roles 1-6 and generate each
-  for (let i = 1; i <= 6; i++) {
+  // switch roles 1-7 and generate each
+  for (let i = 1; i <= 7; i++) {
     await page.keyboard.press(String(i));
     await page.waitForTimeout(150);
     const role = await page.evaluate(() => Odd.app.ui.booth.role);
     ok(role === Odd_roles()[i - 1], 'role key ' + i + ' -> ' + role);
   }
-  function Odd_roles() { return ['drums', 'bass', 'chords', 'pad', 'lead', 'arp']; }
+  function Odd_roles() { return ['drums', 'perc', 'bass', 'chords', 'pad', 'lead', 'arp']; }
 
-  // param change re-rolls same seed
-  await page.keyboard.press('2');
+  // param change re-rolls same seed (on the bass)
+  await page.keyboard.press('3');
   const seedA = await page.evaluate(() => Odd.app.currentTake().seed);
   await page.evaluate(() => {
     const el = document.querySelector('[data-change="param"][data-key="density"]');
@@ -140,12 +140,115 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   const wav = await grab('Stems as audio', 120000);
   ok(fs.statSync(wav).size > 100000, 'wav stems render (' + (fs.statSync(wav).size / 1e6).toFixed(1) + ' MB)');
 
+  // ideas: capture from the booth with the section, hear the bones and the full parts, split, join
+  await page.click('[data-act="tab"][data-tab="booth"]').catch(() => {});
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { Odd.app.ui.booth.context = true; });
+  await page.keyboard.press('6'); // lead
+  await page.waitForTimeout(200);
+  await page.keyboard.press('i');
+  await page.waitForTimeout(250);
+  const boxes = await page.$$('#overlay input[data-i]');
+  ok(boxes.length >= 2, 'capture asks which parts belong together (' + boxes.length + ' offered)');
+  await page.fill('#dlg-idea-name', 'Smoke Idea');
+  await page.click('#overlay .btn-primary');
+  await page.waitForTimeout(300);
+  const idea = await page.evaluate(() => Odd.app.ws.ideas[0] && { name: Odd.app.ws.ideas[0].name, voices: Odd.app.ws.ideas[0].voices.length, view: Odd.app.ui.shelf.view });
+  ok(idea && idea.name === 'Smoke Idea' && idea.voices >= 2 && idea.view === 'ideas', 'idea captured with ' + (idea && idea.voices) + ' voices, shelf shows ideas');
+  ok(await page.evaluate(() => !!document.querySelector('.idea-card canvas.idea-glyph') && document.querySelector('.idea-card canvas.idea-glyph').width > 0), 'idea card draws its glyph');
+  await page.click('.idea-card [data-act="idea-play"][data-kind="bones"]');
+  await page.waitForTimeout(700);
+  ok(await page.evaluate(() => Odd.transport.playing && Odd.app.ui.playing.kind === 'bones'), 'bones play');
+  await page.click('.idea-card [data-act="idea-voice"][data-index="0"]');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => Odd.app.ideaMute(Odd.app.ws.ideas[0].id).includes(0) && !!document.querySelector('.idea-card .voice.is-off')), 'a voice can be left out');
+  await page.click('.idea-card [data-act="idea-play"][data-kind="idea"]');
+  await page.waitForTimeout(700);
+  ok(await page.evaluate(() => Odd.transport.playing && Odd.app.ui.playing.kind === 'idea'), 'full idea plays');
+  await page.screenshot({ path: path.join(out, 'ideas.png'), fullPage: false });
+  await page.keyboard.press('Escape');
+  const nIdeas = await page.evaluate(() => Odd.app.ws.ideas.length);
+  await page.click('.idea-card [data-act="idea-menu"]');
+  await page.click('.menu .menu-item:has-text("' + (await page.evaluate(() => Odd.app.ws.ideas[0].voices[1].name)).replace(/"/g, '\\"') + '")');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate((n) => Odd.app.ws.ideas.length === n + 1, nIdeas), 'split off a voice into its own idea');
+  await page.click('.idea-card [data-act="idea-menu"]');
+  await page.click('.menu .menu-item:has-text("Join with another idea")');
+  await page.click('#overlay .btn-primary');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate((n) => Odd.app.ws.ideas.length === n + 2, nIdeas), 'join two ideas into a new one');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate((n) => Odd.app.ws.ideas.length === n + 1, nIdeas), 'undo takes the join back');
+
+  // the ladder: hear one idea step by step; moving a step keeps the loop going
+  await page.click('.idea-card [data-act="idea-ladder"]');
+  await page.waitForTimeout(300);
+  ok((await page.$$('#overlay .rung')).length === 6, 'ladder shows six steps');
+  ok(await page.evaluate(() => [...document.querySelectorAll('#overlay canvas.rung-roll')].every((c) => c.width > 0)), 'every step draws its picture');
+  await page.click('#overlay [data-ladder-rung="rhythm"]');
+  await page.waitForTimeout(900);
+  ok(await page.evaluate(() => Odd.transport.playing && Odd.app.ui.playing.kind === 'ladder' && Odd.app.ui.ladder.rung === 'rhythm'), 'a step plays');
+  const posA = await page.evaluate(() => Odd.transport.position());
+  for (let k = 0; k < 5; k++) await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(400);
+  const lad = await page.evaluate(() => ({ rung: Odd.app.ui.ladder.rung, playing: Odd.transport.playing, pos: Odd.transport.position(), live: !!document.querySelector('#overlay .rung.is-live') }));
+  ok(lad.playing && lad.live && ['band', 'sound'].includes(lad.rung) && lad.pos > posA, 'arrow keys climb without restarting (' + lad.rung + ')');
+  await page.screenshot({ path: path.join(out, 'ladder.png') });
+  await page.selectOption('#overlay [data-ladder-target]', '');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => document.querySelector('#overlay [data-ladder-rung="band"]').disabled && document.querySelector('#overlay .dialog-actions button[data-i="0"]').disabled), 'where it was found: no band, nothing to place into');
+  await page.click('#overlay .btn-primary');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => !Odd.app.ui.playing && !Odd.app.ui.ladder), 'closing the ladder stops it');
+
+  // who leads: each part's role in its section, and who fits to whom
+  await page.click('[data-act="tab"][data-tab="song"]').catch(() => {});
+  await page.evaluate(() => { const s = Odd.app.session(); Odd.app.ui.sectionId = s.sections.find((x) => x.name === 'Chorus').id; Odd.app.paint(['song']); });
+  await page.waitForTimeout(200);
+  const tags = await page.$$eval('.cell .box-tag', (els) => els.map((e) => e.dataset.box));
+  ok(tags.length >= 5 && tags.every((b) => ['hook', 'topline', 'groove', 'bed'].includes(b)), 'song sheet cells show their roles (' + [...new Set(tags)].join(', ') + ')');
+  ok(await page.evaluate(() => /\S/.test((document.querySelector('.sec-lead') || {}).textContent || '')), 'the section story says who leads');
+  await page.click('.sec-story [data-act="fit-open"]');
+  await page.waitForTimeout(300);
+  const fit0 = await page.evaluate(() => ({ nodes: document.querySelectorAll('#overlay .fit-node').length, lanes: Odd.relate.forSection(Odd.app.session(), Odd.app.selectedSection()).lanes.length, title: document.querySelector('#dlg-title').textContent }));
+  ok(fit0.nodes > 0 && fit0.nodes === fit0.lanes && /Chorus/.test(fit0.title), 'who leads draws every part heard (' + fit0.nodes + ')');
+  ok(await page.evaluate(() => document.querySelectorAll('#overlay .ribbon tbody tr').length > 0 && document.querySelectorAll('#overlay .ribbon thead th').length === Odd.app.session().arrangement.length + 1), 'the strip shows every section of the song');
+  await page.screenshot({ path: path.join(out, 'fit.png') });
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(500);
+  ok(await page.evaluate(() => Odd.transport.playing && Odd.app.isPlaying('section', Odd.app.ui.fit.sectionId)), 'space loops the section');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(400);
+  const fit1 = await page.evaluate(() => ({ id: Odd.app.ui.fit.sectionId, title: document.querySelector('#dlg-title').textContent, playing: Odd.app.isPlaying('section', Odd.app.ui.fit.sectionId) }));
+  ok(!/Chorus/.test(fit1.title) && fit1.playing, 'arrow keys step to another section and keep playing it (' + fit1.title + ')');
+  await page.click('#overlay .ribbon-sec:has-text("Chorus")');
+  await page.waitForTimeout(300);
+  const mutedName = await page.evaluate(() => document.querySelector('#overlay .fit-part:not(.is-muted) strong').textContent);
+  await page.click('#overlay .fit-part:not(.is-muted) [data-act="lane-mute"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate((n) => document.querySelectorAll('#overlay .fit-node').length === n - 1 && !!document.querySelector('#overlay .fit-part.is-muted'), fit0.nodes), 'muting a part takes it off the map (' + mutedName + ')');
+  await page.click('#overlay .fit-part.is-muted [data-act="lane-mute"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate((n) => document.querySelectorAll('#overlay .fit-node').length === n, fit0.nodes), 'unmuting brings it back');
+  await page.click('#overlay .btn-primary');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => !Odd.app.ui.fit && !document.querySelector('#overlay .fit')), 'done closes who leads');
+  await page.keyboard.press('Escape');
+  await page.click('[data-act="roles-toggle"]');
+  await page.waitForTimeout(200);
+  ok((await page.$$('.cell .box-tag')).length === 0, 'roles can be hidden');
+  await page.click('[data-act="roles-toggle"]');
+  await page.waitForTimeout(200);
+
   // reload keeps the work
   await page.evaluate(() => Odd.store.flush());
   const libBefore = await shelfCount();
+  const ideasBefore = await page.evaluate(() => Odd.app.ws.ideas.length);
   await page.reload();
   await page.waitForTimeout(600);
   ok((await shelfCount()) === libBefore, 'shelf survives reload');
+  ok((await page.evaluate(() => Odd.app.ws.ideas.length)) === ideasBefore, 'ideas survive reload');
 
   await page.screenshot({ path: path.join(out, 'flow-end.png') });
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');

@@ -5,7 +5,7 @@
  * - downloads: files go through the viewer's save prompt. Types the viewer does
  *   not accept (.mid, .wav) are delivered inside a .zip.
  * - db + user: the workspace syncs to the viewer's private store, one document
- *   per shelf part and per session, so work survives across devices.
+ *   per shelf part, per idea and per session, so work survives across devices.
  */
 (function (Odd) {
   'use strict';
@@ -96,6 +96,7 @@
     const libById = new Map(ws.library.map((p) => [p.id, p]));
     const docs = new Map();
     for (const p of ws.library) docs.set(p.id, partDoc(p));
+    for (const idea of ws.ideas || []) docs.set(idea.id, { kind: 'idea', created: idea.created || 0, body: idea });
     for (const s of ws.sessions) docs.set(s.id, { kind: 'session', created: s.created || 0, body: packSession(s, libById) });
     docs.set('meta', {
       kind: 'meta',
@@ -132,19 +133,23 @@
     const meta = docs.get('meta');
     if (!meta) return null;
     const library = [];
+    const ideas = [];
     const sessions = new Map();
     for (const [id, d] of docs) {
       if (!d || !d.body) continue;
       if (d.kind === 'part') library.push(JSON.parse(JSON.stringify(d.body)));
+      else if (d.kind === 'idea') ideas.push(JSON.parse(JSON.stringify(d.body)));
       else if (d.kind === 'session') sessions.set(id, JSON.parse(JSON.stringify(d.body)));
     }
     library.sort((a, b) => (b.created || 0) - (a.created || 0));
+    ideas.sort((a, b) => (b.created || 0) - (a.created || 0));
     const libById = new Map(library.map((p) => [p.id, p]));
     const ordered = (meta.sessions || []).map((id) => sessions.get(id)).filter(Boolean);
     for (const [id, s] of sessions) if (!(meta.sessions || []).includes(id)) ordered.push(s);
     const ws = Odd.model.migrate({
       version: meta.version || 1,
       library,
+      ideas,
       sessions: ordered.map((s) => unpackSession(s, libById)),
       currentId: meta.currentId,
       prefs: meta.prefs || {},

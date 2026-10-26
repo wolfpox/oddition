@@ -276,5 +276,172 @@
     ctx.stroke();
   }
 
-  Odd.roll = { draw, head, hit, roleColor, resetTokens, DRUM_ROWS };
+  /**
+   * An idea's glyph: one row per voice, drawn from its core alone. Pitched
+   * voices show their contour (each note a short dash at its height, joined
+   * by a thin line); drums show low, mid and high hits on three rows. Dot size
+   * is weight, a ring marks where the voice lands, and a voice shorter than
+   * the idea repeats faintly.
+   * opts: { idea, mute: [voice indices drawn dimmed] }
+   */
+  function glyph(canvas, opts) {
+    if (!canvas || !canvas.getContext) return;
+    const o = opts || {};
+    const idea = o.idea;
+    if (!idea) return;
+    const { w, h, dpr } = fit(canvas);
+    const ctx = canvas.getContext('2d');
+    const tk = tokens();
+    const length = Math.max(1, idea.bars) * T.BAR;
+    const mute = new Set(o.mute || []);
+    const rows = Math.max(1, idea.voices.length);
+    const rh = h / rows;
+    const padX = 6 * dpr;
+    const xOf = (t) => padX + (t / length) * (w - 2 * padX);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = tk.screen;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = tk.grid;
+    ctx.lineWidth = 1;
+    for (let b = 1; b < idea.bars; b++) {
+      const x = Math.round(xOf(b * T.BAR)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    const radius = [1.3, 2.1, 3.1].map((r) => r * dpr);
+    idea.voices.forEach((v, vi) => {
+      const c = v.core;
+      if (!c || !c.hits.length) return;
+      const top = vi * rh;
+      const pad = Math.min(6 * dpr, rh * 0.22);
+      const span = Math.max(1, rh - 2 * pad);
+      let yOf;
+      if (c.drum) yOf = (x) => top + pad + ((2 - x.h) / 2) * span;
+      else {
+        let lo = Infinity, hi = -Infinity;
+        for (const x of c.hits) { lo = Math.min(lo, x.h); hi = Math.max(hi, x.h); }
+        yOf = hi === lo ? () => top + rh / 2 : (x) => top + pad + ((hi - x.h) / (hi - lo)) * span;
+      }
+      const color = roleColor(v.role);
+      const dim = mute.has(vi) ? 0.25 : 1;
+      if (vi > 0) {
+        ctx.strokeStyle = tk.line;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(top) + 0.5); ctx.lineTo(w, Math.round(top) + 0.5); ctx.stroke();
+      }
+      const len = c.len || length;
+      for (let start = 0, pass = 0; start < length; start += len, pass++) {
+        const a = dim * (pass ? 0.4 : 1);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        if (!c.drum) {
+          // the line between notes
+          ctx.globalAlpha = a * 0.35;
+          ctx.lineWidth = Math.max(1, dpr);
+          ctx.beginPath();
+          c.hits.forEach((x, i) => {
+            const px = xOf(start + x.t), py = yOf(x);
+            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+            ctx.lineTo(Math.min(xOf(start + x.t + x.d), xOf(length)), py);
+          });
+          ctx.stroke();
+          // each note as a dash
+          ctx.globalAlpha = a * 0.8;
+          ctx.lineWidth = Math.max(1.5, 1.6 * dpr);
+          ctx.lineCap = 'round';
+          for (const x of c.hits) {
+            if (start + x.t >= length) continue;
+            const py = yOf(x);
+            ctx.beginPath();
+            ctx.moveTo(xOf(start + x.t), py);
+            ctx.lineTo(Math.min(xOf(start + x.t + x.d), xOf(length)), py);
+            ctx.stroke();
+          }
+          ctx.lineCap = 'butt';
+        }
+        ctx.globalAlpha = a * (c.drum ? 0.9 : 1);
+        for (const x of c.hits) {
+          if (start + x.t >= length) continue;
+          ctx.beginPath();
+          ctx.arc(xOf(start + x.t), yOf(x), radius[x.w] || radius[1], 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // where it lands
+        const land = c.hits[c.land];
+        if (!pass && land && c.hits.length > 1) {
+          ctx.globalAlpha = dim;
+          ctx.strokeStyle = tk.ink;
+          ctx.lineWidth = Math.max(1, 1.2 * dpr);
+          ctx.beginPath();
+          ctx.arc(xOf(land.t), yOf(land), 5 * dpr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  /**
+   * Several parts in one picture, one band per lane, each with its own pitch
+   * range (drums: the rows they use). For the ladder, where every step draws
+   * the same lanes so the eye can follow what each layer adds.
+   * opts: { length, lanes: [{ role, drums, events, dim }] }
+   */
+  function stack(canvas, opts) {
+    if (!canvas || !canvas.getContext) return;
+    const o = opts || {};
+    const { w, h, dpr } = fit(canvas);
+    const ctx = canvas.getContext('2d');
+    const tk = tokens();
+    const length = Math.max(T.BEAT, o.length || T.BAR);
+    const lanes = o.lanes || [];
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = tk.screen;
+    ctx.fillRect(0, 0, w, h);
+    const xOf = (t) => (t / length) * w;
+    ctx.strokeStyle = tk.grid;
+    ctx.lineWidth = 1;
+    for (let b = 1; b * T.BAR < length; b++) {
+      const x = Math.round(xOf(b * T.BAR)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    if (!lanes.length) return;
+    const bh = h / lanes.length;
+    lanes.forEach((lane, li) => {
+      const top = li * bh;
+      if (li) {
+        ctx.strokeStyle = tk.line;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(top) + 0.5); ctx.lineTo(w, Math.round(top) + 0.5); ctx.stroke();
+      }
+      const evs = lane.events || [];
+      if (!evs.length) return;
+      let rowOf, rows;
+      if (lane.drums) {
+        const used = [...new Set(evs.map((e) => (DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER)))].sort((a, b) => a - b);
+        rows = used.length;
+        rowOf = (p) => used.indexOf(DRUM_INDEX[p] != null ? DRUM_INDEX[p] : OTHER);
+      } else {
+        let lo = 127, hi = 0;
+        for (const e of evs) { lo = Math.min(lo, e.p); hi = Math.max(hi, e.p); }
+        if (hi - lo < 6) { const pad = Math.ceil((6 - (hi - lo)) / 2); lo -= pad; hi += pad; }
+        rows = hi - lo + 1;
+        rowOf = (p) => hi - p;
+      }
+      const pad = Math.min(3 * dpr, bh * 0.1);
+      const rh = (bh - 2 * pad) / Math.max(1, rows);
+      const nh = Math.max(1, Math.min(rh - (rh > 3 ? 0.5 * dpr : 0), 6 * dpr));
+      ctx.fillStyle = roleColor(lane.role);
+      for (const e of evs) {
+        const r = rowOf(e.p);
+        if (r < 0) continue;
+        const x = xOf(e.t);
+        const nw = lane.drums ? Math.max(1.5 * dpr, Math.min(xOf(e.t + T.STEP) - x, 5 * dpr)) : Math.max(1.5 * dpr, xOf(e.t + e.d) - x - 0.5 * dpr);
+        ctx.globalAlpha = (lane.dim ? 0.35 : 1) * (0.4 + 0.6 * Math.min(1, (e.v || 100) / 127));
+        ctx.fillRect(x, top + pad + r * rh + (rh - nh) / 2, nw, nh);
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  Odd.roll = { draw, glyph, stack, head, hit, roleColor, resetTokens, DRUM_ROWS };
 })(globalThis.Odd = globalThis.Odd || {});

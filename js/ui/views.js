@@ -8,10 +8,10 @@
   const icon = (n, c) => Odd.icon(n, c);
 
   let rollSeq = 0;
-  function rollSlot(rolls, opts, cls) {
+  function rollSlot(rolls, opts, cls, style) {
     const id = 'roll-' + (++rollSeq);
     rolls.push({ id, opts });
-    return '<canvas class="' + (cls || 'mini-roll') + '" id="' + id + '" aria-hidden="true"></canvas>';
+    return '<canvas class="' + (cls || 'mini-roll') + '" id="' + id + '" aria-hidden="true"' + (style ? ' style="' + style + '"' : '') + '></canvas>';
   }
 
   function roleLabel(role) { return Odd.model.roleInfo(role).label; }
@@ -283,6 +283,7 @@
         '<label class="toggle"><input type="checkbox" id="b-context" data-change="booth-context"' + (b.context ? ' checked' : '') + '><span>Play with the section</span></label>' +
         '<label class="toggle" title="New takes hear the parts already in the section: bass locks to the kick, busy sections get sparser takes, crowded octaves are avoided, the arp leaves room for the lead"><input type="checkbox" id="b-listen" data-change="booth-listen"' + (b.listen ? ' checked' : '') + '><span>Listen to the section</span></label>' +
         '<label class="inline-fld"><span class="sr-only">Length</span><select id="b-bars" data-change="booth-bars">' + barsOpts + '</select></label>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-act="capture-idea"' + (take ? '' : ' disabled') + ' title="Save the rhythm and shape of this take as an idea, with any parts you hear it with (I)">' + icon('idea', 'ico-sm') + '<span>Capture idea</span><kbd>I</kbd></button>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-act="take-midi"' + (take ? '' : ' disabled') + ' title="Download this take as a MIDI file">' + icon('download', 'ico-sm') + '<span>.mid</span></button>' +
       '</div>' +
       '<div class="params">' + params +
@@ -310,67 +311,368 @@
 
   // ======================= shelf =======================
   function shelf(app) {
-    const s = app.session();
     const f = app.ui.shelf;
+    const ideasView = f.view === 'ideas';
     const rolls = [];
-    const all = app.ws.library;
+    const ideas = app.ws.ideas || [];
+    const all = ideasView ? ideas : app.ws.library;
     const counts = {};
-    for (const p of all) counts[p.role] = (counts[p.role] || 0) + 1;
-    const parts = app.shelfParts();
+    if (ideasView) for (const idea of ideas) for (const r of new Set(idea.voices.map((v) => v.role))) counts[r] = (counts[r] || 0) + 1;
+    else for (const p of all) counts[p.role] = (counts[p.role] || 0) + 1;
 
     const chips = ['all'].concat(Odd.gen.ROLES).map((r) =>
       '<button type="button" class="chip' + (f.role === r ? ' is-active' : '') + '" data-act="shelf-role" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' +
       (r === 'all' ? 'All' : '<span class="dot" data-role="' + r + '"></span>' + esc(roleLabel(r))) +
       '<span class="chip-n">' + (r === 'all' ? all.length : counts[r] || 0) + '</span></button>').join('');
 
-    const sel = app.selectedSlot();
-    const cards = parts.map((p) => {
-      const used = Odd.model.usageCount(app.ws, p.id);
-      const len = p.bars * T.BAR;
-      const evs = R.partEvents(p, { tonic: s.tonic, scale: s.scale, prog: p.ctx.prog, length: len });
-      const playing = app.isPlaying('preview', p.id);
-      return '<li class="card" data-part="' + p.id + '" data-role="' + p.role + '" draggable="true">' +
-        '<div class="card-top">' + tag(p.role) +
-          '<span class="card-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
-          '<button type="button" class="icon-btn icon-btn-sm star' + (p.starred ? ' is-on' : '') + '" data-act="part-star" data-id="' + p.id + '" aria-pressed="' + !!p.starred + '" aria-label="Favourite">' + icon(p.starred ? 'starFill' : 'star') + '</button>' +
-        '</div>' +
-        rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(p.role), role: p.role, mini: true }) +
-        '<div class="card-bottom">' +
-          '<span class="card-meta">' + p.bars + (p.bars === 1 ? ' bar' : ' bars') + ' · ' + esc(Odd.model.styleOf(p.style).label) + (used ? ' · in ' + used + (used === 1 ? ' slot' : ' slots') : '') + '</span>' +
-          '<span class="card-actions">' +
-            '<button type="button" class="icon-btn icon-btn-sm' + (playing ? ' is-playing' : '') + '" data-act="part-preview" data-id="' + p.id + '" data-play-key="preview:' + p.id + '" aria-label="Preview in ' + esc(app.boothSection().name) + '" title="Preview in ' + esc(app.boothSection().name) + '"><span class="when-stopped">' + icon('play') + '</span><span class="when-playing">' + icon('stop') + '</span></button>' +
-            '<button type="button" class="btn btn-ghost btn-sm" data-act="part-place" data-id="' + p.id + '" title="Put it in ' + esc(sel.section.name) + '">Place</button>' +
-            '<button type="button" class="icon-btn icon-btn-sm" data-act="part-menu" data-id="' + p.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More">' + icon('dots') + '</button>' +
-          '</span>' +
-        '</div>' +
-      '</li>';
-    }).join('');
-
-    let empty = '';
-    if (!all.length) {
-      empty = '<div class="empty"><p class="empty-title">The shelf is empty</p><p>Parts you keep in the booth land here. Press <kbd>K</kbd> on a take you like.</p></div>';
-    } else if (!parts.length) {
-      empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+    let list, empty = '';
+    if (ideasView) {
+      const shown = app.shelfIdeas();
+      list = '<ul class="cards idea-cards">' + shown.map((idea) => ideaCard(app, idea, rolls)).join('') + '</ul>';
+      if (!ideas.length) {
+        empty = '<div class="empty"><p class="empty-title">No ideas yet</p><p>An idea is the rhythm and shape of a part, or of parts heard together, kept apart from key, chords and sound. Press <kbd>I</kbd> in the booth to capture one, or use <strong>Capture an idea</strong> on a section or a shelf part.</p></div>';
+      } else if (!shown.length) {
+        empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+      }
+    } else {
+      const parts = app.shelfParts();
+      list = '<ul class="cards">' + parts.map((p) => partCard(app, p, rolls)).join('') + '</ul>';
+      if (!all.length) {
+        empty = '<div class="empty"><p class="empty-title">The shelf is empty</p><p>Parts you keep in the booth land here. Press <kbd>K</kbd> on a take you like.</p></div>';
+      } else if (!parts.length) {
+        empty = '<div class="empty"><p class="empty-title">Nothing matches</p><p>Try another stem or clear the search.</p></div>';
+      }
     }
 
     const sorts = [['new', 'Newest'], ['old', 'Oldest'], ['name', 'Name'], ['role', 'Stem']].map(([v, l]) =>
       '<option value="' + v + '"' + (f.sort === v ? ' selected' : '') + '>' + l + '</option>').join('');
+    const seg = (v, label, n) => '<button type="button" class="seg-btn' + ((v === 'ideas') === ideasView ? ' is-active' : '') + '" data-act="shelf-view" data-view="' + v + '" aria-pressed="' + ((v === 'ideas') === ideasView) + '">' + label + ' <span class="chip-n">' + n + '</span></button>';
 
     const html =
       '<div class="panel-head">' +
-        '<h2 class="panel-title">' + icon('shelf', 'ico-title') + 'Shelf <span class="count mono">' + all.length + '</span></h2>' +
+        '<h2 class="panel-title">' + icon('shelf', 'ico-title') + 'Shelf</h2>' +
+        '<div class="seg" role="group" aria-label="Show">' + seg('parts', 'Parts', app.ws.library.length) + seg('ideas', 'Ideas', ideas.length) + '</div>' +
         '<div class="panel-tools">' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="import-midi" title="Add a MIDI file to the shelf">' + icon('upload', 'ico-sm') + '<span>Import MIDI</span></button>' +
+          (ideasView ? '' : '<button type="button" class="btn btn-ghost btn-sm" data-act="import-midi" title="Add a MIDI file to the shelf">' + icon('upload', 'ico-sm') + '<span>Import MIDI</span></button>') +
         '</div>' +
       '</div>' +
       '<div class="chips" role="toolbar" aria-label="Filter by stem">' + chips + '</div>' +
       '<div class="shelf-tools">' +
-        '<input type="search" id="shelf-q" data-input="shelf-query" placeholder="Find a part by name" value="' + esc(f.query) + '" aria-label="Find a part">' +
+        '<input type="search" id="shelf-q" data-input="shelf-query" placeholder="' + (ideasView ? 'Find an idea by name' : 'Find a part by name') + '" value="' + esc(f.query) + '" aria-label="' + (ideasView ? 'Find an idea' : 'Find a part') + '">' +
         '<button type="button" class="icon-btn star' + (f.starred ? ' is-on' : '') + '" data-act="shelf-starred" aria-pressed="' + !!f.starred + '" aria-label="Only favourites" title="Only favourites">' + icon(f.starred ? 'starFill' : 'star') + '</button>' +
         '<select id="shelf-sort" data-change="shelf-sort" aria-label="Sort">' + sorts + '</select>' +
       '</div>' +
-      (empty || '<ul class="cards">' + cards + '</ul>');
+      (empty || list);
     return { html, rolls };
+  }
+
+  function partCard(app, p, rolls) {
+    const s = app.session();
+    const sel = app.selectedSlot();
+    const used = Odd.model.usageCount(app.ws, p.id);
+    const len = p.bars * T.BAR;
+    const evs = R.partEvents(p, { tonic: s.tonic, scale: s.scale, prog: p.ctx.prog, length: len });
+    const playing = app.isPlaying('preview', p.id);
+    return '<li class="card" data-part="' + p.id + '" data-role="' + p.role + '" draggable="true">' +
+      '<div class="card-top">' + tag(p.role) +
+        '<span class="card-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
+        '<button type="button" class="icon-btn icon-btn-sm star' + (p.starred ? ' is-on' : '') + '" data-act="part-star" data-id="' + p.id + '" aria-pressed="' + !!p.starred + '" aria-label="Favourite">' + icon(p.starred ? 'starFill' : 'star') + '</button>' +
+      '</div>' +
+      rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(p.role), role: p.role, mini: true }) +
+      '<div class="card-bottom">' +
+        '<span class="card-meta">' + p.bars + (p.bars === 1 ? ' bar' : ' bars') + ' · ' + esc(Odd.model.styleOf(p.style).label) + (used ? ' · in ' + used + (used === 1 ? ' slot' : ' slots') : '') + '</span>' +
+        '<span class="card-actions">' +
+          '<button type="button" class="icon-btn icon-btn-sm' + (playing ? ' is-playing' : '') + '" data-act="part-preview" data-id="' + p.id + '" data-play-key="preview:' + p.id + '" aria-label="Preview in ' + esc(app.boothSection().name) + '" title="Preview in ' + esc(app.boothSection().name) + '"><span class="when-stopped">' + icon('play') + '</span><span class="when-playing">' + icon('stop') + '</span></button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="part-place" data-id="' + p.id + '" title="Put it in ' + esc(sel.section.name) + '">Place</button>' +
+          '<button type="button" class="icon-btn icon-btn-sm" data-act="part-menu" data-id="' + p.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More">' + icon('dots') + '</button>' +
+        '</span>' +
+      '</div>' +
+    '</li>';
+  }
+
+  /**
+   * An idea: its voices drawn from their cores, each voice in words, and two
+   * ways to hear it: the bones (the core alone, plain sounds, no chords or
+   * feel) and in full (the parts as they were found). A voice can be left
+   * out of playback by clicking it.
+   */
+  function ideaCard(app, idea, rolls) {
+    const sel = app.selectedSlot();
+    const mute = app.ideaMute(idea.id);
+    const n = idea.voices.length;
+    const voices = idea.voices.map((v, i) => {
+      const off = mute.includes(i);
+      return '<li class="voice' + (off ? ' is-off' : '') + '" data-role="' + v.role + '">' +
+        '<button type="button" class="voice-btn" data-act="idea-voice" data-id="' + idea.id + '" data-index="' + i + '" aria-pressed="' + !off + '" title="' + esc((off ? 'Bring back ' : 'Leave out ') + v.name + ' when this idea plays') + '">' +
+          tag(v.role) + '<span class="voice-name">' + esc(v.name) + '</span></button>' +
+        '<span class="voice-desc">' + esc(Odd.idea.describe(v)) + '</span>' +
+      '</li>';
+    }).join('');
+    const playBtn = (kind, label, title) => {
+      const on = app.isPlaying(kind, idea.id);
+      return '<button type="button" class="btn btn-ghost btn-sm play-chip' + (on ? ' is-playing' : '') + '" data-act="idea-play" data-kind="' + kind + '" data-id="' + idea.id + '" data-play-key="' + kind + ':' + idea.id + '" title="' + esc(title) + '">' +
+        '<span class="when-stopped">' + icon('play', 'ico-xs') + '</span><span class="when-playing">' + icon('stop', 'ico-xs') + '</span>' + label + '</button>';
+    };
+    const style = idea.style ? ' · ' + esc(Odd.model.styleOf(idea.style).label) : '';
+    return '<li class="card idea-card" data-idea="' + idea.id + '" data-role="' + idea.voices[0].role + '">' +
+      '<div class="card-top">' +
+        '<span class="card-name" title="' + esc(idea.name) + '">' + esc(idea.name) + '</span>' +
+        '<button type="button" class="icon-btn icon-btn-sm star' + (idea.starred ? ' is-on' : '') + '" data-act="idea-star" data-id="' + idea.id + '" aria-pressed="' + !!idea.starred + '" aria-label="Favourite">' + icon(idea.starred ? 'starFill' : 'star') + '</button>' +
+      '</div>' +
+      rollSlot(rolls, { glyph: true, idea, mute }, 'idea-glyph', 'height:' + (12 + 22 * n) + 'px') +
+      '<ul class="voices">' + voices + '</ul>' +
+      '<div class="card-bottom">' +
+        '<span class="card-meta">' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars') + ' · ' + n + (n === 1 ? ' voice' : ' voices') + style + '</span>' +
+        '<span class="card-actions">' +
+          playBtn('bones', 'Bones', 'Hear only the rhythm and shape: plain sounds, no chords, no swing') +
+          playBtn('idea', 'Full', 'Hear the parts as they were found') +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="idea-ladder" data-id="' + idea.id + '" title="Hear it step by step, from the bare rhythm up to a full mix in a section">' + icon('ladder', 'ico-xs') + 'Ladder</button>' +
+          '<button type="button" class="icon-btn icon-btn-sm" data-act="idea-menu" data-id="' + idea.id + '" aria-haspopup="menu" aria-expanded="false" aria-label="More" title="Place in ' + esc(sel.section.name) + ', split, join…">' + icon('dots') + '</button>' +
+        '</span>' +
+      '</div>' +
+    '</li>';
+  }
+
+  // ======================= ladder =======================
+  /** the ladder dialog's body: a target, the voices, and one row per step with its picture */
+  function ladder(app) {
+    const d = app.ladderData();
+    if (!d) return { html: '', rolls: [] };
+    const rolls = [];
+    const playing = app.isPlaying('ladder');
+    const targets = '<option value=""' + (d.sec ? '' : ' selected') + '>Where it was found (its own chords)</option>' +
+      d.sections.map((x) => '<option value="' + x.id + '"' + (d.sec && d.sec.id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('');
+    const voices = d.idea.voices.length > 1
+      ? '<span class="ladder-voices" title="Click a voice to leave it out">' + d.idea.voices.map((v, i) => {
+        const off = d.mute.includes(i);
+        return '<button type="button" class="chip' + (off ? ' is-off' : ' is-active') + '" data-ladder-voice="' + i + '" aria-pressed="' + !off + '"><span class="dot" data-role="' + v.role + '"></span>' + esc(v.name) + '</button>';
+      }).join('') + '</span>'
+      : '';
+    let rows = '';
+    let group = null;
+    d.rungs.forEach((r, i) => {
+      if (r.group !== group) {
+        group = r.group;
+        const head = group === 'idea' ? 'The idea on its own' : d.sec ? 'Fitting into ' + esc(d.sec.name) : 'Fitting in';
+        rows += '<li class="rung-group">' + head + '</li>';
+      }
+      const cur = r.id === d.rung;
+      const lanes = r.lanes.length;
+      rows += '<li class="rung' + (cur ? ' is-current' : '') + (cur && playing ? ' is-live' : '') + (r.disabled ? ' is-disabled' : '') + '">' +
+        '<button type="button" class="rung-btn" data-ladder-rung="' + r.id + '" aria-pressed="' + cur + '"' + (r.disabled ? ' disabled' : '') +
+          ' aria-label="' + esc((i + 1) + '. ' + r.label + ': ' + r.text) + '">' +
+          '<span class="rung-no mono">' + (i + 1) + '</span>' +
+          '<span class="rung-text"><strong>' + esc(r.label) + '</strong><small>' + esc(r.text) + '</small></span>' +
+          '<span class="rung-count mono">' + (r.disabled ? '' : r.count + (r.count === 1 ? ' note' : ' notes')) + '</span>' +
+          '<span class="rung-play" aria-hidden="true">' + (r.disabled ? '' : icon(cur && playing ? 'stop' : 'play', 'ico-sm')) + '</span>' +
+        '</button>' +
+        (r.disabled ? '' : rollSlot(rolls, { stack: true, length: d.length, lanes: r.lanes }, 'rung-roll', 'height:' + Math.max(30, Math.min(96, 14 * lanes + 10)) + 'px')) +
+      '</li>';
+    });
+    const html =
+      '<div class="ladder-tools">' +
+        '<label class="inline-fld"><span>Fit into</span><select data-ladder-target aria-label="Section to fit the idea into">' + targets + '</select></label>' +
+        voices +
+      '</div>' +
+      '<ol class="rungs">' + rows + '</ol>' +
+      '<p class="help">Click a step to hear it loop. While it plays, click another step or press <kbd>↑</kbd> <kbd>↓</kbd>: the music changes on the spot, so you hear exactly what each layer adds. <kbd>Space</kbd> plays or stops.</p>';
+    return { html, rolls };
+  }
+
+  // ======================= who leads =======================
+
+  function boxTag(box, cls) {
+    const b = Odd.relate.BOXES[box];
+    if (!b) return '';
+    return '<span class="box-tag' + (cls ? ' ' + cls : '') + '" data-box="' + box + '" title="' + esc(b.label + ': ' + b.blurb) + '">' + esc(b.label) + '</span>';
+  }
+
+  /** names as "A", "A and B", "A, B and C" */
+  function listNames(names) {
+    if (names.length < 2) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  /** one sentence: who leads this section, and how */
+  function fitHeadline(res) {
+    if (!res || !res.lanes.length) return '';
+    const V = Odd.relate.verb;
+    const many = (list, one, more) => (list.length > 1 || V(list[0], false, true) ? more : one);
+    const top = res.lanes.find((l) => l.id === res.top);
+    const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
+    const shaped = (id) => [...new Set(res.links.filter((k) => k.to === id || (k.mutual && k.from === id)).map((k) => nameOf(k.to === id ? k.from : k.to)))];
+    if (res.lanes.length === 1) return top.name + V(top.name, ' plays', ' play') + ' alone.';
+    if (top.box === 'hook') {
+      const f = shaped(top.id);
+      if (!f.length) return top.name + V(top.name, ' leads: it stands out and steers.', ' lead: they stand out and steer.');
+      return top.name + V(top.name, ' leads: it stands out, and ', ' lead: they stand out, and ') + listNames(f) + many(f, ' is', ' are') + ' built around ' + V(top.name, 'it', 'them') + '.';
+    }
+    const groove = res.lanes.filter((l) => l.box === 'groove' && l.id !== top.id).sort((a, b) => b.authority - a.authority)[0];
+    if (top.box === 'topline') {
+      const g = groove ? shaped(groove.id) : [];
+      return top.name + V(top.name, ' is out front, fitting itself over the others.', ' are out front, fitting themselves over the others.') +
+        (groove ? ' ' + groove.name + V(groove.name, ' steers', ' steer') + ' underneath' + (g.length ? ': ' + listNames(g) + many(g, ' locks', ' lock') + ' to ' + V(groove.name, 'it', 'them') : '') + '.' : '');
+    }
+    if (top.box === 'groove') {
+      const g = shaped(top.id);
+      return 'Nothing stands out. ' + top.name + V(top.name, ' steers', ' steer') + ' from underneath' + (g.length ? ': ' + listNames(g) + many(g, ' locks', ' lock') + ' to ' + V(top.name, 'it', 'them') : '') + '.';
+    }
+    return 'No part takes the lead: everything sits back together.';
+  }
+
+  const LINK_DASH = { lock: '', pair: '', avoid: '5 4', clear: '1.5 4', answer: '2 3', trade: '2 3' };
+
+  /** the plane: stands out (up) against steers others (right), with who fits to whom */
+  function fitPlane(res) {
+    const X = Odd.relate;
+    const W = 640, H = 330, MX = W / 2, MY = H / 2;
+    const rect = (stands, steers) => ({
+      x0: (steers ? MX : 0) + 26, x1: (steers ? W : MX) - 26,
+      y0: (stands ? 0 : MY) + 58, y1: (stands ? MY : H) - 16,
+    });
+    const nodes = res.lanes.map((l) => {
+      const r = rect(l.stands, l.steers);
+      const fx = l.steers ? (l.authority - X.STEER) / (1 - X.STEER) : l.authority / X.STEER;
+      const fy = l.stands ? (l.rel - X.STAND) / (1 - X.STAND) : l.rel / X.STAND;
+      return { l, r, x: r.x0 + Math.max(0, Math.min(1, fx)) * (r.x1 - r.x0), y: r.y1 - Math.max(0, Math.min(1, fy)) * (r.y1 - r.y0), w: 26 + 7.2 * l.name.length };
+    });
+    // keep labels apart: push overlapping nodes apart, inside their own box
+    for (let it = 0; it < 60; it++) {
+      let moved = false;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const needX = (a.w + b.w) / 2, needY = 26;
+          if (Math.abs(dx) >= needX || Math.abs(dy) >= needY) continue;
+          const push = (needY - Math.abs(dy)) / 2 + 0.5;
+          const dir = dy === 0 ? (i % 2 ? 1 : -1) : Math.sign(dy);
+          a.y -= dir * push; b.y += dir * push;
+          moved = true;
+        }
+      }
+      for (const n of nodes) {
+        n.y = Math.max(n.r.y0, Math.min(n.r.y1, n.y));
+        n.x = Math.max(n.r.x0, Math.min(n.r.x1, n.x));
+      }
+      if (!moved) break;
+    }
+    const at = new Map(nodes.map((n) => [n.l.id, n]));
+    const quad = (box, x, y, anchor) => {
+      const b = X.BOXES[box];
+      return '<g class="fit-quad" data-box="' + box + '"><text x="' + x + '" y="' + y + '" text-anchor="' + anchor + '" class="fit-quad-name">' + esc(b.label) + '</text>' +
+        '<text x="' + x + '" y="' + (y + 15) + '" text-anchor="' + anchor + '" class="fit-quad-blurb">' + esc(b.blurb) + '</text></g>';
+    };
+    let svg = '<svg class="fit-plane" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Where each part sits: standing out against steering the others">' +
+      '<defs>' +
+        '<marker id="fit-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" class="fit-arr-head"/></marker>' +
+        '<marker id="fit-arr-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" class="fit-arr-head is-logged"/></marker>' +
+      '</defs>' +
+      '<rect class="fit-q fit-q-hook" x="' + MX + '" y="0" width="' + MX + '" height="' + MY + '"/>' +
+      '<rect class="fit-q fit-q-groove" x="' + MX + '" y="' + MY + '" width="' + MX + '" height="' + MY + '"/>' +
+      '<line class="fit-axis" x1="' + MX + '" y1="0" x2="' + MX + '" y2="' + H + '"/>' +
+      '<line class="fit-axis" x1="0" y1="' + MY + '" x2="' + W + '" y2="' + MY + '"/>' +
+      quad('topline', 12, 20, 'start') + quad('hook', W - 12, 20, 'end') + quad('bed', 12, MY + 20, 'start') + quad('groove', W - 12, MY + 20, 'end');
+    // links under the nodes
+    for (const k of res.links) {
+      const a = at.get(k.from), b = at.get(k.to);
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const gap = 13;
+      const x1 = a.x + ux * gap, y1 = a.y + uy * gap, x2 = b.x - ux * gap, y2 = b.y - uy * gap;
+      const bend = Math.min(40, len * 0.18);
+      const cx = (x1 + x2) / 2 - uy * bend, cy = (y1 + y2) / 2 + ux * bend;
+      const mk = k.logged ? 'url(#fit-arr-ink)' : 'url(#fit-arr)';
+      const dash = LINK_DASH[k.kind] || '';
+      svg += '<path class="fit-link' + (k.logged ? ' is-logged' : '') + '" data-kind="' + k.kind + '" d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' Q' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '"' +
+        ' style="stroke-width:' + (1.2 + 1.6 * k.strength).toFixed(2) + '"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') +
+        ' marker-end="' + mk + '"' + (k.mutual ? ' marker-start="' + mk + '"' : '') + '><title>' + esc(k.text + (k.detail ? '. ' + k.detail : '')) + '</title></path>';
+    }
+    for (const n of nodes) {
+      const left = n.x + n.w > W - 8;
+      svg += '<g class="fit-node" data-role="' + n.l.role + '"><title>' + esc(n.l.name + (n.l.part ? ' (' + n.l.part + ')' : '') + ' · ' + X.BOXES[n.l.box].label + '. ' + n.l.why.join('. ')) + '</title>' +
+        '<circle cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="8"/>' +
+        '<text x="' + (left ? n.x - 14 : n.x + 14).toFixed(1) + '" y="' + (n.y + 4).toFixed(1) + '" text-anchor="' + (left ? 'end' : 'start') + '">' + esc(n.l.name) + '</text></g>';
+    }
+    return svg + '</svg>';
+  }
+
+  /** the dialog body: app.ui.fit = { sectionId } */
+  function fit(app) {
+    const X = Odd.relate;
+    const s = app.session();
+    const st = app.ui.fit;
+    const sec = st && Odd.model.findSection(s, st.sectionId);
+    if (!sec) return { html: '', rolls: [] };
+    const song = X.song(s);
+    const res = song.find((e) => e.section.id === sec.id) ? song.find((e) => e.section.id === sec.id).fit : X.forSection(s, sec);
+    const order = app.fitOrder();
+    const at = order.findIndex((x) => x.id === sec.id);
+    const opts = order.map((x) => '<option value="' + x.id + '"' + (x.id === sec.id ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('');
+    const tools =
+      '<div class="fit-tools">' +
+        '<button type="button" class="icon-btn icon-btn-sm" data-fit-step="-1" aria-label="Previous section"' + (at > 0 ? '' : ' disabled') + '>' + icon('back') + '</button>' +
+        '<select data-fit-section aria-label="Section">' + opts + '</select>' +
+        '<button type="button" class="icon-btn icon-btn-sm" data-fit-step="1" aria-label="Next section"' + (at < order.length - 1 ? '' : ' disabled') + '>' + icon('fwd') + '</button>' +
+        '<button type="button" class="btn btn-sm btn-ghost" data-act="play-section" data-section="' + sec.id + '" data-play-key="section:' + sec.id + '"><span class="when-stopped">' + icon('play', 'ico-sm') + '</span><span class="when-playing">' + icon('stop', 'ico-sm') + '</span><span>Loop ' + esc(sec.name) + '</span></button>' +
+      '</div>';
+
+    if (!res.lanes.length) {
+      const muted = s.lanes.filter((ln) => (ln.mute || ln.solo) && sec.slots[ln.id] && sec.slots[ln.id].part);
+      return { html: tools + '<div class="empty"><p class="empty-title">Nothing plays in ' + esc(sec.name) + '</p><p>' + (muted.length ? 'Its lanes are muted, or another lane is soloed. Unmute them on the song sheet to see how they fit.' : 'Put some parts in it to see how they fit.') + '</p></div>', rolls: [] };
+    }
+
+    const nameOf = (id) => { const l = res.lanes.find((x) => x.id === id); return l ? l.name : ''; };
+    const sample = (k) => '<svg class="fit-sample" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5 L24 5" class="fit-link' + (k.logged ? ' is-logged' : '') + '"' + (LINK_DASH[k.kind] ? ' stroke-dasharray="' + LINK_DASH[k.kind] + '"' : '') + ' marker-end="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' + (k.mutual ? ' marker-start="url(#fit-arr' + (k.logged ? '-ink' : '') + ')"' : '') + '/></svg>';
+    let links = res.links.map((k) => '<li>' + sample(k) + '<span><strong>' + esc(k.text) + '</strong>' + (k.detail ? '<small>' + esc(k.detail) + '</small>' : '') + '</span></li>').join('');
+    if (res.harmony.follow.length) {
+      const fl = res.harmony.follow.map(nameOf);
+      links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(fl)) + (fl.length > 1 || Odd.relate.verb(fl[0], false, true) ? ' follow' : ' follows') + ' the chords</strong><small>' + esc(chordShown(app, s, sec)) + '. The chords steer every part that fits to them.</small></span></li>';
+    }
+    if (res.harmony.own.length) {
+      links += '<li><span class="fit-sample fit-chords" aria-hidden="true">' + icon('song', 'ico-xs') + '</span><span><strong>' + esc(listNames(res.harmony.own.map(nameOf))) + ' ' + (res.harmony.own.length > 1 || Odd.relate.verb(nameOf(res.harmony.own[0]), false, true) ? 'keep their' : 'keeps its') + ' own harmony</strong><small>Fit is off, so the section\'s chords don\'t bend it.</small></span></li>';
+    }
+    if (!res.links.length) links = '<li class="fit-none"><span>No part follows another part\'s rhythm here: they line up only on the beat.</span></li>' + links;
+
+    const parts = res.lanes.slice().sort((a, b) => X.BOX_ORDER.indexOf(a.box) - X.BOX_ORDER.indexOf(b.box) || b.rel - a.rel).map((l) =>
+      '<li class="fit-part" data-role="' + l.role + '"><span class="dot"></span><strong>' + esc(l.name) + '</strong>' + boxTag(l.box) +
+      '<button type="button" class="ms" data-act="lane-mute" data-lane="' + l.id + '" aria-pressed="false" title="Mute ' + esc(l.name) + ' to hear who takes over">M</button>' +
+      '<small>' + esc(l.why.join(' · ')) + (l.notes.length ? ' · ' + esc(l.notes.join(' · ').toLowerCase()) : '') + '</small></li>').join('') +
+      s.lanes.filter((ln) => ln.mute && sec.slots[ln.id] && sec.slots[ln.id].part).map((ln) =>
+        '<li class="fit-part is-muted" data-role="' + ln.role + '"><span class="dot"></span><strong>' + esc(ln.name) + '</strong><span class="box-tag" data-box="none">Muted</span>' +
+        '<button type="button" class="ms is-on" data-act="lane-mute" data-lane="' + ln.id + '" aria-pressed="true" title="Unmute ' + esc(ln.name) + '">M</button></li>').join('');
+
+    // across the song: every lane's box in each section of the song order
+    const used = s.lanes.filter((ln) => song.some((e) => e.fit.lanes.some((x) => x.id === ln.id)));
+    let ribbon = '';
+    if (song.length > 1 && used.length) {
+      ribbon = '<div class="ribbon-wrap"><table class="ribbon"><thead><tr><th scope="col"><span class="sr-only">Lane</span></th>' +
+        song.map((e) => '<th scope="col"' + (e.section.id === sec.id ? ' class="is-current"' : '') + '><button type="button" class="ribbon-sec" data-fit-pick="' + e.section.id + '" style="--sec-hue:' + sectionHue(s, e.section.id) + '" title="' + esc(e.section.name + ': ' + fitHeadline(e.fit)) + '">' + esc(e.section.name) + '</button></th>').join('') +
+        '</tr></thead><tbody>' +
+        used.map((ln) => '<tr data-role="' + ln.role + '"><th scope="row"><span class="dot"></span>' + esc(ln.name) + '</th>' +
+          song.map((e) => {
+            const l = e.fit.lanes.find((x) => x.id === ln.id);
+            return '<td' + (e.section.id === sec.id ? ' class="is-current"' : '') + '>' + (l ? boxTag(l.box, 'box-tag-sm') : '<span class="ribbon-gap" title="Not playing">·</span>') + '</td>';
+          }).join('') + '</tr>').join('') +
+        '</tbody></table></div>';
+    }
+
+    const html = tools +
+      '<p class="fit-headline">' + esc(fitHeadline(res)) + '</p>' +
+      '<div class="fit-map-scroll"><div class="fit-map">' +
+        '<span class="fit-y fit-y-up" aria-hidden="true">Stands out</span><span class="fit-y fit-y-down" aria-hidden="true">Sits back</span>' +
+        fitPlane(res) +
+        '<span class="fit-x" aria-hidden="true"><span>← Fits to others</span><span>Steers others →</span></span>' +
+      '</div></div>' +
+      '<div class="fit-cols">' +
+        '<section><h3 class="eyebrow">Who fits to whom</h3><ul class="fit-links">' + links + '</ul></section>' +
+        '<section><h3 class="eyebrow">Each part</h3><ul class="fit-parts">' + parts + '</ul></section>' +
+      '</div>' +
+      (ribbon ? '<section><h3 class="eyebrow">Across the song</h3>' + ribbon + '</section>' : '') +
+      '<p class="help">Arrows point from a part to the part it fits to. Solid: locks to its rhythm. Dashed: plays between its hits. Dotted: answers in its gaps or clears room for it. Bold arrows were heard when the take was made; the others are measured from the notes. Mute a lane to see who takes over.</p>';
+    return { html, rolls: [] };
   }
 
   // ======================= song =======================
@@ -414,6 +716,15 @@
 
     // material that recurs across sections gets a letter
     const themes = Odd.model.themes ? Odd.model.themes(s) : new Map();
+
+    // each part's role in its section: hook, topline, groove or bed
+    const showRoles = !!Odd.relate && app.ws.prefs.roles !== false;
+    const fits = new Map();
+    const fitOf = (sec) => {
+      if (!Odd.relate) return null;
+      if (!fits.has(sec.id)) fits.set(sec.id, Odd.relate.forSection(s, sec));
+      return fits.get(sec.id);
+    };
 
     // grid
     const cols = s.sections.length;
@@ -467,11 +778,13 @@
           const th = slot.sourceId ? themes.get(slot.sourceId) : null;
           const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
           const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
-          inner = '<span class="cell-name">' +
+          const fl = showRoles ? fitOf(sec).lanes.find((x) => x.id === lane.id) : null;
+          inner = '<span class="cell-head"><span class="cell-name">' +
               (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
               esc(slot.part.name) +
               (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
+            (fl ? boxTag(fl.box, 'box-tag-sm') : '') + '</span>' +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
         } else {
@@ -513,6 +826,7 @@
         '<span class="song-stats mono">' + bars + ' bars · ' + fmtTime(Odd.model.songSeconds(s)) + '</span>' +
         '<div class="panel-tools">' +
           '<button type="button" class="btn btn-sm btn-ghost chord-mode" data-act="chord-mode" aria-pressed="' + !!app.ws.prefs.chordNames + '" title="Show chords as ' + (app.ws.prefs.chordNames ? 'roman numerals (i VI III VII)' : 'chord names (Am F C G)') + '"><span class="mono">' + (app.ws.prefs.chordNames ? 'Am F' : 'i VI') + '</span></button>' +
+          (Odd.relate ? '<button type="button" class="btn btn-sm' + (showRoles ? ' is-on' : ' btn-ghost') + '" data-act="roles-toggle" aria-pressed="' + showRoles + '" title="Show each part\'s role in its section: hook, topline, groove or bed">' + icon('leads', 'ico-sm') + '<span>Roles</span></button>' : '') +
           '<button type="button" class="btn btn-sm' + (app.ui.loopSong ? ' is-on' : ' btn-ghost') + '" data-act="loop-song" aria-pressed="' + !!app.ui.loopSong + '" title="Loop the whole song">' + icon('loop', 'ico-sm') + '<span>Loop</span></button>' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="add-section">' + icon('plus', 'ico-sm') + '<span>Section</span></button>' +
         '</div>' +
@@ -522,7 +836,7 @@
         '<ol class="arrangement" aria-label="Song order">' + chips + '</ol>' +
         '<button type="button" class="btn btn-ghost btn-sm arr-add" data-act="arr-add" aria-haspopup="menu" aria-expanded="false" title="Add a section to the song order"' + (addOpts.length ? '' : ' disabled') + '>' + icon('plus', 'ico-sm') + '<span>Add</span></button>' +
       '</div>' +
-      storyLine(s, sel.section) +
+      storyLine(s, sel.section, fitOf(sel.section)) +
       '<div class="sheet-wrap">' + grid + '</div>' +
       '<p class="hint">Each section appears once on the sheet; the song order above says when it plays. Select a slot, then audition or pick from the shelf. Drag shelf cards onto slots. Parts follow each section\'s chords.</p>';
     return { html, rolls };
@@ -560,12 +874,13 @@
   }
 
   /** what the selected section does, in words */
-  function storyLine(s, sec) {
+  function storyLine(s, sec, res) {
     if (!sec || !Odd.recipes || !Object.keys(sec.slots).length) return '';
     const r = sec.recipe && Odd.recipes.get(sec.recipe);
     const what = Odd.recipes.describe(s, sec);
     const curve = sec.curve && sec.curve !== 'flat' && Odd.shape ? ' · energy: ' + Odd.shape.CURVE_LABELS[sec.curve].toLowerCase() : '';
-    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + '</p>';
+    const lead = res && res.lanes.length ? ' <span class="sec-lead">' + esc(fitHeadline(res)) + '</span> <button type="button" class="link-btn" data-act="fit-open" data-section="' + sec.id + '">Who leads?</button>' : '';
+    return '<p class="sec-story"><strong>' + esc(sec.name) + '</strong>' + (r ? ' · ' + esc(r.label) : '') + curve + ' — ' + esc(what) + lead + '</p>';
   }
 
   function chordNames(s, sec) {
@@ -580,10 +895,10 @@
 
   function tabs(app) {
     const t = app.ui.tab;
-    const n = app.ws.library.length;
+    const n = app.ws.library.length + (app.ws.ideas ? app.ws.ideas.length : 0);
     const item = (id, label, ic, extra) => '<button type="button" class="tab' + (t === id ? ' is-active' : '') + '" data-act="tab" data-tab="' + id + '" aria-pressed="' + (t === id) + '">' + icon(ic) + '<span>' + label + (extra || '') + '</span></button>';
     return { html: item('booth', 'Booth', 'booth') + item('shelf', 'Shelf', 'shelf', n ? ' <span class="tab-n mono">' + n + '</span>' : '') + item('song', 'Song', 'song'), rolls: [] };
   }
 
-  Odd.views = { top, booth, shelf, song, tabs, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
+  Odd.views = { top, booth, shelf, song, tabs, ladder, fit, fitHeadline, boxTag, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
 })(globalThis.Odd = globalThis.Odd || {});

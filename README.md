@@ -182,6 +182,97 @@ A lead or arp that plays in more than one section, and any part that comes
 back in another form, gets a letter (A, B…) on the sheet so you can see
 the themes at a glance; hover it to see where else it plays.
 
+### Ideas: the core of the music
+
+Under every part is a simple idea: when its notes fall, which of them are
+strong, which way the line moves, and the note it heads for. Key, chords,
+exact pitches, register, sound and feel are layers on top. Oddition can pull
+that core out and keep it in an **idea library** (the **Ideas** side of the
+shelf).
+
+An idea can hold more than one part. You often hear a part *with* others, and
+the combination is the idea: a kick and a bass locked together, or a riff
+answering a lead. Ways to capture one:
+
+- **In the booth**: **Capture idea** (`I`). With *Play with the section* on,
+  the parts you hear the take with are ticked too; untick what doesn't belong.
+- **On the song sheet**: **Capture an idea from this section…** in a
+  section's menu.
+- **On the shelf**: **Capture as an idea** in a part's menu.
+
+Each idea card draws its voices from their cores alone. Pitched voices show
+their contour (a dash per note at its height). Drums show low, mid and high
+hits. Bigger dots are stronger notes, and a ring marks where each voice lands.
+Under the drawing, each voice is described in words, for example *21 notes ·
+rises and falls back within a 6th · some off-beats · lands on bar 4, beat 1*.
+
+- **Bones** plays only the core: plain sounds, no chords, no swing or human
+  feel, velocity from note strength alone. Chords and pads play as their top
+  line, bass as its bottom line.
+- **Full** plays the parts as they were found, through the lane sounds.
+- Click a voice's name to leave it out of playback, so you can hear the
+  others apart from it.
+- The card menu places the idea's parts in the selected section, splits a
+  voice off into an idea of its own, joins two ideas into a new one, or opens
+  a voice in the booth.
+
+An idea keeps the parts it came from, so nothing is lost by capturing.
+
+**Ladder** (on an idea card) plays one idea step by step, from the bare
+rhythm up to a full mix, each step adding one layer:
+
+| Step | Adds |
+| --- | --- |
+| 1 Rhythm | when the notes fall and which are strong: one sound, no pitch |
+| 2 Shape | which way it moves, as plain scale steps (the bones) |
+| 3 Notes | the notes as written: chords, passing notes, sharps and flats, lengths, dynamics |
+| 4 Harmony | every note bent to the chords of the section you fit it into |
+| 5 Sound and feel | the lane sounds, swing and human timing |
+| 6 Band | what else that section plays, and the section's energy |
+
+The first three are the idea on its own; the last three fit it into the
+section picked at the top (or *where it was found*, over its own chords).
+Each step draws what it plays, so you can see what each layer adds. Click a
+step to loop it; while it plays, click another or press `↑` `↓` and the
+music changes without stopping. **Place in…** puts the idea's parts in that
+section.
+
+### Who leads
+
+Some parts stand out and some sit back. Some parts steer the others, and
+some fit themselves around the others. Oddition measures both for every part
+of a section and puts it in one of four boxes:
+
+| | Steers others | Fits to others |
+| --- | --- | --- |
+| **Stands out** | **Hook**: the idea everything else is built around | **Topline**: out front, fitting over the others |
+| **Sits back** | **Groove**: other parts lock to it | **Bed**: fills and supports |
+
+- **Stands out** comes from how high and how much a part moves, and how
+  often it plays where the others leave space. A part that repeats the same
+  bar sinks back a little. It is relative: alone with a pad, the drums are
+  what you hear. At most half the parts stand out.
+- **Steers** comes from what the other parts do about it. One part can lock
+  to another's off-beat hits, play between its kicks, or answer it in its
+  gaps. Two parts can also move together or trade phrases. Some of this was
+  heard when a take was made with *Listen to the section*; the rest is
+  measured from the notes. Pitched parts also follow the section's chords.
+
+Each filled slot on the song sheet shows its box (**Roles** hides them). The
+line above the sheet says who leads the selected section. **Who leads?** (or
+`W`, or the section menu) opens the full picture:
+
+- A map with standing out going up and steering going right. Arrows point
+  from each part to the part it fits to.
+- Every link in words, with the evidence, e.g. *Bass locks to the kick in
+  Drums · 100% of its off-beat notes land with it*.
+- **Across the song**: each lane's box in every section of the song order,
+  so you can see the lead move. For example, the arp leads the intro, the
+  chords lead the verse, and the lead takes over in the chorus.
+
+Mute a part in the dialog to hear and see who takes over. Step through
+sections with `←` `→` while it loops (`Space`).
+
 ### Song shape
 
 Each section has an **energy** level, shown as the small meter next to its
@@ -285,6 +376,8 @@ WAV export always renders at full quality.
 | `K` | Keep on the shelf |
 | `P` | Keep and place in the selected section |
 | `V` | Variation of the take |
+| `I` | Capture the take as an idea (with the parts you hear it with) |
+| `W` | Who leads: how the parts of the selected section fit to each other |
 | `←` `→` | Previous / next take |
 | `1`–`7` | Drums, percussion, bass, chords, pad, lead, arp |
 | `Esc` | Stop |
@@ -300,7 +393,7 @@ npm run build        # rebuild dist/oddition.html after changing sources
 `docs/ARCHITECTURE.md` explains the modules and data formats. In short:
 
 ```
-js/core/   seeded random, music theory, rendering, MIDI files, zip, data model, export, storage
+js/core/   seeded random, music theory, rendering, MIDI files, zip, data model, ideas, export, storage
 js/gen/    the generators (one file per stem) and the style presets
 js/audio/  Web Audio synth and drum kits, the scheduler, Web MIDI output
 js/ui/     views and helpers

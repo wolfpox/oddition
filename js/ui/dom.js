@@ -42,7 +42,7 @@
   let lastFocus = null;
 
   /**
-   * dialog({ title, body (html), actions: [{ label, value, kind, primary }], onOpen(el), wide })
+   * dialog({ title, body (html), actions: [{ label, value, kind, primary }], onOpen(el), onKey(e, el), wide })
    * resolves with the chosen action value (or null when dismissed). Actions may
    * return false from `validate(el)` to keep the dialog open.
    */
@@ -77,6 +77,8 @@
         close(typeof a.value === 'function' ? a.value(dlg) : a.value);
       }
       function onKey(e) {
+        // the dialog's own keys first (opts.onKey returns true when it used the key)
+        if (opts.onKey && e.key !== 'Escape' && e.key !== 'Tab' && opts.onKey(e, dlg)) { e.preventDefault(); e.stopPropagation(); return; }
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
         else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
           const pi = actions.findIndex((a) => a.primary);

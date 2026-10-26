@@ -1,6 +1,7 @@
 /* Oddition — workspace data model.
  *
- * workspace = { version, library: [part], sessions: [session], currentId, prefs }
+ * workspace = { version, library: [part], ideas: [idea], sessions: [session], currentId, prefs }
+ *             ideas: the idea library (see Odd.idea)
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
  * section   = { id, name, bars, prog, transpose, energy, entry, exit, curve, recipe, slots: { [laneId]: slot } }
@@ -432,12 +433,26 @@
     return n;
   }
 
+  // ---------------- ideas ----------------
+
+  function addIdea(ws, idea) {
+    if (!ws.ideas) ws.ideas = [];
+    ws.ideas.unshift(idea);
+    return idea;
+  }
+
+  function findIdea(ws, id) { return (ws.ideas || []).find((x) => x.id === id) || null; }
+
+  function removeIdea(ws, id) {
+    ws.ideas = (ws.ideas || []).filter((x) => x.id !== id);
+  }
+
   // ---------------- workspace ----------------
 
   function createWorkspace(opts) {
     const session = createSession(opts);
     // `fresh` marks a workspace nobody has worked in yet; it never wins a sync
-    return { version: VERSION, library: [], sessions: [session], currentId: session.id, prefs: {}, fresh: true };
+    return { version: VERSION, library: [], ideas: [], sessions: [session], currentId: session.id, prefs: {}, fresh: true };
   }
 
   /** fill a session with starter parts so a first visit makes sound right away */
@@ -472,6 +487,7 @@
     const ws = raw;
     ws.version = VERSION;
     ws.library = Array.isArray(ws.library) ? ws.library.filter((p) => p && p.role && Array.isArray(p.notes)) : [];
+    ws.ideas = Array.isArray(ws.ideas) && Odd.idea ? ws.ideas.map(Odd.idea.repair).filter(Boolean) : Array.isArray(ws.ideas) ? ws.ideas : [];
     ws.prefs = ws.prefs || {};
     ws.sessions = ws.sessions.filter((s) => s && Array.isArray(s.sections) && s.sections.length);
     if (!ws.sessions.length) return null;
@@ -543,6 +559,7 @@
     placePart, clearSlot, slotSpan, setSlotSpan, themes, reuseSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
+    addIdea, findIdea, removeIdea,
     createWorkspace, fillStarter, migrate,
   };
 })(globalThis.Odd = globalThis.Odd || {});

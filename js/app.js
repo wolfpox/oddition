@@ -21,7 +21,8 @@
       playing: null,
       lastPlay: { kind: 'booth', id: null },
       booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {}, edit: false, locks: [] },
-      shelf: { role: 'all', query: '', starred: false, sort: 'new' },
+      shelf: { role: 'all', query: '', starred: false, sort: 'new', view: 'parts' },
+      ideaMute: {}, // idea id -> voice indices left out of playback
     },
   };
   Odd.app = app;
@@ -109,6 +110,24 @@
     return list;
   };
 
+  /** ideas shown in the shelf: same filters as parts (a stem filter shows ideas with that voice) */
+  app.shelfIdeas = () => {
+    const f = app.ui.shelf;
+    const q = f.query.trim().toLowerCase();
+    let list = (app.ws.ideas || []).filter((idea) =>
+      (f.role === 'all' || idea.voices.some((v) => v.role === f.role)) &&
+      (!f.starred || idea.starred) &&
+      (!q || idea.name.toLowerCase().includes(q) || idea.voices.some((v) => v.name.toLowerCase().includes(q))));
+    const order = M.ROLE_ORDER;
+    if (f.sort === 'old') list = list.slice().sort((a, b) => a.created - b.created);
+    else if (f.sort === 'name') list = list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    else if (f.sort === 'role') list = list.slice().sort((a, b) => order.indexOf(a.voices[0].role) - order.indexOf(b.voices[0].role) || b.created - a.created);
+    else list = list.slice().sort((a, b) => b.created - a.created);
+    return list;
+  };
+
+  app.ideaMute = (id) => app.ui.ideaMute[id] || [];
+
   app.isPlaying = (kind, id) => {
     const p = app.ui.playing;
     return !!p && p.kind === kind && (id == null || p.id === id);
@@ -166,7 +185,10 @@
   function drawRolls(rolls) {
     for (const r of rolls) {
       const c = document.getElementById(r.id);
-      if (c && c.clientWidth) Odd.roll.draw(c, r.opts);
+      if (!c || !c.clientWidth) continue;
+      if (r.opts.glyph) Odd.roll.glyph(c, r.opts);
+      else if (r.opts.stack) Odd.roll.stack(c, r.opts);
+      else Odd.roll.draw(c, r.opts);
     }
   }
 
@@ -240,7 +262,7 @@
     const b = app.ui.booth;
     Object.assign(app.ws.prefs, {
       role: b.role, bars: b.bars, context: b.context, listen: b.listen,
-      shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred },
+      shelf: { role: app.ui.shelf.role, sort: app.ui.shelf.sort, starred: app.ui.shelf.starred, view: app.ui.shelf.view },
       loopSong: app.ui.loopSong,
       moreOpen: !!app.ui.moreOpen,
     });
@@ -249,6 +271,8 @@
 
   // ======================= playback =======================
   const TAKE_TRACK = '__take';
+  const IDEA_TRACK = '__v'; // one track per voice: __v0, __v1...
+  const BONES_PATCH = { drum: 'kit-acoustic', pitched: 'keys' };
 
   function laneForPart(part) {
     const s = app.session();
@@ -285,6 +309,8 @@
       seq.partLength = partLen;
       return seq;
     }
+    if (kind === 'bones' || kind === 'idea') return ideaSeq(kind, id);
+    if (kind === 'ladder') return ladderSeq();
     if (kind === 'section') {
       const sec = M.findSection(s, id);
       if (!sec) return null;
@@ -298,6 +324,336 @@
       return seq;
     }
     return null;
+  }
+
+  /**
+   * An idea on its own. Bones: the cores in plain sounds, straight (no swing,
+   * no human feel), in the session's key. Full: the parts as they were found,
+   * over their own chords, through the lane sounds, with the session's feel.
+   */
+  function ideaSeq(kind, id) {
+    const s = app.session();
+    const idea = M.findIdea(app.ws, id);
+    if (!idea) return null;
+    const bones = kind === 'bones';
+    const length = idea.bars * T.BAR;
+    const events = Odd.idea.events(idea, { mode: bones ? 'bones' : 'full', tonic: s.tonic, scale: s.scale, mute: app.ideaMute(id), prefix: IDEA_TRACK });
+    const { tracks } = ideaTracks(idea, bones);
+    if (bones) return { bpm: s.bpm, length, loop: true, events: events.sort(R.byTime), tracks };
+    const seq = R.sequence(s, events, length, true, tracks);
+    for (const k in seq.tracks) seq.tracks[k].solo = false; // solo is for the song sheet
+    return seq;
+  }
+
+  /**
+   * A transport track per voice of an idea. plain: the neutral bones sounds;
+   * otherwise each voice sounds like a lane of its stem (a second voice of the
+   * same stem takes the second lane, if there is one).
+   * Returns { tracks, lanes: Set of the lane ids the voices sound like }.
+   */
+  function ideaTracks(idea, plain) {
+    const s = app.session();
+    const tracks = {};
+    const lanes = new Set();
+    idea.voices.forEach((v, i) => {
+      const drum = T.isDrumRole(v.role);
+      const lane = s.lanes.find((l) => l.role === v.role && !lanes.has(l.id)) || M.laneForRole(s, v.role);
+      if (lane) lanes.add(lane.id);
+      tracks[IDEA_TRACK + i] = {
+        role: v.role,
+        patch: plain ? (drum ? BONES_PATCH.drum : BONES_PATCH.pitched) : lane ? lane.patch : M.roleInfo(v.role).defaultPatch,
+        volume: plain ? 0.75 : lane ? lane.volume : 0.75,
+        mute: false,
+        solo: false,
+        channel: drum ? 9 : lane ? lane.channel : i,
+      };
+    });
+    return { tracks, lanes };
+  }
+
+  // ======================= the ladder =======================
+  /*
+   * One idea heard step by step from its bones to a full mix (Odd.idea.RUNGS).
+   * app.ui.ladder = { ideaId, rung, target } while the ladder is open;
+   * target is a section id, or '' for where the idea was found (its own chords).
+   * Steps up to harmony play plain and straight; sound and feel switches to
+   * the lane sounds with swing and human timing; band adds the section's other
+   * parts and shapes everything with the section's energy.
+   */
+  const RUNG_TEXT = {
+    rhythm: () => 'When the notes fall and which are strong. One sound, no pitch.',
+    shape: () => 'Adds which way it moves: plain steps up and down the scale. These are the bones.',
+    notes: () => 'Adds the notes as written: chords, passing notes, sharps and flats, lengths and dynamics.',
+    harmony: (sec) => (sec ? 'Bends every note to the chords of ' + sec.name + '.' : 'Plays over the chords it was written on. Pick a section above to fit it somewhere.'),
+    sound: () => 'Adds the lane sounds, swing and human timing.',
+    band: (sec) => (sec ? 'Adds what else ' + sec.name + ' plays, and the section\'s energy.' : ''),
+  };
+
+  function ladderCtx() {
+    const L = app.ui.ladder;
+    if (!L) return null;
+    const s = app.session();
+    const idea = M.findIdea(app.ws, L.ideaId);
+    if (!idea) return null;
+    const sec = L.target ? M.findSection(s, L.target) : null;
+    const length = Math.max(idea.bars, sec ? sec.bars : 0) * T.BAR;
+    const tgt = sec ? R.sectionTarget(s, sec, length) : { tonic: s.tonic, scale: s.scale, prog: null, length };
+    // the voices take over their stems' lanes; the band is everything else the section plays
+    const taken = ideaTracks(idea, false).lanes;
+    const band = sec ? s.lanes.filter((l) => sec.slots[l.id] && sec.slots[l.id].part && !taken.has(l.id)) : [];
+    return { s, idea, sec, length, tgt, band };
+  }
+
+  /** a step's events: { events (voices, one track each), band: [{ lane, events }] } */
+  function ladderEvents(c, rung, mute) {
+    const top = rung === 'band' && c.sec && c.band.length;
+    let events = Odd.idea.rungEvents(c.idea, {
+      rung, tonic: c.tgt.tonic, scale: c.tgt.scale, prog: c.sec ? c.sec.prog : null, length: c.length, mute, prefix: IDEA_TRACK,
+    });
+    const band = [];
+    if (top) {
+      if (Odd.shape && Odd.shape.settings(c.s).on) {
+        const energy = Odd.shape.energyOf(c.sec);
+        const shaped = [];
+        c.idea.voices.forEach((v, i) => {
+          const evs = events.filter((e) => e.track === IDEA_TRACK + i);
+          if (evs.length) for (const e of Odd.shape.shapeLane(evs, { role: v.role, energy, start: 0, end: c.length, curve: c.sec.curve, nextEnergy: null })) shaped.push(e);
+        });
+        events = shaped.sort(R.byTime);
+      }
+      for (const lane of c.band) band.push({ lane, events: R.sectionEvents(c.s, c.sec, { only: lane.id, length: c.length }) });
+    }
+    return { events, band };
+  }
+
+  function ladderSeq() {
+    const c = ladderCtx();
+    if (!c) return null;
+    const rung = app.ui.ladder.rung;
+    const i = Odd.idea.rungIndex(rung);
+    const plain = i <= Odd.idea.rungIndex('harmony');
+    const { events, band } = ladderEvents(c, rung, app.ideaMute(c.idea.id));
+    const { tracks } = ideaTracks(c.idea, plain);
+    let all = events;
+    for (const b of band) all = all.concat(b.events);
+    if (plain) return { bpm: c.s.bpm, length: c.length, loop: true, events: all.sort(R.byTime), tracks };
+    const seq = R.sequence(c.s, all, c.length, true, tracks);
+    for (const k in seq.tracks) seq.tracks[k].solo = false; // solo is for the song sheet
+    return seq;
+  }
+
+  /** what the ladder view draws */
+  app.ladderData = () => {
+    const c = ladderCtx();
+    if (!c) return null;
+    const mute = app.ideaMute(c.idea.id);
+    const rungs = Odd.idea.RUNGS.map((r) => {
+      const disabled = r.id === 'band' && (!c.sec || !c.band.length);
+      // draw every voice (left-out ones dimmed), count only what plays
+      const { events, band } = ladderEvents(c, disabled ? 'sound' : r.id, []);
+      const lanes = c.idea.voices.map((v, vi) => ({
+        role: v.role, drums: T.isDrumRole(v.role), dim: mute.includes(vi), events: events.filter((e) => e.track === IDEA_TRACK + vi),
+      }));
+      for (const b of band) lanes.push({ role: b.lane.role, drums: T.isDrumRole(b.lane.role), dim: true, events: b.events });
+      let count = lanes.filter((l) => !l.dim).reduce((n, l) => n + l.events.length, 0);
+      if (band.length) count += band.reduce((n, b) => n + b.events.length, 0);
+      return {
+        id: r.id, label: r.label, group: r.group, lanes, count, disabled,
+        text: disabled ? (c.sec ? c.sec.name + ' has nothing else playing.' : 'Pick a section above to hear it with a band.') : RUNG_TEXT[r.id](c.sec),
+      };
+    });
+    return { idea: c.idea, sec: c.sec, length: c.length, rungs, rung: app.ui.ladder.rung, sections: c.s.sections, mute, bandSize: c.band.length };
+  };
+
+  async function ladderDialog(idea) {
+    const sel = app.selectedSection();
+    app.ui.ladder = { ideaId: idea.id, rung: 'shape', target: sel ? sel.id : '' };
+    let host = null;
+    let dlgEl = null;
+    const enabled = () => (app.ladderData() || { rungs: [] }).rungs.filter((r) => !r.disabled).map((r) => r.id);
+    const render = () => {
+      if (!host) return;
+      const hadFocus = host.contains(document.activeElement);
+      const out = Odd.views.ladder(app);
+      host.innerHTML = out.html;
+      drawRolls(out.rolls);
+      const L = app.ui.ladder;
+      const sec = L.target ? M.findSection(app.session(), L.target) : null;
+      const place = $('.dialog-actions button[data-i="0"]', dlgEl);
+      if (place) { place.textContent = sec ? 'Place in ' + sec.name : 'Place'; place.disabled = !sec; }
+      if (hadFocus) { const b = $('[data-ladder-rung="' + L.rung + '"]', host); if (b) b.focus({ preventScroll: true }); }
+    };
+    const pick = (rung) => {
+      const L = app.ui.ladder;
+      if (!L || !enabled().includes(rung)) return;
+      if (L.rung === rung && app.isPlaying('ladder')) stop();
+      else {
+        L.rung = rung;
+        if (app.isPlaying('ladder')) refreshPlayback();
+        else play('ladder');
+      }
+      render();
+      syncPlayState();
+    };
+    const res = await D.dialog({
+      title: 'Ladder · ' + idea.name,
+      wide: true,
+      body: '<div class="ladder" id="ladder"></div>',
+      onOpen: (el) => {
+        dlgEl = el;
+        host = $('#ladder', el);
+        render();
+        host.addEventListener('click', (e) => {
+          const r = e.target.closest('[data-ladder-rung]');
+          if (r && !r.disabled) { pick(r.dataset.ladderRung); return; }
+          const v = e.target.closest('[data-ladder-voice]');
+          if (v) {
+            const i = Number(v.dataset.ladderVoice);
+            const cur = app.ideaMute(idea.id);
+            let next = cur.includes(i) ? cur.filter((x) => x !== i) : cur.concat(i);
+            if (next.length >= idea.voices.length) next = [];
+            app.ui.ideaMute[idea.id] = next;
+            render();
+            paint(['shelf']);
+            if (app.isPlaying('ladder')) refreshPlayback();
+          }
+        });
+        host.addEventListener('change', (e) => {
+          const t = e.target.closest('[data-ladder-target]');
+          if (!t) return;
+          app.ui.ladder.target = t.value;
+          if (!enabled().includes(app.ui.ladder.rung)) app.ui.ladder.rung = 'sound';
+          render();
+          if (app.isPlaying('ladder')) refreshPlayback();
+        });
+      },
+      onKey: (e) => {
+        if (e.target && e.target.tagName === 'SELECT') return false;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const list = enabled();
+          const at = list.indexOf(app.ui.ladder.rung);
+          const next = list[Math.max(0, Math.min(list.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
+          if (next && next !== app.ui.ladder.rung) {
+            app.ui.ladder.rung = next;
+            if (app.isPlaying('ladder')) refreshPlayback();
+            render();
+            syncPlayState();
+          }
+          return true;
+        }
+        if (e.key === ' ') {
+          if (app.isPlaying('ladder')) stop(); else play('ladder');
+          render();
+          return true;
+        }
+        return false;
+      },
+      actions: [
+        { label: 'Place', value: 'place' },
+        { label: 'Done', primary: true, value: null },
+      ],
+    });
+    const target = app.ui.ladder && app.ui.ladder.target;
+    if (app.isPlaying('ladder')) stop();
+    app.ui.ladder = null;
+    if (res === 'place' && target) {
+      const sec = M.findSection(app.session(), target);
+      if (sec) placeIdea(idea, sec);
+    }
+  }
+
+  /**
+   * Who leads: how the parts of a section fit to each other (Odd.relate).
+   * app.ui.fit = { sectionId } while the dialog is open. Sections step in song
+   * order (each once), then any the song doesn't play.
+   */
+  app.fitOrder = () => {
+    const s = app.session();
+    const out = [];
+    for (const id of s.arrangement) {
+      const sec = M.findSection(s, id);
+      if (sec && !out.includes(sec)) out.push(sec);
+    }
+    for (const sec of s.sections) if (!out.includes(sec)) out.push(sec);
+    return out;
+  };
+
+  async function fitDialog(sectionId) {
+    const s = app.session();
+    if (!Odd.relate || !M.findSection(s, sectionId)) return;
+    app.ui.fit = { sectionId };
+    let host = null, dlgEl = null;
+    const render = () => {
+      if (!host || !app.ui.fit) return;
+      const sec = M.findSection(app.session(), app.ui.fit.sectionId);
+      // keep focus on the same control across the redraw
+      const f = document.activeElement;
+      let again = null;
+      if (f && host.contains(f)) {
+        if (f.dataset.fitStep) again = '[data-fit-step="' + f.dataset.fitStep + '"]';
+        else if (f.matches('[data-fit-section]')) again = '[data-fit-section]';
+        else if (f.dataset.fitPick) again = '[data-fit-pick="' + f.dataset.fitPick + '"]';
+        else if (f.dataset.act) again = '[data-act="' + f.dataset.act + '"]' + (f.dataset.lane ? '[data-lane="' + f.dataset.lane + '"]' : '');
+      }
+      host.innerHTML = Odd.views.fit(app).html;
+      const back = again && ($(again, host) || $('[data-act="play-section"]', host));
+      if (back && !back.disabled) back.focus({ preventScroll: true });
+      const t = $('#dlg-title', dlgEl);
+      if (t && sec) t.textContent = 'Who leads · ' + sec.name;
+      syncPlayState();
+    };
+    const go = (id) => {
+      const L = app.ui.fit;
+      if (!L || !id || id === L.sectionId) return;
+      const was = app.isPlaying('section', L.sectionId);
+      L.sectionId = id;
+      app.ui.sectionId = id;
+      render();
+      paint(['song']);
+      if (was) play('section', id);
+    };
+    const step = (dir) => {
+      const order = app.fitOrder();
+      const at = order.findIndex((x) => x.id === app.ui.fit.sectionId);
+      const next = order[at + dir];
+      if (next) go(next.id);
+    };
+    await D.dialog({
+      title: 'Who leads · ' + M.findSection(s, sectionId).name,
+      wide: true,
+      body: '<div class="fit" id="fit"></div>',
+      onOpen: (el) => {
+        dlgEl = el;
+        host = $('#fit', el);
+        render();
+        // start on the play button: keys typed into the section list belong to it
+        setTimeout(() => { const p = $('[data-act="play-section"]', host); if (p) p.focus({ preventScroll: true }); }, 0);
+        host.addEventListener('click', (e) => {
+          const st = e.target.closest('[data-fit-step]');
+          if (st && !st.disabled) { step(Number(st.dataset.fitStep)); return; }
+          const pk = e.target.closest('[data-fit-pick]');
+          if (pk) { go(pk.dataset.fitPick); return; }
+          // muting runs in the page's own click handler, after this one
+          if (e.target.closest('[data-act="lane-mute"], [data-act="lane-solo"]')) setTimeout(render, 0);
+        });
+        host.addEventListener('change', (e) => {
+          const t = e.target.closest('[data-fit-section]');
+          if (t) go(t.value);
+        });
+      },
+      onKey: (e) => {
+        if (e.target && e.target.tagName === 'SELECT') return false;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { step(e.key === 'ArrowLeft' ? -1 : 1); return true; }
+        if (e.key === ' ') {
+          const id = app.ui.fit.sectionId;
+          if (app.isPlaying('section', id)) stop(); else play('section', id);
+          return true;
+        }
+        return false;
+      },
+      actions: [{ label: 'Done', primary: true, value: null }],
+    });
+    app.ui.fit = null;
   }
 
   let currentSeq = null;
@@ -392,6 +748,12 @@
         } else if (p.kind === 'preview') {
           const part = M.findPart(app.ws, p.id);
           text = 'Shelf · ' + (part ? part.name : '');
+        } else if (p.kind === 'ladder') {
+          const r = app.ui.ladder && Odd.idea.RUNGS.find((x) => x.id === app.ui.ladder.rung);
+          text = 'Ladder · ' + (r ? r.label : '');
+        } else if (p.kind === 'bones' || p.kind === 'idea') {
+          const idea = M.findIdea(app.ws, p.id);
+          text = 'Idea · ' + (idea ? idea.name : '') + (p.kind === 'bones' ? ' (bones)' : '');
         } else if (p.kind === 'section') {
           const sec = M.findSection(s, p.id);
           text = 'Loop · ' + (sec ? sec.name : '');
@@ -800,6 +1162,7 @@
       } },
       { label: 'Open in the booth', run: () => loadIntoBooth(part) },
       { label: 'Make a variation in the booth', run: () => loadIntoBooth(part, true) },
+      { label: 'Capture as an idea', run: () => captureIdea([{ part, sourceId: part.id }], { from: 'shelf' }) },
       { label: 'Download MIDI', run: () => downloadPart(part) },
       '-',
       { label: 'Remove from shelf', kind: 'danger', run: () => {
@@ -1079,6 +1442,8 @@
       { label: 'Edit chords…', run: () => editChords(section) },
       { label: 'Section type…', run: () => typeDialog(section) },
       { label: 'Energy and entry…', run: () => shapeDialog(section) },
+      { label: 'Who leads…', disabled: !Object.keys(section.slots).length, run: () => fitDialog(section.id) },
+      { label: 'Capture an idea from this section…', disabled: !Object.keys(section.slots).length, run: () => captureFromSection(section) },
       { label: 'New chords', run: () => commit('New chords', () => { section.prog = M.newProgression(s, section.bars); }) },
       { label: 'Key up a semitone', run: () => commit('Change section key', () => { section.transpose = Math.min(11, (section.transpose || 0) + 1); }) },
       { label: 'Key down a semitone', run: () => commit('Change section key', () => { section.transpose = Math.max(-11, (section.transpose || 0) - 1); }) },
@@ -1124,6 +1489,178 @@
       actions: [{ label: 'Cancel', value: null }, { label: 'Save', primary: true, value: (el) => Number($('#dlg-ch', el).value) }],
     });
     if (v != null) commit('Change MIDI channel', () => { lane.channel = v; }, ['song']);
+  }
+
+  // ======================= ideas =======================
+  /**
+   * Save parts heard together as an idea. sources: [{ part, oct, form,
+   * sourceId, label, checked }]. With more than one source (or opts.ask), a
+   * dialog asks which belong in the idea.
+   */
+  async function captureIdea(sources, opts) {
+    const o = opts || {};
+    const s = app.session();
+    let chosen = sources;
+    let name = '';
+    if (sources.length > 1 || o.ask) {
+      const rows = sources.map((src, i) =>
+        '<label class="toggle capture-row" data-role="' + src.part.role + '"><input type="checkbox" data-i="' + i + '"' + (src.checked !== false ? ' checked' : '') + '>' +
+        '<span><span class="tag" data-role="' + src.part.role + '">' + esc(M.roleInfo(src.part.role).short || src.part.role) + '</span> ' + esc(src.label || src.part.name) + '</span></label>').join('');
+      const v = await D.dialog({
+        title: o.title || 'Capture an idea',
+        body:
+          '<p class="help">An idea keeps the rhythm and shape of each part: when the notes fall, which are strong, which way the line moves and where it lands. The parts themselves come along as source material. Pick the parts that belong together; you can split them apart later.</p>' +
+          '<div class="capture-list">' + rows + '</div>' +
+          '<label class="field"><span>Name</span><input type="text" id="dlg-idea-name" maxlength="80" placeholder="Named after its parts"></label>',
+        actions: [
+          { label: 'Cancel', value: null },
+          { label: 'Capture', primary: true, validate: (el) => $$('input[data-i]:checked', el).length > 0, value: (el) => ({
+            picks: $$('input[data-i]:checked', el).map((x) => Number(x.dataset.i)),
+            name: $('#dlg-idea-name', el).value.trim(),
+          }) },
+        ],
+      });
+      if (!v) return null;
+      chosen = v.picks.map((i) => sources[i]);
+      name = v.name;
+    }
+    const idea = Odd.idea.fromParts(chosen, { name: name || undefined, style: s.style, from: o.from });
+    if (!idea) { D.toast('Those parts have no notes to make an idea from.'); return null; }
+    // show the ideas, with filters that let the new one through
+    const f = app.ui.shelf;
+    f.view = 'ideas';
+    if (f.role !== 'all' && !idea.voices.some((v) => v.role === f.role)) f.role = 'all';
+    f.starred = false;
+    f.query = '';
+    savePrefs();
+    commit('Capture idea', (ss, ws) => { M.addIdea(ws, idea); }, ['shelf', 'tabs']);
+    const n = idea.voices.length;
+    D.toast('Captured idea “' + idea.name + '”' + (n > 1 ? ' (' + n + ' voices)' : ''), {
+      action: app.ui.tab !== 'shelf' && window.innerWidth <= 900 ? { label: 'Show', run: () => goTab('shelf') } : { label: 'Undo', run: undo },
+    });
+    return idea;
+  }
+
+  /** the booth take, plus whatever the section plays with it (ticked when you hear them together) */
+  function captureFromBooth() {
+    const take = app.currentTake();
+    if (!take) return;
+    const s = app.session();
+    const sec = app.selectedSection();
+    const target = app.boothLane();
+    const sources = [{ part: take, sourceId: take.id, label: 'This take: ' + take.name, checked: true }];
+    for (const lane of s.lanes) {
+      if (target && lane.id === target.id) continue;
+      const slot = sec.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      sources.push({
+        part: slot.part, oct: slot.oct, form: slot.form, sourceId: slot.sourceId,
+        label: lane.name + ': ' + slot.part.name, checked: !!app.ui.booth.context,
+      });
+    }
+    captureIdea(sources, { from: 'booth', title: 'Capture an idea from take ' + String(take.take || 1).padStart(3, '0') });
+  }
+
+  function captureFromSection(section) {
+    const s = app.session();
+    const sources = [];
+    for (const lane of s.lanes) {
+      const slot = section.slots[lane.id];
+      if (!slot || !slot.part) continue;
+      sources.push({
+        part: slot.part, oct: slot.oct, form: slot.form, sourceId: slot.sourceId,
+        label: lane.name + ': ' + slot.part.name, checked: !M.slotSpan(section, slot).out,
+      });
+    }
+    if (!sources.length) { D.toast(section.name + ' has no parts yet.'); return; }
+    captureIdea(sources, { from: 'section', ask: true, title: 'Capture an idea from ' + section.name });
+  }
+
+  /** put each voice's part in a section (the selected one by default), in a lane of its stem */
+  function placeIdea(idea, section) {
+    const s = app.session();
+    const sec = section || app.selectedSection();
+    const voices = idea.voices.filter((v) => v.part);
+    if (!voices.length) { D.toast('This idea has no parts to place.'); return; }
+    const where = [];
+    commit('Place idea', () => {
+      const used = new Set();
+      for (const v of voices) {
+        let lane = s.lanes.find((l) => l.role === v.role && !used.has(l.id));
+        if (!lane) lane = M.addLane(s, v.role);
+        used.add(lane.id);
+        const part = Object.assign(M.clone(v.part), { id: v.sourceId || v.part.id });
+        const slot = M.placePart(s, sec.id, lane.id, part);
+        if (!slot) continue;
+        slot.oct = v.oct || 0;
+        if (v.form) slot.form = v.form; else delete slot.form;
+        where.push(lane.name);
+      }
+      app.ui.sectionId = sec.id;
+    }, ['song', 'shelf', 'booth']);
+    D.toast('Placed “' + idea.name + '” in ' + sec.name + ': ' + where.join(', '), { action: { label: 'Undo', run: undo } });
+  }
+
+  function splitVoice(idea, index) {
+    const v = idea.voices[index];
+    if (!v || idea.voices.length < 2) return;
+    let made = null;
+    commit('Split idea', (s, ws) => {
+      made = Odd.idea.split(idea, index);
+      Odd.idea.removeVoice(idea, index);
+      M.addIdea(ws, made);
+    }, ['shelf', 'tabs']);
+    delete app.ui.ideaMute[idea.id];
+    D.toast(v.name + ' is now an idea of its own', { action: { label: 'Undo', run: undo } });
+  }
+
+  async function joinDialog(idea) {
+    const others = (app.ws.ideas || []).filter((x) => x.id !== idea.id);
+    if (!others.length) { D.toast('Capture another idea first.'); return; }
+    const rows = others.map((x, i) =>
+      '<label class="type-opt"><input type="radio" name="dlg-join" value="' + esc(x.id) + '"' + (i ? '' : ' checked') + '>' +
+      '<span><strong>' + esc(x.name) + '</strong><small>' + esc(x.voices.map((v) => M.roleInfo(v.role).label).join(', ')) + ' · ' + x.bars + (x.bars === 1 ? ' bar' : ' bars') + '</small></span></label>').join('');
+    const id = await D.dialog({
+      title: 'Join “' + idea.name + '” with…',
+      body: '<p class="help">Makes a new idea with the voices of both, so you can hear them together. Both ideas stay as they are.</p><div class="join-list">' + rows + '</div>',
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Join', primary: true, value: (el) => { const r = $('input[name="dlg-join"]:checked', el); return r ? r.value : null; } },
+      ],
+    });
+    const other = id && M.findIdea(app.ws, id);
+    if (!other) return;
+    const joined = Odd.idea.join([idea, other]);
+    commit('Join ideas', (s, ws) => { M.addIdea(ws, joined); }, ['shelf', 'tabs']);
+    D.toast('Joined into “' + joined.name + '”', { action: { label: 'Undo', run: undo } });
+  }
+
+  function ideaMenu(anchor, idea) {
+    const sec = app.selectedSection();
+    const items = [
+      { label: 'Rename…', run: async () => {
+        const name = await D.prompt('Rename idea', 'Name', idea.name);
+        if (name) commit('Rename idea', () => { idea.name = name; }, ['shelf']);
+      } },
+      { label: 'Ladder: hear it step by step…', run: () => ladderDialog(idea) },
+      { label: 'Place in ' + sec.name, disabled: !idea.voices.some((v) => v.part), run: () => placeIdea(idea) },
+      { label: 'Join with another idea…', disabled: (app.ws.ideas || []).length < 2, run: () => joinDialog(idea) },
+    ];
+    if (idea.voices.length > 1) {
+      items.push('-', { heading: 'Split off' });
+      idea.voices.forEach((v, i) => items.push({ label: v.name, hint: M.roleInfo(v.role).short, run: () => splitVoice(idea, i) }));
+    }
+    const openable = idea.voices.filter((v) => v.part);
+    if (openable.length) {
+      items.push('-', { heading: 'Open in the booth' });
+      for (const v of openable) items.push({ label: v.name, hint: M.roleInfo(v.role).short, run: () => loadIntoBooth(v.part) });
+    }
+    items.push('-', { label: 'Delete idea', kind: 'danger', run: () => {
+      if (app.isPlaying('bones', idea.id) || app.isPlaying('idea', idea.id)) stop();
+      commit('Delete idea', (s, ws) => M.removeIdea(ws, idea.id), ['shelf', 'tabs']);
+      D.toast('Deleted idea “' + idea.name + '”', { action: { label: 'Undo', run: undo } });
+    } });
+    D.menu(anchor, items, { align: 'right' });
   }
 
   // ======================= sessions =======================
@@ -1268,7 +1805,7 @@
     const incoming = data.workspace;
     const choice = await D.dialog({
       title: 'Open project',
-      body: '<p>This file has ' + incoming.sessions.length + (incoming.sessions.length === 1 ? ' session' : ' sessions') + ' and ' + incoming.library.length + ' shelf parts.</p><p class="help">Adding keeps everything you have now. Replacing swaps your whole workspace for the file. Either can be undone.</p>',
+      body: '<p>This file has ' + incoming.sessions.length + (incoming.sessions.length === 1 ? ' session' : ' sessions') + ', ' + incoming.library.length + ' shelf parts and ' + (incoming.ideas || []).length + ' ideas.</p><p class="help">Adding keeps everything you have now. Replacing swaps your whole workspace for the file. Either can be undone.</p>',
       actions: [
         { label: 'Cancel', value: null },
         { label: 'Replace everything', value: 'replace', kind: 'danger' },
@@ -1280,10 +1817,14 @@
       if (choice === 'replace') {
         ws.sessions = incoming.sessions;
         ws.library = incoming.library;
+        ws.ideas = incoming.ideas || [];
         ws.currentId = incoming.currentId;
       } else {
         const ids = new Set(ws.library.map((p) => p.id));
         for (const p of incoming.library) if (!ids.has(p.id)) ws.library.push(p);
+        ws.ideas = ws.ideas || [];
+        const iids = new Set(ws.ideas.map((x) => x.id));
+        for (const x of incoming.ideas || []) if (!iids.has(x.id)) ws.ideas.push(x);
         const sids = new Set(ws.sessions.map((x) => x.id));
         for (const ss of incoming.sessions) { if (sids.has(ss.id)) ss.id = M.uid('ss'); ws.sessions.push(ss); }
         ws.currentId = incoming.sessions[0].id;
@@ -1353,6 +1894,8 @@
     const rows = [
       ['Space', 'Play or stop'], ['X', 'Reject and hear a new take'], ['K', 'Keep the take on the shelf'],
       ['P', 'Keep and place it in the selected section'], ['V', 'Make a variation of the take'],
+      ['I', 'Capture the take as an idea (with the parts you hear it with)'],
+      ['W', 'Who leads: how the parts of the selected section fit to each other'],
       ['← →', 'Step through takes'], ['1 – 7', 'Switch stem: drums, percussion, bass, chords, pad, lead, arp'],
       ['Esc', 'Stop'], ['Ctrl Z', 'Undo'], ['Ctrl Shift Z', 'Redo'],
     ];
@@ -1383,6 +1926,8 @@
     undo, redo,
     'toggle-fields': () => { app.ui.fieldsOpen = !app.ui.fieldsOpen; paint(['top']); },
     'toggle-more': () => { app.ui.moreOpen = !app.ui.moreOpen; savePrefs(); paint(['top']); },
+    'roles-toggle': () => { app.ws.prefs.roles = app.ws.prefs.roles === false; persist(); paint(['song']); },
+    'fit-open': (el) => fitDialog(el.dataset.section || app.selectedSection().id),
     'chord-mode': () => { app.ws.prefs.chordNames = !app.ws.prefs.chordNames; persist(); paint(['song', 'booth']); },
     tab: (el) => goTab(el.dataset.tab),
 
@@ -1397,6 +1942,7 @@
     'take-next': () => stepTake(1),
     'take-goto': (el) => { const tk = app.takesFor(app.ui.booth.role); tk.index = Number(el.dataset.index); paint(['booth']); autoPlayBooth(); },
     'take-midi': () => { const t = app.currentTake(); if (t) downloadPart(t); },
+    'capture-idea': () => captureFromBooth(),
     'params-reset': () => {
       if (app.ws.prefs.params) delete app.ws.prefs.params[app.ui.booth.role];
       persist();
@@ -1411,6 +1957,29 @@
     'part-place': (el) => { const p = M.findPart(app.ws, el.dataset.id); if (p) placeFromShelf(p); },
     'part-menu': (el) => { const p = M.findPart(app.ws, el.dataset.id); if (p) partMenu(el, p); },
     'import-midi': () => importMidi(),
+    'shelf-view': (el) => {
+      const view = el.dataset.view === 'ideas' ? 'ideas' : 'parts';
+      if (app.ui.shelf.view === view) return;
+      app.ui.shelf.view = view;
+      savePrefs();
+      paint(['shelf']);
+    },
+    'idea-play': (el) => toggle(el.dataset.kind === 'bones' ? 'bones' : 'idea', el.dataset.id),
+    'idea-voice': (el) => {
+      const id = el.dataset.id;
+      const i = Number(el.dataset.index);
+      const idea = M.findIdea(app.ws, id);
+      if (!idea) return;
+      const cur = app.ideaMute(id);
+      let next = cur.includes(i) ? cur.filter((x) => x !== i) : cur.concat(i);
+      if (next.length >= idea.voices.length) next = []; // leaving every voice out means hear them all again
+      app.ui.ideaMute[id] = next;
+      paint(['shelf']);
+      if (app.isPlaying('bones', id) || app.isPlaying('idea', id)) refreshPlayback();
+    },
+    'idea-ladder': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) ladderDialog(x); },
+    'idea-star': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) commit(x.starred ? 'Unfavourite' : 'Favourite', () => { x.starred = !x.starred; }, ['shelf']); },
+    'idea-menu': (el) => { const x = M.findIdea(app.ws, el.dataset.id); if (x) ideaMenu(el, x); },
 
     // song
     'select-cell': (el) => selectCell(el.dataset.section, el.dataset.lane),
@@ -1832,6 +2401,8 @@
       case 'k': case 'K': keep(false); break;
       case 'p': case 'P': keep(true); break;
       case 'v': case 'V': vary(); break;
+      case 'i': case 'I': captureFromBooth(); break;
+      case 'w': case 'W': fitDialog(app.selectedSection().id); break;
       case 'ArrowLeft': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(-1); } break;
       case 'ArrowRight': if (!e.target.matches('input[type=range]')) { e.preventDefault(); stepTake(1); } break;
       case 'Escape': stop(); break;
@@ -1915,6 +2486,7 @@
     if (pr.listen != null) b.listen = !!pr.listen;
     app.ui.moreOpen = !!pr.moreOpen;
     if (pr.shelf) Object.assign(app.ui.shelf, pr.shelf, { query: '' });
+    if (app.ui.shelf.view !== 'ideas') app.ui.shelf.view = 'parts';
     app.ui.loopSong = !!pr.loopSong;
   }
 

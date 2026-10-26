@@ -34,6 +34,8 @@ js/core/edit.js       keep bars, add/remove notes       Odd.edit
 js/core/midi-file.js  Standard MIDI File writer/reader  Odd.midiFile
 js/core/zip.js        store-only .zip writer            Odd.zip
 js/core/model.js      workspace, sessions, sections     Odd.model
+js/core/idea.js       the core of parts: ideas          Odd.idea
+js/core/relate.js     who leads: roles and links        Odd.relate
 js/core/recipes.js    section types (intro builds...)   Odd.recipes
 js/core/export.js     .mid / .zip / project builders    Odd.exporter
 js/core/store.js      localStorage autosave, undo       Odd.store, Odd.history
@@ -204,6 +206,103 @@ and records `section.recipe`. `describe()` turns a section's spans into the
 sentence shown above the sheet. `kindOf(name)` picks which types are
 suggested.
 
+## Ideas (`Odd.idea`)
+
+An idea is the core of some music: what is left once key, chords, exact
+pitches, register, sound and feel are taken away. Influence lives in parts;
+the idea keeps them as source material.
+
+```js
+idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags }
+voice = { role, name, sourceId, part, oct, form, core }   // part: copy as found (or null)
+core  = { len, drum, hits: [{ t, d, w, h }], land, root }
+```
+
+- `t`, `d`: onset and length in ticks.
+- `w`: weight 0 ghost / 1 normal / 2 accent. A score from velocity (relative
+  to the voice's own range; flat dynamics count as middling), place in the
+  bar (`metric`: downbeat 1, beat 3 0.75, other beats 0.5, off-beat 8ths
+  0.25) and, for pitched voices, length.
+- `h`: pitched, scale steps from the first note (accidentals dropped: they are
+  colour, not contour). Drums, 0 low / 1 mid / 2 high (`drumClass`).
+- `land`: the hit the voice heads for (`landing`): a long note on a strong
+  beat late in the idea; for drums a strong low or mid hit late in the cycle.
+- `root`: the first note's degree, only so the bones can sound in a key.
+
+A pitched voice is one line: where notes start together, the top note is the
+line (the bottom one for bass). Drums keep one hit per onset and height.
+`extract(part, { form })` reads a part as it was played where it was found,
+form included; `voiceFrom({ part, oct, form, sourceId })` builds a voice.
+The core is invariant under key, register and chord changes (tested), which
+is what makes it the idea's identity.
+
+`fromParts(sources)`, `split(idea, i)`, `join(ideas)` and `removeVoice` make
+and reshape ideas. `describe(voice)` says a core in words. `events(idea, {
+mode: 'bones' | 'full', tonic, scale, mute, prefix })` renders one track per
+voice: bones sound the core plainly (pitched contour as plain scale steps from
+`root` in the voice's register, drums as kick/snare/hat, velocity from weight);
+full renders each voice's part over its own `ctx.prog` in the session key.
+The app plays bones straight (no swing or humanize) and full through
+`Odd.render.sequence`. `repair` cleans loaded ideas (`Odd.model.migrate`
+calls it, rebuilding a missing core from its part).
+
+The ladder (`RUNGS`: rhythm, shape, notes, harmony, sound, band) hears an
+idea one layer at a time. `voiceAt(voice, rung, { tonic, scale, prog,
+length })` gives one voice's events at a step: rhythm puts every hit on one
+sound (the first note's pitch, or a side stick for drums, one tap per onset);
+shape is the bones; notes is the part as written over its own chords; harmony
+refits it to `prog` (imported parts keep their notes); sound and band play the
+same notes. `rungEvents(idea, { rung, ..., mute, prefix })` does every voice.
+The app (`ladderSeq` in `js/app.js`) plays steps up to harmony plain and
+straight, switches to the lane sounds with `Odd.render.sequence` at sound,
+and at band adds the section's other lanes (those the voices don't take over)
+and runs the voices through `Odd.shape.shapeLane` at the section's energy.
+Every step is rendered over the same length (the longer of the idea and the
+section), so `Odd.transport.update` swaps steps without losing the beat.
+`Odd.roll.stack` draws each step, one band per lane.
+
+Ideas are stored in `workspace.ideas` (`Odd.model.addIdea`, `findIdea`,
+`removeIdea`), saved and undone like everything else, and synced by the
+hosted build as one document each (`kind: 'idea'`).
+
+## Who leads (`Odd.relate`)
+
+Primacy is measured on two axes per part of a section, from the events the
+section plays (muted lanes left out; only soloed lanes if any are soloed):
+
+- **Salience** (`salienceOf`): 0.4 role prior + 0.2 height (mean pitch of the
+  line) + 0.2 motion (how often the line changes pitch, times how busy it is)
+  + 0.2 space (share of its onsets where no other melodic part starts)
+  − 0.1 repetition (bars that repeat an earlier bar). `rel` is salience over
+  the section's highest. A part stands out at `rel >= STAND` (0.85) if it is
+  also in the top half by salience.
+- **Authority**: `1 − Π(1 − strength · PULL[kind])` over the links pointing
+  at the part. It steers at `>= STEER` (0.45).
+
+A link goes from a follower to the part it fits to:
+
+- `lock`: the follower's off-beat onsets land on the other's (drums offer
+  their kick, or kick and snare together). The score is above chance, and it
+  shrinks below 8 onsets. Both ways at once is a `pair` (mutual).
+- `avoid`: onsets keep off a kick that is there at least 12% of the time.
+- `answer`: the follower sounds mostly while the other rests. Both ways is a
+  `trade` (mutual).
+- Logged: `part.heard` lines are parsed by the `HEARD` table into `lock`,
+  `avoid`, `answer` and `clear` links to the lane of the named role.
+  `balance` lines stay notes. A logged answer turns a measured trade into
+  a one-way answer. A test checks that every line the generators write is
+  understood.
+
+Each follower keeps its two strongest links. Pitched lanes that refit are
+listed in `harmony.follow` and the others in `harmony.own`; these links point
+at the chords, not at a lane, and give no authority. `analyse(lanes, {
+length })` is the pure core, `forSection(session, section)` reads a section,
+and `song(session)` measures each section of the song order once. `top` is
+the part with the most primacy: a hook, else the top topline, else the
+strongest groove. The views draw the boxes on sheet cells, the headline in
+the section story, and the dialog (`fitDialog` in `js/app.js`): the plane,
+links in words, and the strip across the song.
+
 ## Song shape (`Odd.shape`)
 
 Shape works on rendered events, never on stored parts, so it re-renders when
@@ -324,7 +423,7 @@ section.
 
 ## Persistence
 
-The whole workspace (shelf + sessions) autosaves to `localStorage` and can be
+The whole workspace (shelf, ideas and sessions) autosaves to `localStorage` and can be
 exported or imported as a `.oddition.json` file. Every change made through
 `commit()` in `app.js` snapshots the workspace first, which is what undo and
 redo restore. Takes in the booth are scratch state and are not saved.
