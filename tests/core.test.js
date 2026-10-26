@@ -143,8 +143,10 @@ test('zip archive is valid', (t) => {
 test('model: sessions, sections, slots and the song', () => {
   const ws = Odd.model.createWorkspace({ seed: 3, style: 'lofi' });
   const s = Odd.model.currentSession(ws);
-  assert.strictEqual(s.lanes.length, 6);
+  assert.strictEqual(s.lanes.length, 7);
   assert.strictEqual(s.lanes.find((l) => l.role === 'drums').channel, 9);
+  assert.strictEqual(s.lanes.find((l) => l.role === 'perc').channel, 9);
+  // drums and percussion share GM channel 10; every other lane has its own
   assert.strictEqual(new Set(s.lanes.map((l) => l.channel)).size, 6);
   assert.strictEqual(s.sections.length, 3);
   assert.strictEqual(Odd.model.songBars(s), 4 + 8 + 8 + 8 + 8);

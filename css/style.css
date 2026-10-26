@@ -22,6 +22,7 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 
   --r-drums: #f27b62;
+  --r-perc: #a9d15a;
   --r-bass: #a395ff;
   --r-chords: #4ec8b2;
   --r-pad: #6fb0ff;
@@ -63,6 +64,7 @@
     --on-keep: #ffffff;
     --shadow: 0 10px 30px rgba(20, 24, 34, 0.16);
     --r-drums: #cf5135;
+    --r-perc: #5f8a1a;
     --r-bass: #6a55e0;
     --r-chords: #0f8d78;
     --r-pad: #2b78cf;
@@ -88,6 +90,7 @@
   --on-keep: #ffffff;
   --shadow: 0 10px 30px rgba(20, 24, 34, 0.16);
   --r-drums: #cf5135;
+  --r-perc: #5f8a1a;
   --r-bass: #6a55e0;
   --r-chords: #0f8d78;
   --r-pad: #2b78cf;
@@ -97,6 +100,7 @@
 }
 
 [data-role="drums"] { --role: var(--r-drums); }
+[data-role="perc"] { --role: var(--r-perc); }
 [data-role="bass"] { --role: var(--r-bass); }
 [data-role="chords"] { --role: var(--r-chords); }
 [data-role="pad"] { --role: var(--r-pad); }

@@ -25,7 +25,7 @@ js/core/rng.js        seeded PRNG                       Odd.rng
 js/core/theory.js     scales, degrees, progressions     Odd.theory
 js/gen/styles.js      genre presets                     Odd.styles
 js/gen/names.js       part names                        Odd.gen (names)
-js/gen/drums.js ...   one file per role                 Odd.gen.roles.<role>
+js/gen/drums.js ...   one file per role (perc.js too)   Odd.gen.roles.<role>
 js/gen/band.js        what a section already plays      Odd.band
 js/gen/index.js       generate / vary entry points      Odd.gen
 js/core/shape.js      energy, transitions, human feel   Odd.shape
@@ -197,12 +197,28 @@ section.entry  = 'auto' | 'none' | 'fill' | 'build' | 'gap'
 ## Generators (`Odd.gen`)
 
 ```js
-Odd.gen.ROLES                 // ['drums','bass','chords','pad','lead','arp']
+Odd.gen.ROLES                 // ['drums','perc','bass','chords','pad','lead','arp']
 Odd.gen.roleInfo[role]        // { label, short, base, defaultPatch }
 Odd.gen.params(role)          // slider/select specs for the booth UI
 Odd.gen.generate(req) -> part // req: { role, style, seed, bars, tonic, scale, prog, params }
 Odd.gen.vary(part, { seed, amount }) -> part
 ```
+
+`drums` and `perc` are drum roles (`Odd.theory.isDrumRole`): their notes
+are GM drum notes (`p`), they play on channel 10 and they never refit. Both
+take `touch` and `accent` params, applied by `Odd.gen.dynamics` before
+`finalize`: accent spreads velocities away from 76, touch scales them, and
+both are neutral at 0.5 so older parts are unchanged. The percussion
+generator (`js/gen/perc.js`) picks a main instrument family (weighted per
+style by `style.perc.kits`, or the `kit` param), one of its traditional
+patterns, and texture layers as density rises. Its grids add `g` (ghost tap)
+and `h` (ghost tap half the time) to the drum grid characters.
+
+The synth turns velocity into timbre as well as level: every drum voice
+gets `vel` (0..1) and opens filters, adds attack noise and raises the
+starting pitch on hard hits. Hand drums (`dHand`) use it as articulation:
+GM 62 is a soft heel tap or a hard slap, open tones gain a slap edge when
+struck hard.
 
 Generators are deterministic for a given request. Each part also records
 `seeds`, one per internal random stream (motif rhythm, motif pitch, form,

@@ -21,10 +21,11 @@
   const gen = (Odd.gen = Odd.gen || {});
   gen.roles = gen.roles || {};
 
-  const ROLES = ['drums', 'bass', 'chords', 'pad', 'lead', 'arp'];
+  const ROLES = ['drums', 'perc', 'bass', 'chords', 'pad', 'lead', 'arp'];
 
   const roleInfo = {
     drums: { label: 'Drums', short: 'DRM', base: null, defaultPatch: 'kit-acoustic' },
+    perc: { label: 'Percussion', short: 'PRC', base: null, defaultPatch: 'kit-perc' },
     bass: { label: 'Bass', short: 'BAS', base: 36, defaultPatch: 'bass-sub' },
     chords: { label: 'Chords', short: 'CHD', base: 60, defaultPatch: 'epiano' },
     pad: { label: 'Pad', short: 'PAD', base: 48, defaultPatch: 'pad-warm' },
@@ -36,6 +37,8 @@
     { key: 'density', label: 'Density', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5, hint: 'How many notes or hits' },
     { key: 'complexity', label: 'Complexity', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5, hint: 'Variation, syncopation and detail' },
   ];
+  const TOUCH = { key: 'touch', label: 'Touch', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5, hint: 'Light taps or hard hits' };
+  const ACCENT = { key: 'accent', label: 'Accents', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5, hint: 'How much louder accents are than the quiet hits between them' };
   const OCTAVE = { key: 'octave', label: 'Octave', type: 'range', min: -2, max: 2, step: 1, default: 0, hint: 'Shift the register up or down' };
 
   // ---------- shared helpers handed to role generators ----------
@@ -190,7 +193,7 @@
    */
   function finalize(notes, ctx) {
     const total = ctx.total;
-    const drum = ctx.role === 'drums';
+    const drum = T.isDrumRole(ctx.role);
     const keyOf = drum ? (n) => n.p : (n) => ctx.pitch(n.deg, n.acc);
     const out = [];
     for (const n of notes) {
@@ -237,13 +240,29 @@
     return dedup.filter((n) => !dropped.has(n));
   }
 
+  /**
+   * Touch and accents for drum parts. Accent spreads velocities away from a
+   * middle level (quiet hits quieter, accents louder); touch scales them all.
+   * Both are neutral at 0.5.
+   */
+  const PIVOT = 76;
+  function dynamics(notes, touch, accent) {
+    const tc = touch == null ? 0.5 : touch;
+    const ac = accent == null ? 0.5 : accent;
+    if (tc === 0.5 && ac === 0.5) return notes;
+    const spread = 0.35 + 1.3 * ac;
+    const scale = 0.55 + 0.9 * tc;
+    return notes.map((n) => Object.assign({}, n, { v: vel((PIVOT + (n.v - PIVOT) * spread) * scale) }));
+  }
+
   // ---------- public API ----------
 
   function params(role) {
     const mod = gen.roles[role];
     const own = mod && mod.params ? mod.params : [];
     const list = COMMON.concat(own);
-    if (role !== 'drums') list.push(OCTAVE);
+    if (T.isDrumRole(role)) list.push(TOUCH, ACCENT);
+    else list.push(OCTAVE);
     return list.map((p) => Object.assign({}, p, p.options ? { options: p.options.map((o) => Object.assign({}, o)) } : {}));
   }
 
@@ -263,6 +282,7 @@
       raw = a.notes;
       if (a.note) ctx.heard.push(a.note);
     }
+    if (T.isDrumRole(ctx.role)) raw = dynamics(raw, ctx.params.touch, ctx.params.accent);
     const notes = finalize(raw, ctx);
     // out of the way of the other parts' register (unless an octave was asked for)
     let lift = 0;
@@ -349,5 +369,6 @@
   gen.generate = generate;
   gen.vary = vary;
   gen._finalize = finalize;
+  gen.dynamics = dynamics;
   gen._makeCtx = makeCtx;
 })(globalThis.Odd = globalThis.Odd || {});

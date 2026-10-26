@@ -19,7 +19,7 @@
     const tg = target || {};
     const partLen = Math.max(1, part.bars || 1) * T.BAR;
     const length = tg.length != null ? tg.length : partLen;
-    const isDrum = part.role === 'drums';
+    const isDrum = T.isDrumRole(part.role);
     const base = (part.base != null ? part.base : 60) + 12 * (tg.oct || 0);
     const refit = tg.refit !== false;
     const srcProg = part.ctx && part.ctx.prog && part.ctx.prog.length ? part.ctx.prog : FALLBACK_PROG;

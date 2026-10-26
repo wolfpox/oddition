@@ -196,7 +196,7 @@
           (take.heard && take.heard.length ? '<p class="take-heard" title="How this take fits the parts already in the section">' + icon('headphones', 'ico-xs') + esc(take.heard.join(' · ')) + '</p>' : '') +
         '</div>' +
         '<div class="screen" draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)">' +
-          rollSlot(rolls, { events: r.events, length: r.length, drums: take.role === 'drums', role: take.role, chords: r.chords }, 'roll-base') +
+          rollSlot(rolls, { events: r.events, length: r.length, drums: T.isDrumRole(take.role), role: take.role, chords: r.chords }, 'roll-base') +
           '<canvas class="roll-head" id="booth-head" aria-hidden="true"></canvas>' +
         '</div>';
     } else {
@@ -294,7 +294,7 @@
           '<span class="card-name" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
           '<button type="button" class="icon-btn icon-btn-sm star' + (p.starred ? ' is-on' : '') + '" data-act="part-star" data-id="' + p.id + '" aria-pressed="' + !!p.starred + '" aria-label="Favourite">' + icon(p.starred ? 'starFill' : 'star') + '</button>' +
         '</div>' +
-        rollSlot(rolls, { events: evs, length: len, drums: p.role === 'drums', role: p.role, mini: true }) +
+        rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(p.role), role: p.role, mini: true }) +
         '<div class="card-bottom">' +
           '<span class="card-meta">' + p.bars + (p.bars === 1 ? ' bar' : ' bars') + ' · ' + esc(Odd.model.styleOf(p.style).label) + (used ? ' · in ' + used + (used === 1 ? ' slot' : ' slots') : '') + '</span>' +
           '<span class="card-actions">' +
@@ -417,7 +417,7 @@
           const evs = R.partEvents(slot.part, Object.assign(R.sectionTarget(s, sec, len), { oct: slot.oct || 0, refit: slot.refit !== false }));
           inner = '<span class="cell-name">' + esc(slot.part.name) + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
-            rollSlot(rolls, { events: evs, length: len, drums: slot.part.role === 'drums', role: lane.role, mini: true });
+            rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
         } else {
           inner = '<span class="cell-empty">' + icon('plus', 'ico-sm') + '</span>';
         }
@@ -429,7 +429,7 @@
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-swap" data-dir="1" aria-label="Next part from the shelf" title="Swap in the next ' + esc(roleLabel(lane.role)) + ' from the shelf">' + icon('fwd') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="-1" aria-label="Octave down" title="Octave down">' + icon('minus') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
-              (lane.role !== 'drums' ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
+              (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-audition" aria-label="Audition another" title="Audition a replacement in the booth">' + icon('booth') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-clear" aria-label="Clear slot" title="Clear">' + icon('trash') + '</button>' +
             '</div>';

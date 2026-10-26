@@ -668,7 +668,11 @@
     return fitProg(prog, bars);
   }
 
+  /** roles whose notes are GM drum sounds (channel 10), not scale degrees */
+  function isDrumRole(role) { return role === 'drums' || role === 'perc'; }
+
   Odd.theory = {
+    isDrumRole,
     PPQ, BEAT, BAR, STEP, NOTE_NAMES, NUMERALS, SCALES,
     mod, scaleSteps, degToSemis, tonicOffset, pitchOf, degreeOf, midiName, clampPitch,
     MODES, chordAlt, chordShape, isDiatonic, sameChord, chordOnly, rescaleChord, resolveChord, parseChord,

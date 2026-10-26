@@ -34,7 +34,7 @@
   /** below this load a section counts as sparse (ambient is meant to be) */
   const QUIET = { ambient: 0.15, techno: 0.4 };
 
-  const ROLE_NAMES = { drums: 'drums', bass: 'bass', chords: 'chords', pad: 'pad', lead: 'lead', arp: 'arp' };
+  const ROLE_NAMES = { drums: 'drums', perc: 'percussion', bass: 'bass', chords: 'chords', pad: 'pad', lead: 'lead', arp: 'arp' };
 
   function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
 
@@ -69,8 +69,8 @@
           if (at >= total * passes) continue;
           const t = at % total;
           const s = Math.round(t / STEP) % steps;
-          if (lane.role === 'drums') {
-            if (KICKS.has(e.p)) kick[s] = Math.min(passes, kick[s] + 1);
+          if (Odd.theory.isDrumRole(lane.role)) {
+            if (lane.role === 'drums' && KICKS.has(e.p)) kick[s] = Math.min(passes, kick[s] + 1);
             continue;
           }
           if (lane.role === 'bass') bassOn[s] = Math.min(passes, bassOn[s] + 1);
@@ -86,7 +86,7 @@
     const norm = (a) => a.map((x) => Math.min(1, x / passes));
     // how busy the section already is: pads and drums don't count
     let load = 0;
-    for (const r in onsets) if (r !== 'pad' && r !== 'drums') load += Math.min(1, onsets[r] / 8);
+    for (const r in onsets) if (r !== 'pad' && !Odd.theory.isDrumRole(r)) load += Math.min(1, onsets[r] / 8);
     return {
       total, steps, roles,
       kick: norm(kick), bassOn: norm(bassOn), lead: norm(lead).map((x) => Math.min(1, x)),
@@ -111,9 +111,9 @@
    */
   function balance(role, density, band, styleId) {
     if (!band || role === 'pad') return { density, note: null };
-    const melodic = band.roles.some((r) => r !== 'drums' && r !== 'pad');
-    if (!melodic && role !== 'drums') return { density, note: null };
-    const weight = { drums: 0.12, bass: 0.15, chords: 0.25, lead: 0.3, arp: 0.3 }[role] || 0.2;
+    const melodic = band.roles.some((r) => !Odd.theory.isDrumRole(r) && r !== 'pad');
+    if (!melodic && !Odd.theory.isDrumRole(role)) return { density, note: null };
+    const weight = { drums: 0.12, perc: 0.18, bass: 0.15, chords: 0.25, lead: 0.3, arp: 0.3 }[role] || 0.2;
     // between about one and one and a half busy parts is neutral
     const load = band.load;
     const quiet = QUIET[styleId] != null ? QUIET[styleId] : 0.6;

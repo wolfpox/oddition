@@ -9,7 +9,12 @@
     { label: 'RIDE', notes: [51, 59, 53] },
     { label: 'OPEN HAT', notes: [46] },
     { label: 'HAT', notes: [42, 44] },
-    { label: 'PERC', notes: [54, 56, 69, 70, 75, 76, 77, 60, 61, 62, 63, 64] },
+    { label: 'BELL', notes: [56, 67, 68, 80, 81] },
+    { label: 'SHAKER', notes: [54, 69, 70, 73, 74] },
+    { label: 'PERC', notes: [75, 76, 77, 71, 72, 78, 79] },
+    { label: 'TIMBALE', notes: [65, 66] },
+    { label: 'BONGO', notes: [60, 61] },
+    { label: 'CONGA', notes: [62, 63, 64] },
     { label: 'TOM HI', notes: [50, 48] },
     { label: 'TOM LO', notes: [47, 45, 43, 41] },
     { label: 'RIM', notes: [37] },
@@ -19,6 +24,7 @@
   ];
   const DRUM_INDEX = {};
   DRUM_ROWS.forEach((r, i) => r.notes.forEach((n) => { DRUM_INDEX[n] = i; }));
+  const OTHER = DRUM_ROWS.findIndex((r) => r.label === 'PERC');
 
   let tokenCache = null;
   function tokens() {
@@ -96,12 +102,12 @@
     let rows, rowOf;
     if (o.drums) {
       const present = new Set();
-      for (const e of events) present.add(DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : 4);
+      for (const e of events) present.add(DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER);
       rows = DRUM_ROWS.map((r, i) => i).filter((i) => present.has(i));
-      if (!rows.length) rows = [10];
+      if (!rows.length) rows = [DRUM_ROWS.length - 1];
       const pos = {};
       rows.forEach((ri, i) => { pos[ri] = i; });
-      rowOf = (p) => pos[DRUM_INDEX[p] != null ? DRUM_INDEX[p] : 4];
+      rowOf = (p) => pos[DRUM_INDEX[p] != null ? DRUM_INDEX[p] : OTHER];
     } else {
       let lo = 127, hi = 0;
       for (const e of events) { lo = Math.min(lo, e.p); hi = Math.max(hi, e.p); }

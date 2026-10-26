@@ -26,6 +26,7 @@
     'kit-808': { label: '808 Kit', role: 'drums', gm: 0 },
     'kit-909': { label: '909 Kit', role: 'drums', gm: 0 },
     'kit-lofi': { label: 'Lo-fi Kit', role: 'drums', gm: 0 },
+    'kit-perc': { label: 'Hand Percussion', role: 'drums', gm: 0 },
     'bass-sub': { label: 'Sub Bass', role: 'bass', gm: 38 },
     'bass-saw': { label: 'Saw Bass', role: 'bass', gm: 39 },
     'bass-808': { label: '808 Bass', role: 'bass', gm: 38 },
@@ -46,7 +47,7 @@
 
   // [reverb send, delay send]
   const SENDS = {
-    'kit-acoustic': [0.14, 0], 'kit-808': [0.05, 0], 'kit-909': [0.06, 0], 'kit-lofi': [0.1, 0],
+    'kit-acoustic': [0.14, 0], 'kit-808': [0.05, 0], 'kit-909': [0.06, 0], 'kit-lofi': [0.1, 0], 'kit-perc': [0.2, 0],
     'bass-sub': [0, 0], 'bass-saw': [0.03, 0], 'bass-808': [0, 0], 'bass-pluck': [0.05, 0],
     epiano: [0.25, 0.07], keys: [0.22, 0.04], organ: [0.16, 0], stab: [0.22, 0.12],
     'pad-warm': [0.42, 0.05], 'pad-glass': [0.5, 0.14], strings: [0.36, 0],
@@ -59,6 +60,7 @@
   function patchList(role) {
     const all = Object.keys(PATCHES).map((id) => ({ id, label: PATCHES[id].label, role: PATCHES[id].role }));
     if (!role) return all;
+    if (role === 'perc') role = 'drums';
     return all.filter((p) => p.role === role).concat(all.filter((p) => p.role !== role));
   }
 
@@ -887,6 +889,7 @@
       snare: { tone: 185, tone2: 0, tDec: 0.06, nDec: 0.075, hp: 1300, bp: 3200, tMix: 0.42, nMix: 0.9 },
       hat: { type: 'noise', hp: 7200, bp: 10500, tune: 1, cDec: 0.022, oDec: 0.13, lvl: 0.7 },
       tom: { dec: 0.17, tune: 1, tri: 0.3 }, cym: { dec: 0.6, tune: 1 }, clap: { bp: 1150, dec: 0.06 },
+      hand: { tune: 1, dec: 1, skin: 1 },
       lp: 0, crush: 0,
     },
     'kit-808': {
@@ -894,6 +897,7 @@
       snare: { tone: 238, tone2: 476, tDec: 0.045, nDec: 0.06, hp: 1900, bp: 0, tMix: 0.45, nMix: 0.6 },
       hat: { type: 'metal', hp: 7500, bp: 10000, tune: 1, cDec: 0.02, oDec: 0.12, lvl: 1.1 },
       tom: { dec: 0.28, tune: 0.92, tri: 0 }, cym: { dec: 0.55, tune: 1.05 }, clap: { bp: 1050, dec: 0.08 },
+      hand: { tune: 1.06, dec: 1.2, skin: 0.4 },
       lp: 0, crush: 0,
     },
     'kit-909': {
@@ -901,6 +905,7 @@
       snare: { tone: 200, tone2: 0, tDec: 0.05, nDec: 0.1, hp: 1100, bp: 0, tMix: 0.38, nMix: 0.7 },
       hat: { type: 'mix', hp: 8000, bp: 11000, tune: 1.12, cDec: 0.018, oDec: 0.1, lvl: 0.9 },
       tom: { dec: 0.19, tune: 1.05, tri: 0.15 }, cym: { dec: 0.5, tune: 1.15 }, clap: { bp: 1300, dec: 0.07 },
+      hand: { tune: 1.04, dec: 0.9, skin: 0.7 },
       lp: 0, crush: 0,
     },
     'kit-lofi': {
@@ -908,14 +913,35 @@
       snare: { tone: 175, tone2: 0, tDec: 0.06, nDec: 0.07, hp: 900, bp: 2200, tMix: 0.48, nMix: 0.85 },
       hat: { type: 'noise', hp: 6000, bp: 8000, tune: 1, cDec: 0.02, oDec: 0.1, lvl: 0.75 },
       tom: { dec: 0.15, tune: 0.95, tri: 0.25 }, cym: { dec: 0.45, tune: 0.9 }, clap: { bp: 1000, dec: 0.06 },
+      hand: { tune: 0.96, dec: 0.9, skin: 0.8 },
       lp: 5500, crush: 1,
+    },
+    // hand percussion first: warm skins, a little room; the kit voices are the acoustic ones
+    'kit-perc': {
+      kick: { f0: 118, f1: 50, pd: 0.07, dec: 0.13, click: 0.25, drive: 1.1, lvl: 1 },
+      snare: { tone: 190, tone2: 0, tDec: 0.06, nDec: 0.07, hp: 1400, bp: 3000, tMix: 0.45, nMix: 0.8 },
+      hat: { type: 'noise', hp: 7400, bp: 10500, tune: 1, cDec: 0.02, oDec: 0.12, lvl: 0.65 },
+      tom: { dec: 0.2, tune: 0.97, tri: 0.35 }, cym: { dec: 0.6, tune: 1 }, clap: { bp: 1100, dec: 0.06 },
+      hand: { tune: 1, dec: 1.15, skin: 1.2 },
+      lp: 0, crush: 0,
     },
   };
 
   const METAL = [2, 3, 4.16, 5.43, 6.79, 8.21];
   const METAL_LIGHT = [2, 4.16, 6.79];
   const TOMS = { 41: 82, 43: 97, 45: 110, 47: 130, 48: 147, 50: 174 };
-  const HAND = { 60: [440, 0.07], 61: [330, 0.09], 62: [290, 0.035], 63: [260, 0.12], 64: [180, 0.16] };
+  /*
+   * Hand drums by GM note: [pitch Hz, body decay (s), kind]. Kinds:
+   *   open  an open tone that rings; struck hard it gets a slap edge
+   *   mute  a muted stroke: soft it is a heel/fingertip tap, hard it is a slap
+   */
+  const HAND = {
+    60: [500, 0.07, 'open'], // high bongo (macho)
+    61: [360, 0.09, 'open'], // low bongo (hembra)
+    62: [330, 0.03, 'mute'], // muted / slapped high conga
+    63: [320, 0.14, 'open'], // open high conga
+    64: [225, 0.18, 'open'], // low conga (tumba)
+  };
 
   function metal(k, base, w, dest, level) {
     const ratios = k.light ? METAL_LIGHT : METAL;
@@ -925,29 +951,36 @@
     return g;
   }
 
-  function dKick(k, P, out, amp, w, tune) {
-    const o = k.osc('sine', P.f0 * tune, w);
-    o.frequency.exponentialRampToValueAtTime(P.f1 * tune, w + P.pd);
+  /*
+   * Every voice takes `vel` (0..1) as well as `amp`: a hard hit is not just
+   * louder, it has more attack and more high end, and skins start higher
+   * before they settle. A soft hit is duller and shorter.
+   */
+
+  function dKick(k, P, out, amp, w, tune, vel) {
+    const f0 = P.f0 * tune * (0.86 + 0.26 * vel);
+    const o = k.osc('sine', f0, w);
+    o.frequency.exponentialRampToValueAtTime(P.f1 * tune, w + P.pd * (0.8 + 0.3 * vel));
     o.frequency.exponentialRampToValueAtTime(P.f1 * tune * 0.9, w + P.pd + P.dec * 4);
     const g = k.gain(0);
     g.gain.setValueAtTime(0, w);
     g.gain.linearRampToValueAtTime(amp * P.lvl * 0.9, w + 0.0025);
-    g.gain.setTargetAtTime(0, w + 0.012, P.dec);
+    g.gain.setTargetAtTime(0, w + 0.012, P.dec * (0.85 + 0.2 * vel));
     o.connect(g);
-    if (P.drive) g.connect(k.shaper(driveCurve(P.drive))).connect(out);
+    if (P.drive) g.connect(k.shaper(driveCurve(Math.round(P.drive * (0.8 + 0.4 * vel) * 5) / 5))).connect(out);
     else g.connect(out);
     if (P.click) {
-      const hp = k.filter('highpass', 2500, 0.7);
+      const hp = k.filter('highpass', 2000 + 1500 * vel, 0.7);
       const cg = k.gain(0);
-      hit(cg.gain, w, amp * P.click * 0.5, 0.0005, 0.004);
+      hit(cg.gain, w, amp * P.click * (0.2 + 0.7 * vel), 0.0005, 0.004);
       k.noise(w, 0.04).connect(hp).connect(cg).connect(out);
     }
     return w + 0.012 + P.dec * 6.5;
   }
 
-  function dSnare(k, P, out, amp, w, bright, alt) {
+  function dSnare(k, P, out, amp, w, bright, alt, vel) {
     const tone = P.tone * (alt ? 1.08 : 1);
-    const o = k.osc('triangle', tone * 1.25, w);
+    const o = k.osc('triangle', tone * (1.1 + 0.3 * vel), w);
     o.frequency.exponentialRampToValueAtTime(tone, w + 0.025);
     const tg = k.gain(0);
     hit(tg.gain, w, amp * P.tMix, 0.002, P.tDec);
@@ -958,41 +991,46 @@
       hit(g2.gain, w, amp * P.tMix * 0.5, 0.002, P.tDec * 0.8);
       o2.connect(g2).connect(out);
     }
-    const hp = k.filter('highpass', P.hp * (alt ? 1.3 : 1), 0.7);
+    // soft strokes (ghost notes) are darker and shorter
+    const hp = k.filter('highpass', P.hp * (alt ? 1.3 : 1) * (0.7 + 0.4 * vel), 0.7);
     let chain = k.noise(w).connect(hp);
     if (P.bp) {
       const body = k.filter('peaking', P.bp, 0.8);
-      body.gain.value = 5;
+      body.gain.value = 2 + 5 * vel;
       chain = chain.connect(body);
     }
     const ng = k.gain(0);
-    hit(ng.gain, w, amp * P.nMix * bright, 0.0015, P.nDec * (alt ? 0.8 : 1));
+    const nDec = P.nDec * (alt ? 0.8 : 1) * (0.65 + 0.45 * vel);
+    hit(ng.gain, w, amp * P.nMix * bright, 0.0015, nDec);
     chain.connect(ng).connect(out);
-    return w + 0.004 + Math.max(P.tDec, P.nDec) * 7;
+    return w + 0.004 + Math.max(P.tDec, nDec) * 7;
   }
 
-  function dClap(k, P, out, amp, w) {
+  function dClap(k, P, out, amp, w, vel) {
     const hp = k.filter('highpass', 500, 0.5);
-    const bp = k.filter('bandpass', P.bp, 1.1);
+    const bp = k.filter('bandpass', P.bp * (0.85 + 0.3 * vel), 1.1);
     const g = k.gain(0);
     const pk = amp * 2.2;
     g.gain.setValueAtTime(0, w);
     let t = w;
+    // a firm clap has tighter, sharper bursts
+    const gap = 0.0105 - 0.002 * vel;
     for (let i = 0; i < 3; i++) {
       g.gain.linearRampToValueAtTime(pk, t + 0.0012);
-      g.gain.linearRampToValueAtTime(pk * 0.12, t + 0.0085);
-      t += 0.0095;
+      g.gain.linearRampToValueAtTime(pk * 0.12, t + gap - 0.001);
+      t += gap;
     }
     g.gain.linearRampToValueAtTime(pk, t + 0.0012);
-    g.gain.setTargetAtTime(0, t + 0.0015, P.dec);
+    g.gain.setTargetAtTime(0, t + 0.0015, P.dec * (0.75 + 0.4 * vel));
     k.noise(w).connect(hp).connect(bp).connect(g).connect(out);
     return t + P.dec * 7;
   }
 
-  function dHat(k, P, out, amp, w, dec, bright) {
+  function dHat(k, P, out, amp, w, dec, bright, vel) {
     const g = k.gain(0);
-    const end = hit(g.gain, w, amp * P.lvl * bright, 0.001, dec);
-    const hp = k.filter('highpass', P.hp, 0.6);
+    const end = hit(g.gain, w, amp * P.lvl * bright, 0.001, dec * (0.8 + 0.35 * vel));
+    // a light tip touch is thin; a hard shoulder hit brings out the body
+    const hp = k.filter('highpass', P.hp * (1.2 - 0.3 * vel), 0.6);
     hp.connect(g).connect(out);
     if (P.type !== 'metal') k.noise(w).connect(k.gain(P.type === 'mix' ? 0.55 : 1)).connect(hp);
     if (P.type !== 'noise') {
@@ -1005,32 +1043,32 @@
     return end;
   }
 
-  function dTom(k, P, out, amp, w, note) {
+  function dTom(k, P, out, amp, w, note, vel) {
     const f = TOMS[note] * P.tune;
-    const o = k.osc('sine', f * 1.6, w);
-    o.frequency.exponentialRampToValueAtTime(f, w + 0.06);
+    const o = k.osc('sine', f * (1.25 + 0.6 * vel), w);
+    o.frequency.exponentialRampToValueAtTime(f, w + 0.04 + 0.04 * vel);
     const g = k.gain(0);
-    const end = hit(g.gain, w, amp * 0.8, 0.002, P.dec);
+    const end = hit(g.gain, w, amp * 0.8, 0.002, P.dec * (0.8 + 0.35 * vel));
     o.connect(g);
     if (P.tri && !k.light) {
       const t2 = k.osc('triangle', f * 2.4, w);
       t2.frequency.exponentialRampToValueAtTime(f * 1.5, w + 0.06);
-      t2.connect(k.gain(P.tri)).connect(g);
+      t2.connect(k.gain(P.tri * (0.5 + 0.7 * vel))).connect(g);
     }
     const bp = k.filter('bandpass', f * 6, 1);
     const ng = k.gain(0);
-    hit(ng.gain, w, amp * 0.25, 0.001, 0.01);
+    hit(ng.gain, w, amp * (0.06 + 0.4 * vel), 0.001, 0.01);
     k.noise(w, 0.06).connect(bp).connect(ng).connect(out);
     g.connect(out);
     return end;
   }
 
-  function dCrash(k, P, out, amp, w, note) {
+  function dCrash(k, P, out, amp, w, note, vel) {
     const alt = note === 57;
-    const dec = P.dec * (alt ? 1.25 : 1);
+    const dec = P.dec * (alt ? 1.25 : 1) * (0.7 + 0.5 * vel);
     const g = k.gain(0);
     const end = hit(g.gain, w, amp * 0.5, 0.003, dec);
-    const hp = k.filter('highpass', 4500, 0.5);
+    const hp = k.filter('highpass', 5500 - 2000 * vel, 0.5);
     k.noise(w).connect(k.gain(0.7)).connect(hp);
     const bp = k.filter('bandpass', 8000, 0.6);
     metal(k, 130 * P.tune * (alt ? 1.1 : 1), w, bp, 3);
@@ -1039,14 +1077,14 @@
     return end;
   }
 
-  function dRide(k, P, out, amp, w, note) {
+  function dRide(k, P, out, amp, w, note, vel) {
     const alt = note === 59;
     const g = k.gain(0);
     const end = hit(g.gain, w, amp * 0.4, 0.002, alt ? 0.4 : 0.32);
-    const bp = k.filter('bandpass', 5200, 1.6);
+    const bp = k.filter('bandpass', 4600 + 1200 * vel, 1.6);
     metal(k, 170 * P.tune * (alt ? 1.1 : 1), w, bp, 4);
     const hp = k.filter('highpass', 7000, 0.6);
-    k.noise(w).connect(k.gain(0.3)).connect(hp).connect(g);
+    k.noise(w).connect(k.gain(0.15 + 0.3 * vel)).connect(hp).connect(g);
     bp.connect(g);
     g.connect(out);
     return end;
@@ -1061,44 +1099,48 @@
     return end;
   }
 
-  function dTamb(k, P, out, amp, w) {
+  function dTamb(k, P, out, amp, w, vel) {
     const g = k.gain(0);
     const pk = amp * 0.9;
+    // a shake is a smear of jingles; a hit on the head is one sharp burst
+    const rattle = 0.06 + 0.04 * vel;
     g.gain.setValueAtTime(0, w);
     g.gain.linearRampToValueAtTime(pk, w + 0.001);
-    g.gain.linearRampToValueAtTime(pk * 0.3, w + 0.012);
+    g.gain.linearRampToValueAtTime(pk * (0.45 - 0.2 * vel), w + 0.012);
     g.gain.linearRampToValueAtTime(pk * 0.7, w + 0.018);
-    g.gain.setTargetAtTime(0, w + 0.02, 0.06);
+    g.gain.setTargetAtTime(0, w + 0.02, rattle);
     const hp = k.filter('highpass', 6500, 0.7);
-    const bp = k.filter('bandpass', 9500, 0.8);
+    const bp = k.filter('bandpass', 8500 + 2000 * vel, 0.8);
     k.noise(w).connect(hp);
     metal(k, 240, w, hp, 1);
     hp.connect(bp).connect(g).connect(out);
-    return w + 0.02 + 0.06 * 7;
+    return w + 0.02 + rattle * 7;
   }
 
-  function dCowbell(k, P, out, amp, w) {
+  function dCowbell(k, P, out, amp, w, vel) {
     const g = k.gain(0);
     const pk = amp * 0.5;
     g.gain.setValueAtTime(0, w);
     g.gain.linearRampToValueAtTime(pk, w + 0.001);
     g.gain.setTargetAtTime(pk * 0.3, w + 0.002, 0.012);
-    g.gain.setTargetAtTime(0, w + 0.03, 0.09);
+    g.gain.setTargetAtTime(0, w + 0.03, 0.06 + 0.05 * vel);
     const bp = k.filter('bandpass', 900, 1.3);
     k.osc('square', 540, w).connect(k.gain(0.5)).connect(bp);
     k.osc('square', 800, w).connect(k.gain(0.5)).connect(bp);
     bp.connect(g).connect(out);
-    return w + 0.03 + 0.09 * 7;
+    return w + 0.03 + 0.11 * 7;
   }
 
-  function dShaker(k, P, out, amp, w, note) {
+  function dShaker(k, P, out, amp, w, note, vel) {
     const g = k.gain(0);
+    // a firm shake has a quicker, brighter front edge
+    const att = 0.016 - 0.008 * vel;
     g.gain.setValueAtTime(0, w);
-    g.gain.linearRampToValueAtTime(amp * 0.45, w + 0.012);
-    g.gain.setTargetAtTime(0, w + 0.014, 0.028);
-    const hp = k.filter('highpass', note === 70 ? 6500 : 5000, 0.7);
+    g.gain.linearRampToValueAtTime(amp * 0.45, w + att);
+    g.gain.setTargetAtTime(0, w + att + 0.002, 0.022 + 0.012 * vel);
+    const hp = k.filter('highpass', (note === 70 ? 5500 : 4200) + 2000 * vel, 0.7);
     k.noise(w).connect(hp).connect(g).connect(out);
-    return w + 0.014 + 0.028 * 7;
+    return w + 0.02 + 0.034 * 7;
   }
 
   function dTone(k, out, type, f, amp, w, tc, drop) {
@@ -1110,27 +1152,110 @@
     return end;
   }
 
-  function dRim(k, P, out, amp, w) {
+  function dRim(k, P, out, amp, w, vel) {
     const hp = k.filter('highpass', 600, 0.7);
-    const e1 = dTone(k, hp, 'triangle', 1700, amp * 0.5, w, 0.01);
+    const e1 = dTone(k, hp, 'triangle', 1550 + 300 * vel, amp * 0.5, w, 0.01);
     hp.connect(out);
     dTone(k, out, 'sine', 480, amp * 0.3, w, 0.012);
     const bp = k.filter('bandpass', 2400, 2);
     const ng = k.gain(0);
-    hit(ng.gain, w, amp * 0.6, 0.0005, 0.006);
+    hit(ng.gain, w, amp * (0.3 + 0.5 * vel), 0.0005, 0.006);
     k.noise(w, 0.04).connect(bp).connect(ng).connect(out);
     return Math.max(e1, w + 0.1);
   }
 
-  function dHand(k, P, out, amp, w, note) {
-    const [f, tc] = HAND[note];
-    const end = dTone(k, out, 'sine', f, amp * 0.7, w, tc, 1.25);
-    if (note === 62 || note === 63) {
-      const bp = k.filter('bandpass', 2000, 1.2);
-      const ng = k.gain(0);
-      hit(ng.gain, w, amp * (note === 62 ? 0.5 : 0.25), 0.0005, 0.008);
-      k.noise(w, 0.05).connect(bp).connect(ng).connect(out);
+  /*
+   * Congas and bongos: a skin (a sine that starts sharp and settles, plus an
+   * inharmonic overtone) and a hand (a short noise burst). Velocity moves an
+   * open stroke from a soft fingertip tone to a hard, ringing one with a slap
+   * edge; a muted stroke from a quiet heel tap to a cracking slap.
+   */
+  function dHand(k, K, out, amp, w, note, vel) {
+    const H = K.hand || { tune: 1, dec: 1, skin: 1 };
+    const [f0, dec0, kind] = HAND[note];
+    const f = f0 * H.tune;
+    const mute = kind === 'mute';
+    const slap = mute ? Math.max(0, (vel - 0.5) * 2) : Math.max(0, (vel - 0.75) * 2.5);
+    let dec = dec0 * H.dec * (mute ? 0.6 + 0.6 * vel : 0.7 + 0.5 * vel);
+    if (mute && slap > 0) dec *= 0.8;
+    const body = mute ? 0.55 - 0.3 * slap : 0.85;
+    const o = k.osc('sine', f * (1.04 + 0.14 * vel), w);
+    o.frequency.exponentialRampToValueAtTime(f, w + 0.012 + 0.01 * vel);
+    const g = k.gain(0);
+    const end = hit(g.gain, w, amp * body, 0.0012, dec);
+    o.connect(g).connect(out);
+    if (!k.light) {
+      // the skin's first overtone, a fifth-and-a-bit up, dies quickly
+      const o2 = k.osc('sine', f * 1.59, w);
+      const g2 = k.gain(0);
+      hit(g2.gain, w, amp * body * (0.18 + 0.2 * vel), 0.001, dec * 0.35);
+      o2.connect(g2).connect(out);
     }
+    // the hand: dull thump when soft, bright crack when hard
+    const bp = k.filter('bandpass', (mute ? 1400 : 1800) + 2600 * vel + 1200 * slap, mute ? 0.9 : 1.2);
+    const ng = k.gain(0);
+    hit(ng.gain, w, amp * H.skin * (0.08 + 0.35 * vel + 0.9 * slap), 0.0006, 0.006 + 0.012 * slap);
+    k.noise(w, 0.06).connect(bp).connect(ng).connect(out);
+    return Math.max(end, w + 0.08);
+  }
+
+  /** timbales: a bright, ringing shell over a tight head */
+  function dTimbale(k, out, amp, w, note, vel) {
+    const f = note === 65 ? 640 : 460;
+    const g = k.gain(0);
+    const end = hit(g.gain, w, amp * 0.55, 0.001, 0.09 + 0.08 * vel);
+    k.osc('sine', f * (1.05 + 0.1 * vel), w).connect(g);
+    if (!k.light) {
+      const shell = k.filter('bandpass', 3200, 3);
+      metal(k, f * 0.97, w, shell, 0.8 + 1.4 * vel);
+      shell.connect(g);
+    }
+    const ng = k.gain(0);
+    const hp = k.filter('highpass', 2500, 0.7);
+    hit(ng.gain, w, amp * (0.15 + 0.4 * vel), 0.0006, 0.012);
+    k.noise(w, 0.05).connect(hp).connect(ng).connect(out);
+    g.connect(out);
+    return end;
+  }
+
+  /** agogo bells: two clangorous partials, high (67) or low (68) bell */
+  function dAgogo(k, out, amp, w, note, vel) {
+    const f = note === 67 ? 920 : 690;
+    const g = k.gain(0);
+    const end = hit(g.gain, w, amp * 0.42, 0.001, 0.12 + 0.08 * vel);
+    k.osc('sine', f, w).connect(g);
+    k.osc('sine', f * 2.66, w).connect(k.gain(0.2 + 0.35 * vel)).connect(g);
+    g.connect(out);
+    return end;
+  }
+
+  /** guiro: a scrape of short noise grains, short (73) or long (74) */
+  function dGuiro(k, out, amp, w, note, vel) {
+    const n = note === 73 ? 6 : 15;
+    const gap = note === 73 ? 0.011 : 0.016;
+    const bp = k.filter('bandpass', 3000 + 1500 * vel, 1.4);
+    const g = k.gain(0);
+    g.gain.setValueAtTime(0, w);
+    for (let i = 0; i < n; i++) {
+      const t = w + i * gap;
+      const pk = amp * 0.6 * (note === 74 ? 0.6 + 0.4 * Math.sin((Math.PI * i) / n) : 1);
+      g.gain.linearRampToValueAtTime(pk, t + 0.002);
+      g.gain.linearRampToValueAtTime(pk * 0.1, t + gap * 0.8);
+    }
+    g.gain.setTargetAtTime(0, w + n * gap, 0.01);
+    k.noise(w).connect(bp).connect(g).connect(out);
+    return w + n * gap + 0.08;
+  }
+
+  /** triangle: inharmonic partials, open (81) rings, muted (80) chokes */
+  function dTriangle(k, out, amp, w, note, vel) {
+    const open = note === 81;
+    const g = k.gain(0);
+    const tc = open ? 0.35 + 0.25 * vel : 0.025;
+    const end = hit(g.gain, w, amp * 0.22, 0.0008, tc);
+    const parts = k.light ? [1, 2.76] : [1, 2.76, 5.4];
+    parts.forEach((r, i) => k.osc('sine', 1650 * r, w).connect(k.gain(i ? 0.25 + 0.3 * vel : 1)).connect(g));
+    g.connect(out);
     return end;
   }
 
@@ -1146,36 +1271,40 @@
     const bright = 0.6 + 0.4 * vel;
 
     switch (note) {
-      case 35: return dKick(k, K.kick, out, amp, w, 0.88);
-      case 36: return dKick(k, K.kick, out, amp, w, 1);
-      case 37: return dRim(k, K, out, amp, w);
-      case 38: return dSnare(k, K.snare, out, amp, w, bright, false);
-      case 40: return dSnare(k, K.snare, out, amp, w, bright, true);
-      case 39: return dClap(k, K.clap, out, amp, w);
+      case 35: return dKick(k, K.kick, out, amp, w, 0.88, vel);
+      case 36: return dKick(k, K.kick, out, amp, w, 1, vel);
+      case 37: return dRim(k, K, out, amp, w, vel);
+      case 38: return dSnare(k, K.snare, out, amp, w, bright, false, vel);
+      case 40: return dSnare(k, K.snare, out, amp, w, bright, true, vel);
+      case 39: return dClap(k, K.clap, out, amp, w, vel);
       case 42:
       case 44: {
         const o = env.chokes.get(dest);
         if (o && !o.done && o.start < w && o.end > w) o.stop(w);
         const pedal = note === 44;
-        return dHat(k, K.hat, out, amp * (pedal ? 0.55 : 1), w, K.hat.cDec * (pedal ? 0.7 : 1), bright);
+        return dHat(k, K.hat, out, amp * (pedal ? 0.55 : 1), w, K.hat.cDec * (pedal ? 0.7 : 1), bright, vel);
       }
       case 46: {
-        const end = dHat(k, K.hat, out, amp * 0.7, w, K.hat.oDec, bright);
+        const end = dHat(k, K.hat, out, amp * 0.7, w, K.hat.oDec, bright, vel);
         env.chokes.set(dest, v);
         return end;
       }
       case 41: case 43: case 45: case 47: case 48: case 50:
-        return dTom(k, K.tom, out, amp, w, note);
-      case 49: case 57: return dCrash(k, K.cym, out, amp, w, note);
-      case 51: case 59: return dRide(k, K.cym, out, amp, w, note);
+        return dTom(k, K.tom, out, amp, w, note, vel);
+      case 49: case 57: return dCrash(k, K.cym, out, amp, w, note, vel);
+      case 51: case 59: return dRide(k, K.cym, out, amp, w, note, vel);
       case 53: return dRideBell(k, K.cym, out, amp, w);
-      case 54: return dTamb(k, K, out, amp, w);
-      case 56: return dCowbell(k, K, out, amp, w);
-      case 69: case 70: return dShaker(k, K, out, amp, w, note);
-      case 75: return dTone(k, out, 'sine', 2500, amp * 0.5, w, 0.022);
-      case 76: return dTone(k, out, 'triangle', 1050, amp * 0.6, w, 0.028, 1.06);
-      case 77: return dTone(k, out, 'triangle', 790, amp * 0.6, w, 0.028, 1.06);
-      case 60: case 61: case 62: case 63: case 64: return dHand(k, K, out, amp, w, note);
+      case 54: return dTamb(k, K, out, amp, w, vel);
+      case 56: return dCowbell(k, K, out, amp, w, vel);
+      case 60: case 61: case 62: case 63: case 64: return dHand(k, K, out, amp, w, note, vel);
+      case 65: case 66: return dTimbale(k, out, amp, w, note, vel);
+      case 67: case 68: return dAgogo(k, out, amp, w, note, vel);
+      case 69: case 70: return dShaker(k, K, out, amp, w, note, vel);
+      case 73: case 74: return dGuiro(k, out, amp, w, note, vel);
+      case 75: return dTone(k, out, 'sine', 2350 + 300 * vel, amp * 0.5, w, 0.016 + 0.01 * vel);
+      case 76: return dTone(k, out, 'triangle', 1050, amp * 0.6, w, 0.022 + 0.01 * vel, 1.03 + 0.05 * vel);
+      case 77: return dTone(k, out, 'triangle', 790, amp * 0.6, w, 0.022 + 0.01 * vel, 1.03 + 0.05 * vel);
+      case 80: case 81: return dTriangle(k, out, amp, w, note, vel);
       default: return dTone(k, out, 'sine', 1200, amp * 0.35, w, 0.01);
     }
   }
@@ -1234,7 +1363,13 @@
       b.setMute(false);
       const t0 = ctx.currentTime + 0.05;
       const notes = [];
-      if (P.role === 'drums') {
+      if (patchId === 'kit-perc') {
+        const s = 60 / 104 / 4;
+        [[62, 0, 40], [62, 2, 44], [62, 4, 118], [62, 6, 44], [62, 8, 40], [62, 10, 44], [63, 12, 96], [64, 14, 100],
+          [70, 0, 70], [70, 2, 40], [70, 4, 80], [70, 6, 40], [70, 8, 70], [70, 10, 40], [70, 12, 80], [70, 14, 40],
+          [60, 16, 100], [60, 18, 50], [61, 20, 96], [60, 22, 60], [56, 24, 80], [67, 26, 90], [68, 28, 90], [81, 30, 70]]
+          .forEach(([n, i, vv]) => notes.push([n, t0 + i * s, 0.1, vv]));
+      } else if (P.role === 'drums') {
         const s = 60 / 110 / 2;
         [[36, 0, 110], [42, 0, 80], [42, 1, 70], [38, 2, 105], [42, 2, 80], [42, 3, 70],
           [36, 4, 105], [42, 4, 80], [36, 5, 90], [42, 5, 70], [38, 6, 110], [46, 7, 80]]

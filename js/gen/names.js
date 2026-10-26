@@ -5,6 +5,8 @@
   const NOUNS = {
     drums: ['Pocket', 'Shuffle', 'Knock', 'Stomp', 'Rattle', 'Break', 'Strut', 'Clatter', 'Bounce', 'Snap',
       'Thump', 'Shake', 'Swagger', 'Tumble', 'March', 'Stride', 'Clap', 'Kick'],
+    perc: ['Conga', 'Rattle', 'Shaker', 'Bongo', 'Patter', 'Clave', 'Ritual', 'Carnival', 'Tumble', 'Chatter',
+      'Drizzle', 'Market', 'Woodpile', 'Tapestry', 'Firelight'],
     bass: ['Undertow', 'Floor', 'Rumble', 'Current', 'Anchor', 'Bedrock', 'Sway', 'Walk', 'Groundswell',
       'Hum', 'Weight', 'Root', 'Tremor', 'Riverbed', 'Low End'],
     chords: ['Changes', 'Stack', 'Bloom', 'Haze', 'Glow', 'Comp', 'Palette', 'Swell', 'Chorale', 'Mood',

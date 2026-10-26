@@ -434,6 +434,23 @@
     },
   ];
 
+  // percussion lane: which instrument families each style reaches for (weights)
+  const PERC = {
+    lofi: { congas: 2, bongos: 3, shakers: 3, clave: 1, wood: 1 },
+    boombap: { bongos: 3, congas: 2, shakers: 2, tamb: 2, bells: 1 },
+    trap: { wood: 3, toms: 2, clave: 2, shakers: 1 },
+    house: { congas: 4, bongos: 2, shakers: 3, bells: 2, tamb: 2, clave: 1 },
+    techno: { wood: 3, toms: 3, shakers: 2, bells: 1, clave: 1 },
+    synthwave: { tamb: 3, toms: 2, shakers: 2, bells: 1 },
+    pop: { tamb: 3, shakers: 3, congas: 1, bongos: 1, triangle: 1 },
+    ambient: { shakers: 2, triangle: 2, wood: 2, clave: 1, bells: 1 },
+    dnb: { bongos: 3, congas: 2, shakers: 2, wood: 1, timbales: 1 },
+  };
+  for (const s of STYLES) {
+    if (!s.perc) s.perc = { kits: PERC[s.id] || { congas: 2, bongos: 2, shakers: 2 } };
+    if (!s.patches.perc) s.patches.perc = s.id === 'lofi' ? 'kit-lofi' : 'kit-perc';
+  }
+
   // how often new chord progressions reach outside the key (0..1), per style
   const HARMONY = { lofi: 0.55, boombap: 0.35, trap: 0.15, house: 0.3, techno: 0.05, synthwave: 0.35, pop: 0.3, ambient: 0.2, dnb: 0.25 };
   for (const s of STYLES) if (s.harmony == null) s.harmony = HARMONY[s.id] != null ? HARMONY[s.id] : 0.3;

@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const path = require('node:path');
 
 for (const f of [
-  'core/rng', 'core/theory', 'gen/styles', 'gen/names', 'gen/drums', 'gen/bass', 'gen/chords', 'gen/pad', 'gen/lead',
+  'core/rng', 'core/theory', 'gen/styles', 'gen/names', 'gen/drums', 'gen/perc', 'gen/bass', 'gen/chords', 'gen/pad', 'gen/lead',
   'gen/arp', 'gen/index', 'core/render', 'core/midi-file', 'core/zip', 'core/model', 'core/export',
   'audio/synth', 'audio/webmidi', 'audio/transport',
 ]) require(path.join(__dirname, '..', 'js', f + '.js'));

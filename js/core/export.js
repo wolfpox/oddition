@@ -31,7 +31,7 @@
       tracks.push({
         name: lane.name,
         channel: lane.channel,
-        program: lane.role === 'drums' ? null : gmFor(lane.patch),
+        program: T.isDrumRole(lane.role) ? null : gmFor(lane.patch),
         notes,
         lane,
       });
@@ -54,8 +54,8 @@
       tonic, scale, length,
       tracks: [{
         name: part.name,
-        channel: role === 'drums' ? 9 : lane ? lane.channel : 0,
-        program: role === 'drums' ? null : gmFor(lane ? lane.patch : Odd.model.roleInfo(role).defaultPatch),
+        channel: T.isDrumRole(role) ? 9 : lane ? lane.channel : 0,
+        program: T.isDrumRole(role) ? null : gmFor(lane ? lane.patch : Odd.model.roleInfo(role).defaultPatch),
         notes: events,
       }],
     });

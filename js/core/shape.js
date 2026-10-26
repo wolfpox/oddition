@@ -51,11 +51,12 @@
   const CRASH = 49, SNARE = 38;
 
   // how much of a part low energy may remove (0 = never thin)
-  const MAX_CUT = { drums: 0.8, bass: 0.55, chords: 0.6, pad: 0, lead: 0.5, arp: 0.7 };
+  const MAX_CUT = { drums: 0.8, perc: 0.8, bass: 0.55, chords: 0.6, pad: 0, lead: 0.5, arp: 0.7 };
 
   // humanize at amount 1: timing mean and spread, velocity spread (ticks / velocity units)
   const FEEL = {
     drums: { mean: 0, sd: 8, vel: 10 },
+    perc: { mean: 2, sd: 10, vel: 12 },
     bass: { mean: 10, sd: 8, vel: 8 },
     chords: { mean: 2, sd: 8, vel: 8, strum: 10 },
     pad: { mean: 0, sd: 4, vel: 4 },

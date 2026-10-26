@@ -6,7 +6,7 @@ Oddition writes music for you, one stem at a time, and you decide what stays.
 It works like an audition room: the booth plays a freshly generated part,
 you **reject** it (and hear the next one), **vary** it, or **keep** it. Kept
 parts go on the **shelf**. From the shelf you build a **song**: a sheet of
-lanes (drums, bass, chords, pad, lead, arp) by sections (intro, verse,
+lanes (drums, percussion, bass, chords, pad, lead, arp) by sections (intro, verse,
 chorus…), arranged in any order. Everything exports as standard MIDI, per
 stem or as a whole song, ready for any DAW.
 
@@ -25,7 +25,7 @@ file** to keep a copy or move it to another machine.
 
 ## How it works
 
-1. **Booth.** Pick a stem (keys `1`–`6`) and a section to audition over. Each
+1. **Booth.** Pick a stem (keys `1`–`7`) and a section to audition over. Each
    take is generated from a seed, the session's style, key and mode, and the
    section's chords. Press `Space` to play, `X` to reject, `V` for a variation,
    `K` to keep, `P` to keep it and drop it straight into the song. `←` `→` step
@@ -130,6 +130,29 @@ the beat, chords are strummed upwards, the lead is loosest. The same notes
 always get the same offsets, so playback, MIDI and audio export match. Set
 it to 0% for a fully quantised export.
 
+### Percussion and dynamics
+
+The **Percussion** lane plays hand percussion next to the kit: congas,
+bongos, shakers, tambourine, bells (cowbell, agogo), clave, woodblocks, toms,
+timbales and triangle. Each take is a traditional pattern for its main
+instrument (a conga tumbao, a bongo martillo, a son or rumba clave, a
+tribal tom pulse…). Higher density adds a texture layer or two underneath,
+such as a shaker or a bell. **Instrument** in the booth picks the main
+instrument; **Auto** chooses one that suits the style.
+
+Hand drums are full of quiet strokes between the loud ones: heel and
+fingertip taps around the tones and slaps. Velocity is the articulation:
+a soft conga stroke is a dull tap, a hard one is a cracking slap or a
+ringing open tone. The same goes for the kit: harder hits are brighter,
+with more attack and a little more pitch, not just louder.
+
+Two booth controls on drums and percussion shape this:
+
+- **Touch**: light taps (low) to hard hits (high).
+- **Accents**: how far the accents stand out from the quiet hits around
+  them. Low evens everything out; high makes ghost notes whisper and
+  accents crack.
+
 ### Styles
 
 Lo-fi, boom bap, trap, house, techno, synthwave, pop, ambient and drum & bass.
@@ -179,7 +202,7 @@ WAV export always renders at full quality.
 | `P` | Keep and place in the selected section |
 | `V` | Variation of the take |
 | `←` `→` | Previous / next take |
-| `1`–`6` | Drums, bass, chords, pad, lead, arp |
+| `1`–`7` | Drums, percussion, bass, chords, pad, lead, arp |
 | `Esc` | Stop |
 | `Ctrl/⌘ Z`, `Ctrl/⌘ Shift Z` | Undo, redo |
 

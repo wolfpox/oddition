@@ -7,7 +7,7 @@ const assert = require('node:assert');
 for (const f of [
   '../js/core/rng.js', '../js/core/theory.js',
   '../js/gen/styles.js', '../js/gen/names.js',
-  '../js/gen/drums.js', '../js/gen/bass.js', '../js/gen/chords.js',
+  '../js/gen/drums.js', '../js/gen/perc.js', '../js/gen/bass.js', '../js/gen/chords.js',
   '../js/gen/pad.js', '../js/gen/lead.js', '../js/gen/arp.js', '../js/gen/index.js',
 ]) require(f);
 
@@ -21,7 +21,7 @@ const RANGES = {
   lead: [60, 96],
   arp: [48, 96],
 };
-const DRUM_NOTES = new Set([36, 37, 38, 39, 42, 44, 46, 45, 47, 50, 49, 51, 54, 56, 70, 75]);
+const DRUM_NOTES = new Set([41, 43, 76, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 73, 74, 77, 80, 81, 36, 37, 38, 39, 42, 44, 46, 45, 47, 50, 49, 51, 54, 56, 70, 75]);
 
 function request(style, role, bars, seed, tonic, scale) {
   const st = Odd.styles.get(style);
@@ -37,7 +37,7 @@ function checkPart(part, req) {
   assert.ok(typeof part.name === 'string' && part.name.length > 2, 'name');
   assert.ok(Array.isArray(part.notes) && part.notes.length > 0, 'has notes');
   assert.strictEqual(T.progBeats(part.ctx.prog), req.bars * 4, 'ctx.prog covers the part');
-  if (req.role === 'drums') assert.strictEqual(part.base, null);
+  if (Odd.theory.isDrumRole(req.role)) assert.strictEqual(part.base, null);
   else assert.strictEqual(part.base % 12, 0, 'base is a C');
   let prev = null;
   for (const n of part.notes) {
@@ -47,7 +47,7 @@ function checkPart(part, req) {
     assert.ok(n.t + n.d <= total, 'ends inside the part');
     assert.ok(n.v >= 1 && n.v <= 127, 'velocity');
     let key;
-    if (req.role === 'drums') {
+    if (Odd.theory.isDrumRole(req.role)) {
       assert.ok(DRUM_NOTES.has(n.p), 'drum note ' + n.p);
       key = n.p;
     } else {
@@ -79,7 +79,8 @@ test('params and defaults', () => {
     const ps = Odd.gen.params(role);
     const keys = ps.map((p) => p.key);
     assert.ok(keys.includes('density') && keys.includes('complexity'));
-    if (role !== 'drums') assert.ok(keys.includes('octave'));
+    if (!Odd.theory.isDrumRole(role)) assert.ok(keys.includes('octave'));
+    else assert.ok(keys.includes('touch') && keys.includes('accent'));
     const d = Odd.gen.defaults(role);
     for (const p of ps) {
       assert.ok(p.type === 'range' || p.type === 'select');

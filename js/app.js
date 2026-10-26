@@ -277,7 +277,7 @@
         volume: lane ? lane.volume : 0.75,
         mute: false,
         solo: false,
-        channel: lane ? lane.channel : part.role === 'drums' ? 9 : 0,
+        channel: lane ? lane.channel : T.isDrumRole(part.role) ? 9 : 0,
       };
       const seq = R.sequence(s, events, length, true, { [TAKE_TRACK]: take });
       for (const k in seq.tracks) seq.tracks[k].solo = false; // solo is for the song sheet
@@ -444,7 +444,7 @@
     if (els.head) {
       const take = app.currentTake();
       if (p && p.kind === 'booth' && pos != null && take) {
-        Odd.roll.head(els.head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: take.role === 'drums' });
+        Odd.roll.head(els.head, pos % (take.bars * T.BAR), take.bars * T.BAR, { drums: T.isDrumRole(take.role) });
         els.head.dataset.on = '1';
       } else if (els.head.dataset.on) {
         Odd.roll.head(els.head, null);
@@ -1179,7 +1179,7 @@
     const rows = [
       ['Space', 'Play or stop'], ['X', 'Reject and hear a new take'], ['K', 'Keep the take on the shelf'],
       ['P', 'Keep and place it in the selected section'], ['V', 'Make a variation of the take'],
-      ['← →', 'Step through takes'], ['1 – 6', 'Switch stem: drums, bass, chords, pad, lead, arp'],
+      ['← →', 'Step through takes'], ['1 – 7', 'Switch stem: drums, percussion, bass, chords, pad, lead, arp'],
       ['Esc', 'Stop'], ['Ctrl Z', 'Undo'], ['Ctrl Shift Z', 'Redo'],
     ];
     D.dialog({
@@ -1588,7 +1588,7 @@
       case 'Escape': stop(); break;
       case '?': helpDialog(); break;
       default:
-        if (/^[1-6]$/.test(k)) setRole(Odd.gen.ROLES[Number(k) - 1]);
+        if (/^[1-7]$/.test(k)) setRole(Odd.gen.ROLES[Number(k) - 1]);
     }
   }
 

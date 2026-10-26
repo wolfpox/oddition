@@ -14,9 +14,10 @@
   const T = Odd.theory;
 
   const VERSION = 1;
-  const ROLE_ORDER = ['drums', 'bass', 'chords', 'pad', 'lead', 'arp'];
+  const ROLE_ORDER = ['drums', 'perc', 'bass', 'chords', 'pad', 'lead', 'arp'];
   const ROLE_FALLBACK = {
     drums: { label: 'Drums', short: 'DRM', base: null, defaultPatch: 'kit-808' },
+    perc: { label: 'Percussion', short: 'PRC', base: null, defaultPatch: 'kit-perc' },
     bass: { label: 'Bass', short: 'BAS', base: 36, defaultPatch: 'bass-sub' },
     chords: { label: 'Chords', short: 'CHD', base: 60, defaultPatch: 'epiano' },
     pad: { label: 'Pad', short: 'PAD', base: 48, defaultPatch: 'pad-warm' },
@@ -58,7 +59,7 @@
   // ---------------- lanes ----------------
 
   function nextChannel(session, role) {
-    if (role === 'drums') return 9;
+    if (T.isDrumRole(role)) return 9;
     const used = new Set(session.lanes.map((l) => l.channel));
     for (let c = 0; c < 16; c++) {
       if (c === 9) continue;
@@ -75,7 +76,7 @@
       role,
       name: name || roleInfo(role).label + (sameRole ? ' ' + (sameRole + 1) : ''),
       patch: patchFor(style, role),
-      volume: role === 'pad' ? 0.62 : role === 'arp' ? 0.6 : 0.75,
+      volume: role === 'pad' ? 0.62 : role === 'arp' || role === 'perc' ? 0.6 : 0.75,
       mute: false,
       solo: false,
       channel: nextChannel(session, role),
@@ -358,7 +359,7 @@
     const plan = {
       Intro: ['pad', 'arp'],
       Verse: ['drums', 'bass', 'chords'],
-      Chorus: ['drums', 'bass', 'chords', 'pad', 'lead'],
+      Chorus: ['drums', 'perc', 'bass', 'chords', 'pad', 'lead'],
     };
     for (const section of session.sections) {
       for (const role of plan[section.name] || []) {
