@@ -899,6 +899,24 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .span-note { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
 .cell.is-out .mini-roll, .cell.is-out .cell-name { opacity: 0.4; }
 .cell.is-out.is-filled { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--role) 6%, transparent) 6px 12px), var(--panel); }
+.theme-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border-radius: 4px;
+  background: var(--role);
+  color: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.form-tag { font-weight: 500; font-size: 0.68rem; color: var(--muted); }
+.reuse-list { display: grid; gap: 8px; }
+.reuse-row { grid-template-columns: 1fr 150px; align-items: center; }
+.reuse-row small { color: var(--faint); }
 .sec-story { margin: 0 0 8px; font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; }
 .sec-story strong { color: var(--ink); }
 
@@ -5272,8 +5290,67 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   const FALLBACK_PROG = [{ deg: 0, beats: 4 }];
 
+  /*
+   * Forms: the same part, played another way. This is how a section sets up
+   * material that another pays off: an intro outlines or teases the chorus
+   * hook, a pre-chorus loops a fragment of it, an outro plays it half-time.
+   *   full      as written
+   *   outline   only the notes on the beat, each held until the next
+   *   tease     the first bar of every two, then silence
+   *   fragment  the first bar, over and over
+   *   half      half-time: the first half of the part stretched to fill it
+   * Each kept note remembers where it came from (st), so it still refits
+   * against the chord it was written over.
+   */
+  const FORMS = ['full', 'outline', 'tease', 'fragment', 'half'];
+  const FORM_LABELS = { full: 'As written', outline: 'Outline', tease: 'Tease', fragment: 'Fragment', half: 'Half-time' };
+  const FORM_HINTS = {
+    full: 'The part as written.',
+    outline: 'Only the notes on the beat, held: the bones of the idea.',
+    tease: 'Plays the first bar of every two, then leaves a gap.',
+    fragment: 'Loops just the first bar.',
+    half: 'Half speed: the first half of the part stretched over the whole.',
+  };
+
+  function formNotes(notes, form, partLen, isDrum) {
+    if (!form || form === 'full') return notes;
+    const BAR = T.BAR, BEAT = T.BEAT;
+    const tag = (n, t, d, v) => Object.assign({}, n, { t, d, st: n.st != null ? n.st : n.t }, v != null ? { v } : {});
+    if (form === 'half') {
+      return notes.filter((n) => n.t < partLen / 2).map((n) => tag(n, n.t * 2, Math.max(15, n.d * 2)));
+    }
+    if (form === 'fragment') {
+      const cell = partLen >= 2 * BAR ? BAR : Math.max(BEAT * 2, partLen / 2);
+      const first = notes.filter((n) => n.t < cell);
+      const out = [];
+      for (let k = 0; k * cell < partLen; k++) {
+        for (const n of first) {
+          const t = n.t + k * cell;
+          if (t < partLen) out.push(tag(n, t, Math.min(n.d, cell - n.t)));
+        }
+      }
+      return out;
+    }
+    if (form === 'tease') {
+      if (partLen < 2 * BAR) return notes.filter((n) => n.t < partLen / 2).map((n) => tag(n, n.t, Math.min(n.d, partLen / 2 - n.t)));
+      return notes.filter((n) => Math.floor(n.t / BAR) % 2 === 0).map((n) => {
+        const barEnd = (Math.floor(n.t / BAR) + 1) * BAR;
+        return tag(n, n.t, Math.min(n.d, barEnd - n.t));
+      });
+    }
+    if (form === 'outline') {
+      const onBeat = notes.filter((n) => n.t % BEAT === 0);
+      if (isDrum) return onBeat.map((n) => tag(n, n.t, n.d));
+      // hold each onset group until the next one (at most a bar)
+      const starts = [...new Set(onBeat.map((n) => n.t))].sort((a, b) => a - b);
+      const next = new Map(starts.map((t, i) => [t, i + 1 < starts.length ? starts[i + 1] : partLen]));
+      return onBeat.map((n) => tag(n, n.t, Math.max(n.d, Math.min(BAR, next.get(n.t) - n.t))));
+    }
+    return notes;
+  }
+
   /**
-   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true) }
+   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form }
    */
   function partEvents(part, target) {
     const tg = target || {};
@@ -5286,7 +5363,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const tgtProg = tg.prog && tg.prog.length ? tg.prog : srcProg;
     const tonic = tg.tonic != null ? tg.tonic : (part.ctx ? part.ctx.tonic : 0);
     const scale = tg.scale || (part.ctx ? part.ctx.scale : 'major');
-    const notes = part.notes || [];
+    const notes = formNotes(part.notes || [], tg.form, partLen, isDrum);
     const out = [];
 
     for (let loopStart = 0; loopStart < length; loopStart += partLen) {
@@ -5301,7 +5378,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         let deg = n.deg;
         let acc = n.acc || 0;
         if (refit) {
-          const sc = T.chordAt(srcProg, n.t).chord;
+          const sc = T.chordAt(srcProg, n.st != null ? n.st : n.t).chord;
           const gc = T.chordAt(tgtProg, t).chord;
           deg += T.wrapDelta(gc.deg - sc.deg);
           // a note that took its chord's accidental (F# over V/V) takes the
@@ -5383,7 +5460,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       if (!slot || !slot.part) continue;
       // the bars this slot plays; a part that comes in late starts from its own top
       const wins = spanWindows(section, slot, tgt.length);
-      const look = { oct: slot.oct || 0, refit: slot.refit !== false };
+      const look = { oct: slot.oct || 0, refit: slot.refit !== false, form: slot.form };
       let evs;
       if (!wins) evs = partEvents(slot.part, Object.assign({}, tgt, look));
       else {
@@ -5514,6 +5591,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   Odd.render = {
+    FORMS, FORM_LABELS, FORM_HINTS, formNotes,
     partEvents, applySwing, sectionTarget, spanWindows, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
 })(globalThis.Odd = globalThis.Odd || {});
@@ -5871,7 +5949,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
  *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
  * session.shape = { on, humanize, lift } (see Odd.shape)
- * slot      = { part (a copy), sourceId, oct, refit, from, to }
+ * slot      = { part (a copy), sourceId, oct, refit, from, to, form }
+ *             form: how the part is played here (Odd.render.FORMS; none = as written)
  *             from/to: the bars of the section it plays (from inclusive, to exclusive;
  *             to null = to the end). from >= to: the part sits this section out.
  * arrangement = [sectionId, ...] in play order (a section may appear many times)
@@ -6075,6 +6154,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     // a new part takes over the bars the old one played
     if (prev && prev.from) slot.from = prev.from;
     if (prev && prev.to != null) slot.to = prev.to;
+    if (prev && prev.form) slot.form = prev.form;
     section.slots[laneId] = slot;
     return slot;
   }
@@ -6102,6 +6182,62 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function clearSlot(session, sectionId, laneId) {
     const section = findSection(session, sectionId);
     if (section) delete section.slots[laneId];
+  }
+
+  /**
+   * Material that recurs: slots across a session that play the same shelf
+   * part. Returns Map(sourceId -> { letter, uses: [{ section, laneId, form }] })
+   * lettered A, B, C... in song order, for parts used in two or more sections
+   * that are hook material (lead, arp) or come back in another form. A groove
+   * or chord part that simply repeats is how songs work, not a theme.
+   */
+  const THEME_ROLES = new Set(['lead', 'arp']);
+  function themes(session) {
+    const uses = new Map();
+    const order = session.arrangement.map((id) => findSection(session, id)).filter(Boolean);
+    for (const sec of session.sections) if (!order.includes(sec)) order.push(sec);
+    const seen = new Set();
+    for (const sec of order) {
+      if (seen.has(sec.id)) continue;
+      seen.add(sec.id);
+      for (const lane of session.lanes) {
+        const slot = sec.slots[lane.id];
+        if (!slot || !slot.sourceId) continue;
+        if (!uses.has(slot.sourceId)) uses.set(slot.sourceId, []);
+        uses.get(slot.sourceId).push({ section: sec, laneId: lane.id, role: lane.role, form: slot.form || 'full' });
+      }
+    }
+    const out = new Map();
+    let i = 0;
+    for (const [id, list] of uses) {
+      if (new Set(list.map((u) => u.section.id)).size < 2) continue;
+      if (!list.some((u) => THEME_ROLES.has(u.role) || u.form !== 'full')) continue;
+      out.set(id, { letter: String.fromCharCode(65 + (i++ % 26)), uses: list });
+    }
+    return out;
+  }
+
+  /** place a slot's part in other sections, played in the given forms: { [sectionId]: form } */
+  function reuseSlot(session, fromSectionId, laneId, targets) {
+    const src = findSection(session, fromSectionId);
+    const slot = src && src.slots[laneId];
+    if (!slot) return 0;
+    let n = 0;
+    for (const sid in targets) {
+      const sec = findSection(session, sid);
+      if (!sec || sec === src) continue;
+      const form = targets[sid];
+      if (!form) continue;
+      const part = Object.assign(clone(slot.part), { id: slot.sourceId || slot.part.id });
+      const placed = placePart(session, sid, laneId, part);
+      if (!placed) continue;
+      placed.oct = slot.oct || 0;
+      placed.refit = slot.refit !== false;
+      if (form === 'full') delete placed.form;
+      else placed.form = form;
+      n++;
+    }
+    return n;
   }
 
   // ---------------- arrangement ----------------
@@ -6327,6 +6463,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           if (!slot) continue;
           if (slot.from != null && !(Number(slot.from) >= 0)) delete slot.from;
           if (slot.to != null && !(Number(slot.to) >= 0)) delete slot.to;
+          const forms = (Odd.render && Odd.render.FORMS) || ['full'];
+          if (slot.form != null && (!forms.includes(slot.form) || slot.form === 'full')) delete slot.form;
         }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
       }
@@ -6341,7 +6479,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
     newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
-    placePart, clearSlot, slotSpan, setSlotSpan, moveArrangement, songBars, songSeconds,
+    placePart, clearSlot, slotSpan, setSlotSpan, themes, reuseSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
     createWorkspace, fillStarter, migrate,
@@ -6663,7 +6801,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       if (sp.out) { out.push(lane.name); continue; }
       const key = sp.from + ':' + sp.to;
       if (!groups.has(key)) groups.set(key, { sp, names: [] });
-      groups.get(key).names.push(lane.name);
+      const form = slot.form && slot.form !== 'full' && Odd.render ? ' (' + Odd.render.FORM_LABELS[slot.form].toLowerCase() + ')' : '';
+      groups.get(key).names.push(lane.name + form);
     }
     const list = [...groups.values()].sort((a, b) => a.sp.from - b.sp.from || b.sp.to - a.sp.to);
     for (const g of list) {
@@ -10291,6 +10430,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       '</li>';
     }).join('');
 
+    // material that recurs across sections gets a letter
+    const themes = Odd.model.themes ? Odd.model.themes(s) : new Map();
+
     // grid
     const cols = s.sections.length;
     let grid = '<div class="sheet" style="--cols:' + cols + '" role="grid" aria-label="Song sheet">';
@@ -10340,7 +10482,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const len = sec.bars * T.BAR;
           // as written, but only in the bars the slot plays
           const evs = R.sectionEvents(s, sec, { only: lane.id, shape: false });
-          inner = '<span class="cell-name">' + esc(slot.part.name) + '</span>' +
+          const th = slot.sourceId ? themes.get(slot.sourceId) : null;
+          const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
+          const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
+          inner = '<span class="cell-name">' +
+              (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
+              esc(slot.part.name) +
+              (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
@@ -10357,6 +10505,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
               (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
               '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
+              '<button type="button" class="tiny-toggle' + (slot.form && slot.form !== 'full' ? ' is-on' : '') + '" data-act="cell-form" aria-haspopup="menu" aria-expanded="false" title="Play this part another way here: outline, tease, fragment, half-time">Form</button>' +
+              '<button type="button" class="tiny-toggle" data-act="cell-reuse" title="Use this part in other sections, as a theme that comes back">Reuse</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-audition" aria-label="Audition another" title="Audition a replacement in the booth">' + icon('booth') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-clear" aria-label="Clear slot" title="Clear">' + icon('trash') + '</button>' +
             '</div>';
@@ -11404,6 +11554,58 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
   }
 
+  async function reuseDialog() {
+    const s = app.session();
+    const { section, lane } = app.selectedSlot();
+    const slot = lane && section.slots[lane.id];
+    if (!slot) return;
+    const others = s.sections.filter((x) => x.id !== section.id);
+    if (!others.length) { D.toast('Add another section first.'); return; }
+    // a sensible first guess for each section, from its kind
+    const guess = { intro: 'outline', verse: '', pre: 'fragment', chorus: 'full', break: 'half', outro: 'half' };
+    const formOpts = (sel) => '<option value="">Not there</option>' + R.FORMS.map((f) => '<option value="' + f + '"' + (f === sel ? ' selected' : '') + '>' + esc(R.FORM_LABELS[f]) + '</option>').join('');
+    const rows = others.map((x) => {
+      const there = x.slots[lane.id];
+      const same = there && there.sourceId && there.sourceId === slot.sourceId;
+      const kind = Odd.recipes ? Odd.recipes.kindOf(x.name) : 'verse';
+      const sel = same ? there.form || 'full' : '';
+      const note = there && !same ? '<small>replaces ' + esc(there.part.name) + '</small>' : '';
+      return '<label class="field reuse-row"><span>' + esc(x.name) + ' ' + note + '</span><select data-sec="' + x.id + '" data-guess="' + (guess[kind] || '') + '">' + formOpts(sel) + '</select></label>';
+    }).join('');
+    const v = await D.dialog({
+      title: 'Reuse ' + slot.part.name,
+      body:
+        '<p class="help">Bring this ' + esc(Odd.views.roleLabel(lane.role).toLowerCase()) + ' back in other sections, so the song sets it up and pays it off: outline or tease it in the intro, loop a fragment in the pre-chorus, play it in full in the chorus, half-time in the outro. Every section follows its own chords.</p>' +
+        '<div class="reuse-list">' + rows + '</div>' +
+        '<div><button type="button" class="btn btn-ghost btn-sm" id="dlg-reuse-guess">Suggest forms</button></div>',
+      onOpen: (el) => {
+        $('#dlg-reuse-guess', el).addEventListener('click', () => {
+          for (const sel of $$('select[data-sec]', el)) if (!sel.value) sel.value = sel.dataset.guess;
+        });
+      },
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Apply', primary: true, value: (el) => {
+          const out = {};
+          for (const sel of $$('select[data-sec]', el)) out[sel.dataset.sec] = sel.value;
+          return out;
+        } },
+      ],
+    });
+    if (!v) return;
+    let n = 0;
+    commit('Reuse part', () => {
+      // sections set to "Not there" that held this part lose it
+      for (const sid in v) {
+        const x = M.findSection(s, sid);
+        const there = x && x.slots[lane.id];
+        if (!v[sid] && there && there.sourceId && there.sourceId === slot.sourceId) M.clearSlot(s, sid, lane.id);
+      }
+      n = M.reuseSlot(s, section.id, lane.id, v);
+    }, ['song', 'shelf']);
+    if (n) D.toast(slot.part.name + ' now plays in ' + (n + 1) + ' sections', { action: { label: 'Undo', run: undo } });
+  }
+
   async function spanDialog() {
     const { section, lane } = app.selectedSlot();
     const slot = lane && section.slots[lane.id];
@@ -11786,6 +11988,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     'section-shape': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) shapeDialog(sec); },
     'section-type': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) typeDialog(sec); },
     'cell-span': () => spanDialog(),
+    'cell-form': (el) => {
+      const { section, lane } = app.selectedSlot();
+      const slot = lane && section.slots[lane.id];
+      if (!slot) return;
+      const cur = slot.form || 'full';
+      D.menu(el, [{ heading: 'Play it here as' }].concat(R.FORMS.map((f) => ({
+        label: R.FORM_LABELS[f] + (f === cur ? '  ✓' : ''),
+        run: () => commit('Change form', () => { if (f === 'full') delete slot.form; else slot.form = f; }, ['song']),
+      }))));
+    },
+    'cell-reuse': () => reuseDialog(),
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),

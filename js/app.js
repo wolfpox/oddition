@@ -947,6 +947,58 @@
     }
   }
 
+  async function reuseDialog() {
+    const s = app.session();
+    const { section, lane } = app.selectedSlot();
+    const slot = lane && section.slots[lane.id];
+    if (!slot) return;
+    const others = s.sections.filter((x) => x.id !== section.id);
+    if (!others.length) { D.toast('Add another section first.'); return; }
+    // a sensible first guess for each section, from its kind
+    const guess = { intro: 'outline', verse: '', pre: 'fragment', chorus: 'full', break: 'half', outro: 'half' };
+    const formOpts = (sel) => '<option value="">Not there</option>' + R.FORMS.map((f) => '<option value="' + f + '"' + (f === sel ? ' selected' : '') + '>' + esc(R.FORM_LABELS[f]) + '</option>').join('');
+    const rows = others.map((x) => {
+      const there = x.slots[lane.id];
+      const same = there && there.sourceId && there.sourceId === slot.sourceId;
+      const kind = Odd.recipes ? Odd.recipes.kindOf(x.name) : 'verse';
+      const sel = same ? there.form || 'full' : '';
+      const note = there && !same ? '<small>replaces ' + esc(there.part.name) + '</small>' : '';
+      return '<label class="field reuse-row"><span>' + esc(x.name) + ' ' + note + '</span><select data-sec="' + x.id + '" data-guess="' + (guess[kind] || '') + '">' + formOpts(sel) + '</select></label>';
+    }).join('');
+    const v = await D.dialog({
+      title: 'Reuse ' + slot.part.name,
+      body:
+        '<p class="help">Bring this ' + esc(Odd.views.roleLabel(lane.role).toLowerCase()) + ' back in other sections, so the song sets it up and pays it off: outline or tease it in the intro, loop a fragment in the pre-chorus, play it in full in the chorus, half-time in the outro. Every section follows its own chords.</p>' +
+        '<div class="reuse-list">' + rows + '</div>' +
+        '<div><button type="button" class="btn btn-ghost btn-sm" id="dlg-reuse-guess">Suggest forms</button></div>',
+      onOpen: (el) => {
+        $('#dlg-reuse-guess', el).addEventListener('click', () => {
+          for (const sel of $$('select[data-sec]', el)) if (!sel.value) sel.value = sel.dataset.guess;
+        });
+      },
+      actions: [
+        { label: 'Cancel', value: null },
+        { label: 'Apply', primary: true, value: (el) => {
+          const out = {};
+          for (const sel of $$('select[data-sec]', el)) out[sel.dataset.sec] = sel.value;
+          return out;
+        } },
+      ],
+    });
+    if (!v) return;
+    let n = 0;
+    commit('Reuse part', () => {
+      // sections set to "Not there" that held this part lose it
+      for (const sid in v) {
+        const x = M.findSection(s, sid);
+        const there = x && x.slots[lane.id];
+        if (!v[sid] && there && there.sourceId && there.sourceId === slot.sourceId) M.clearSlot(s, sid, lane.id);
+      }
+      n = M.reuseSlot(s, section.id, lane.id, v);
+    }, ['song', 'shelf']);
+    if (n) D.toast(slot.part.name + ' now plays in ' + (n + 1) + ' sections', { action: { label: 'Undo', run: undo } });
+  }
+
   async function spanDialog() {
     const { section, lane } = app.selectedSlot();
     const slot = lane && section.slots[lane.id];
@@ -1329,6 +1381,17 @@
     'section-shape': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) shapeDialog(sec); },
     'section-type': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) typeDialog(sec); },
     'cell-span': () => spanDialog(),
+    'cell-form': (el) => {
+      const { section, lane } = app.selectedSlot();
+      const slot = lane && section.slots[lane.id];
+      if (!slot) return;
+      const cur = slot.form || 'full';
+      D.menu(el, [{ heading: 'Play it here as' }].concat(R.FORMS.map((f) => ({
+        label: R.FORM_LABELS[f] + (f === cur ? '  ✓' : ''),
+        run: () => commit('Change form', () => { if (f === 'full') delete slot.form; else slot.form = f; }, ['song']),
+      }))));
+    },
+    'cell-reuse': () => reuseDialog(),
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),

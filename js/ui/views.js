@@ -372,6 +372,9 @@
       '</li>';
     }).join('');
 
+    // material that recurs across sections gets a letter
+    const themes = Odd.model.themes ? Odd.model.themes(s) : new Map();
+
     // grid
     const cols = s.sections.length;
     let grid = '<div class="sheet" style="--cols:' + cols + '" role="grid" aria-label="Song sheet">';
@@ -421,7 +424,13 @@
           const len = sec.bars * T.BAR;
           // as written, but only in the bars the slot plays
           const evs = R.sectionEvents(s, sec, { only: lane.id, shape: false });
-          inner = '<span class="cell-name">' + esc(slot.part.name) + '</span>' +
+          const th = slot.sourceId ? themes.get(slot.sourceId) : null;
+          const form = slot.form && slot.form !== 'full' ? R.FORM_LABELS[slot.form] : '';
+          const where = th ? th.uses.filter((u) => u.section.id !== sec.id).map((u) => u.section.name + (u.form !== 'full' ? ' (' + R.FORM_LABELS[u.form].toLowerCase() + ')' : '')) : [];
+          inner = '<span class="cell-name">' +
+              (th ? '<span class="theme-badge" title="' + esc('Theme ' + th.letter + ': also in ' + [...new Set(where)].join(', ')) + '">' + th.letter + '</span>' : '') +
+              esc(slot.part.name) +
+              (form ? ' <span class="form-tag">' + esc(form.toLowerCase()) + '</span>' : '') + '</span>' +
             (slot.oct ? '<span class="pill mono cell-oct">' + (slot.oct > 0 ? '+' : '') + slot.oct + ' oct</span>' : '') +
             spanBar(sec, span) +
             rollSlot(rolls, { events: evs, length: len, drums: T.isDrumRole(slot.part.role), role: lane.role, mini: true });
@@ -438,6 +447,8 @@
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-oct" data-dir="1" aria-label="Octave up" title="Octave up">' + icon('plus') + '</button>' +
               (!T.isDrumRole(lane.role) ? '<button type="button" class="tiny-toggle' + (slot.refit !== false ? ' is-on' : '') + '" data-act="cell-refit" aria-pressed="' + (slot.refit !== false) + '" title="Follow this section\'s chords">Fit</button>' : '') +
               '<button type="button" class="tiny-toggle' + (span.full ? '' : ' is-on') + '" data-act="cell-span" title="Which bars of the section this part plays">Bars</button>' +
+              '<button type="button" class="tiny-toggle' + (slot.form && slot.form !== 'full' ? ' is-on' : '') + '" data-act="cell-form" aria-haspopup="menu" aria-expanded="false" title="Play this part another way here: outline, tease, fragment, half-time">Form</button>' +
+              '<button type="button" class="tiny-toggle" data-act="cell-reuse" title="Use this part in other sections, as a theme that comes back">Reuse</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-audition" aria-label="Audition another" title="Audition a replacement in the booth">' + icon('booth') + '</button>' +
               '<button type="button" class="icon-btn icon-btn-xs" data-act="cell-clear" aria-label="Clear slot" title="Clear">' + icon('trash') + '</button>' +
             '</div>';

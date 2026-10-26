@@ -12,8 +12,67 @@
 
   const FALLBACK_PROG = [{ deg: 0, beats: 4 }];
 
+  /*
+   * Forms: the same part, played another way. This is how a section sets up
+   * material that another pays off: an intro outlines or teases the chorus
+   * hook, a pre-chorus loops a fragment of it, an outro plays it half-time.
+   *   full      as written
+   *   outline   only the notes on the beat, each held until the next
+   *   tease     the first bar of every two, then silence
+   *   fragment  the first bar, over and over
+   *   half      half-time: the first half of the part stretched to fill it
+   * Each kept note remembers where it came from (st), so it still refits
+   * against the chord it was written over.
+   */
+  const FORMS = ['full', 'outline', 'tease', 'fragment', 'half'];
+  const FORM_LABELS = { full: 'As written', outline: 'Outline', tease: 'Tease', fragment: 'Fragment', half: 'Half-time' };
+  const FORM_HINTS = {
+    full: 'The part as written.',
+    outline: 'Only the notes on the beat, held: the bones of the idea.',
+    tease: 'Plays the first bar of every two, then leaves a gap.',
+    fragment: 'Loops just the first bar.',
+    half: 'Half speed: the first half of the part stretched over the whole.',
+  };
+
+  function formNotes(notes, form, partLen, isDrum) {
+    if (!form || form === 'full') return notes;
+    const BAR = T.BAR, BEAT = T.BEAT;
+    const tag = (n, t, d, v) => Object.assign({}, n, { t, d, st: n.st != null ? n.st : n.t }, v != null ? { v } : {});
+    if (form === 'half') {
+      return notes.filter((n) => n.t < partLen / 2).map((n) => tag(n, n.t * 2, Math.max(15, n.d * 2)));
+    }
+    if (form === 'fragment') {
+      const cell = partLen >= 2 * BAR ? BAR : Math.max(BEAT * 2, partLen / 2);
+      const first = notes.filter((n) => n.t < cell);
+      const out = [];
+      for (let k = 0; k * cell < partLen; k++) {
+        for (const n of first) {
+          const t = n.t + k * cell;
+          if (t < partLen) out.push(tag(n, t, Math.min(n.d, cell - n.t)));
+        }
+      }
+      return out;
+    }
+    if (form === 'tease') {
+      if (partLen < 2 * BAR) return notes.filter((n) => n.t < partLen / 2).map((n) => tag(n, n.t, Math.min(n.d, partLen / 2 - n.t)));
+      return notes.filter((n) => Math.floor(n.t / BAR) % 2 === 0).map((n) => {
+        const barEnd = (Math.floor(n.t / BAR) + 1) * BAR;
+        return tag(n, n.t, Math.min(n.d, barEnd - n.t));
+      });
+    }
+    if (form === 'outline') {
+      const onBeat = notes.filter((n) => n.t % BEAT === 0);
+      if (isDrum) return onBeat.map((n) => tag(n, n.t, n.d));
+      // hold each onset group until the next one (at most a bar)
+      const starts = [...new Set(onBeat.map((n) => n.t))].sort((a, b) => a - b);
+      const next = new Map(starts.map((t, i) => [t, i + 1 < starts.length ? starts[i + 1] : partLen]));
+      return onBeat.map((n) => tag(n, n.t, Math.max(n.d, Math.min(BAR, next.get(n.t) - n.t))));
+    }
+    return notes;
+  }
+
   /**
-   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true) }
+   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form }
    */
   function partEvents(part, target) {
     const tg = target || {};
@@ -26,7 +85,7 @@
     const tgtProg = tg.prog && tg.prog.length ? tg.prog : srcProg;
     const tonic = tg.tonic != null ? tg.tonic : (part.ctx ? part.ctx.tonic : 0);
     const scale = tg.scale || (part.ctx ? part.ctx.scale : 'major');
-    const notes = part.notes || [];
+    const notes = formNotes(part.notes || [], tg.form, partLen, isDrum);
     const out = [];
 
     for (let loopStart = 0; loopStart < length; loopStart += partLen) {
@@ -41,7 +100,7 @@
         let deg = n.deg;
         let acc = n.acc || 0;
         if (refit) {
-          const sc = T.chordAt(srcProg, n.t).chord;
+          const sc = T.chordAt(srcProg, n.st != null ? n.st : n.t).chord;
           const gc = T.chordAt(tgtProg, t).chord;
           deg += T.wrapDelta(gc.deg - sc.deg);
           // a note that took its chord's accidental (F# over V/V) takes the
@@ -123,7 +182,7 @@
       if (!slot || !slot.part) continue;
       // the bars this slot plays; a part that comes in late starts from its own top
       const wins = spanWindows(section, slot, tgt.length);
-      const look = { oct: slot.oct || 0, refit: slot.refit !== false };
+      const look = { oct: slot.oct || 0, refit: slot.refit !== false, form: slot.form };
       let evs;
       if (!wins) evs = partEvents(slot.part, Object.assign({}, tgt, look));
       else {
@@ -254,6 +313,7 @@
   }
 
   Odd.render = {
+    FORMS, FORM_LABELS, FORM_HINTS, formNotes,
     partEvents, applySwing, sectionTarget, spanWindows, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
 })(globalThis.Odd = globalThis.Odd || {});

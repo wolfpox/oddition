@@ -890,6 +890,24 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .span-note { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
 .cell.is-out .mini-roll, .cell.is-out .cell-name { opacity: 0.4; }
 .cell.is-out.is-filled { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--role) 6%, transparent) 6px 12px), var(--panel); }
+.theme-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border-radius: 4px;
+  background: var(--role);
+  color: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.form-tag { font-weight: 500; font-size: 0.68rem; color: var(--muted); }
+.reuse-list { display: grid; gap: 8px; }
+.reuse-row { grid-template-columns: 1fr 150px; align-items: center; }
+.reuse-row small { color: var(--faint); }
 .sec-story { margin: 0 0 8px; font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; }
 .sec-story strong { color: var(--ink); }
 

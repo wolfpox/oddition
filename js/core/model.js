@@ -8,7 +8,8 @@
  *             exit: how the next section is entered when its own entry is 'auto' ('auto' = guess)
  *             curve: energy across the section, Odd.shape.CURVES; recipe: Odd.recipes id or null
  * session.shape = { on, humanize, lift } (see Odd.shape)
- * slot      = { part (a copy), sourceId, oct, refit, from, to }
+ * slot      = { part (a copy), sourceId, oct, refit, from, to, form }
+ *             form: how the part is played here (Odd.render.FORMS; none = as written)
  *             from/to: the bars of the section it plays (from inclusive, to exclusive;
  *             to null = to the end). from >= to: the part sits this section out.
  * arrangement = [sectionId, ...] in play order (a section may appear many times)
@@ -212,6 +213,7 @@
     // a new part takes over the bars the old one played
     if (prev && prev.from) slot.from = prev.from;
     if (prev && prev.to != null) slot.to = prev.to;
+    if (prev && prev.form) slot.form = prev.form;
     section.slots[laneId] = slot;
     return slot;
   }
@@ -239,6 +241,62 @@
   function clearSlot(session, sectionId, laneId) {
     const section = findSection(session, sectionId);
     if (section) delete section.slots[laneId];
+  }
+
+  /**
+   * Material that recurs: slots across a session that play the same shelf
+   * part. Returns Map(sourceId -> { letter, uses: [{ section, laneId, form }] })
+   * lettered A, B, C... in song order, for parts used in two or more sections
+   * that are hook material (lead, arp) or come back in another form. A groove
+   * or chord part that simply repeats is how songs work, not a theme.
+   */
+  const THEME_ROLES = new Set(['lead', 'arp']);
+  function themes(session) {
+    const uses = new Map();
+    const order = session.arrangement.map((id) => findSection(session, id)).filter(Boolean);
+    for (const sec of session.sections) if (!order.includes(sec)) order.push(sec);
+    const seen = new Set();
+    for (const sec of order) {
+      if (seen.has(sec.id)) continue;
+      seen.add(sec.id);
+      for (const lane of session.lanes) {
+        const slot = sec.slots[lane.id];
+        if (!slot || !slot.sourceId) continue;
+        if (!uses.has(slot.sourceId)) uses.set(slot.sourceId, []);
+        uses.get(slot.sourceId).push({ section: sec, laneId: lane.id, role: lane.role, form: slot.form || 'full' });
+      }
+    }
+    const out = new Map();
+    let i = 0;
+    for (const [id, list] of uses) {
+      if (new Set(list.map((u) => u.section.id)).size < 2) continue;
+      if (!list.some((u) => THEME_ROLES.has(u.role) || u.form !== 'full')) continue;
+      out.set(id, { letter: String.fromCharCode(65 + (i++ % 26)), uses: list });
+    }
+    return out;
+  }
+
+  /** place a slot's part in other sections, played in the given forms: { [sectionId]: form } */
+  function reuseSlot(session, fromSectionId, laneId, targets) {
+    const src = findSection(session, fromSectionId);
+    const slot = src && src.slots[laneId];
+    if (!slot) return 0;
+    let n = 0;
+    for (const sid in targets) {
+      const sec = findSection(session, sid);
+      if (!sec || sec === src) continue;
+      const form = targets[sid];
+      if (!form) continue;
+      const part = Object.assign(clone(slot.part), { id: slot.sourceId || slot.part.id });
+      const placed = placePart(session, sid, laneId, part);
+      if (!placed) continue;
+      placed.oct = slot.oct || 0;
+      placed.refit = slot.refit !== false;
+      if (form === 'full') delete placed.form;
+      else placed.form = form;
+      n++;
+    }
+    return n;
   }
 
   // ---------------- arrangement ----------------
@@ -464,6 +522,8 @@
           if (!slot) continue;
           if (slot.from != null && !(Number(slot.from) >= 0)) delete slot.from;
           if (slot.to != null && !(Number(slot.to) >= 0)) delete slot.to;
+          const forms = (Odd.render && Odd.render.FORMS) || ['full'];
+          if (slot.form != null && (!forms.includes(slot.form) || slot.form === 'full')) delete slot.form;
         }
         sec.prog = T.fitProg(sec.prog || [], sec.bars);
       }
@@ -478,7 +538,7 @@
     VERSION, ROLE_ORDER, SECTION_NAMES, uid, clone, roleInfo, styleOf, patchFor,
     createLane, addLane, removeLane, findLane, laneForRole,
     newProgression, harmonyOf, createSection, findSection, addSection, duplicateSection, removeSection, setScale, setSectionBars,
-    placePart, clearSlot, slotSpan, setSlotSpan, moveArrangement, songBars, songSeconds,
+    placePart, clearSlot, slotSpan, setSlotSpan, themes, reuseSlot, moveArrangement, songBars, songSeconds,
     createSession, defaultShape, applyStyle, duplicateSession, removeSession, currentSession,
     stamp, addToLibrary, findPart, removeFromLibrary, usageCount,
     createWorkspace, fillStarter, migrate,

@@ -312,7 +312,8 @@
       if (sp.out) { out.push(lane.name); continue; }
       const key = sp.from + ':' + sp.to;
       if (!groups.has(key)) groups.set(key, { sp, names: [] });
-      groups.get(key).names.push(lane.name);
+      const form = slot.form && slot.form !== 'full' && Odd.render ? ' (' + Odd.render.FORM_LABELS[slot.form].toLowerCase() + ')' : '';
+      groups.get(key).names.push(lane.name + form);
     }
     const list = [...groups.values()].sort((a, b) => a.sp.from - b.sp.from || b.sp.to - a.sp.to);
     for (const g of list) {

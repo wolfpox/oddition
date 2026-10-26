@@ -137,6 +137,30 @@ The line above the sheet tells you what the selected section does, for
 example *Intro · Slow build · energy: rise — Pad, Chords throughout · Drums
 from bar 5 · Bass from bar 13*.
 
+### Themes: set it up, pay it off
+
+Songs feel written when material comes back: the chorus hook hinted at in
+the intro, a fragment of it looping under the pre-chorus, the whole thing in
+the chorus. Select a part on the sheet and press **Reuse** to place it in
+other sections, each in a **form**:
+
+| Form | Plays |
+| --- | --- |
+| As written | the part unchanged |
+| Outline | only the notes on the beat, each held: the bones of the idea |
+| Tease | the first bar of every two, then a gap |
+| Fragment | the first bar, over and over |
+| Half-time | the first half of the part stretched over the whole |
+
+**Suggest forms** fills in a guess from each section's name (outline in an
+intro, fragment in a pre-chorus, half-time in an outro). **Form** on a
+selected part changes how it plays in that section alone. Every section
+still follows its own chords.
+
+A lead or arp that plays in more than one section, and any part that comes
+back in another form, gets a letter (A, B…) on the sheet so you can see
+the themes at a glance; hover it to see where else it plays.
+
 ### Song shape
 
 Each section has an **energy** level, shown as the small meter next to its

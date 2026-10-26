@@ -184,6 +184,14 @@ of its own bars (`T.sliceProg`), so it starts from its own top; a section
 rendered longer than itself (the booth) repeats the span each pass
 (`spanWindows`). `placePart` keeps the span when a part is swapped.
 
+`slot.form` plays a part another way in one section (`Odd.render.FORMS`:
+outline, tease, fragment, half; none = as written). `formNotes` reshapes
+the part's notes before looping and marks each with `st`, its original
+time, so refit still reads the chord it was written over.
+`Odd.model.reuseSlot(session, sectionId, laneId, { [sectionId]: form })`
+places the same shelf part in other sections; `themes(session)` letters
+the recurring material (lead and arp parts, or any part in another form).
+
 `Odd.recipes` (js/core/recipes.js) holds the section types. A type is
 data: waves of roles that enter (`enter: [{ roles, at }]`) or leave
 (`leave`) at a fraction of the section (snapped to 4-bar phrases in long

@@ -196,3 +196,77 @@ test('sitting out and migration', () => {
     assert.strictEqual(x.exit, 'auto');
   }
 });
+
+test('forms: outline, tease, fragment and half-time reshape a part', () => {
+  const notes = [
+    { t: 0, d: 240, v: 90, deg: 0 }, { t: 240, d: 240, v: 80, deg: 1 }, { t: 480, d: 480, v: 90, deg: 2 },
+    { t: BAR, d: 480, v: 90, deg: 4 }, { t: BAR + 960, d: 240, v: 70, deg: 3 },
+    { t: 2 * BAR, d: 480, v: 90, deg: 5 }, { t: 3 * BAR + 120, d: 120, v: 60, deg: 6 },
+  ];
+  const len = 4 * BAR;
+  const F = R.formNotes;
+  assert.strictEqual(F(notes, 'full', len), notes);
+  const half = F(notes, 'half', len);
+  assert.deepStrictEqual(half.map((n) => n.t), [0, 480, 960, 2 * BAR, 3 * BAR]); // the first two bars, doubled
+  assert.ok(half.every((n) => n.st != null), 'remembers the original time');
+  const frag = F(notes, 'fragment', len);
+  assert.strictEqual(frag.length, 3 * 4);
+  assert.ok(frag.every((n) => n.st < BAR));
+  const tease = F(notes, 'tease', len);
+  assert.ok(tease.every((n) => Math.floor(n.t / BAR) % 2 === 0));
+  assert.ok(tease.every((n) => n.t + n.d <= (Math.floor(n.t / BAR) + 1) * BAR));
+  const outline = F(notes, 'outline', len);
+  assert.ok(outline.every((n) => n.t % T.BEAT === 0));
+  assert.ok(!outline.some((n) => n.t === 3 * BAR + 120));
+  // held to the next on-beat onset
+  assert.strictEqual(outline.find((n) => n.t === BAR).d, 960);
+});
+
+test('a form still refits each note against the chord it was written over', () => {
+  const part = {
+    role: 'bass', bars: 2, base: 36, notes: [{ t: 0, d: 480, v: 90, deg: 0, acc: 0 }, { t: BAR, d: 480, v: 90, deg: 3, acc: 0 }],
+    ctx: { tonic: 0, scale: 'major', prog: [{ deg: 0, beats: 4 }, { deg: 3, beats: 4 }] },
+  };
+  // half-time puts the first bar (over I) across both bars of a I - IV section:
+  // the note over I in the source lands over IV and moves up a fourth
+  const tgt = { tonic: 0, scale: 'major', prog: [{ deg: 0, beats: 4 }, { deg: 3, beats: 4 }], length: 2 * BAR };
+  const plain = R.partEvents(part, tgt);
+  const half = R.partEvents(part, Object.assign({}, tgt, { form: 'half' }));
+  assert.strictEqual(half.length, 1);
+  assert.strictEqual(half[0].p, plain[0].p);
+  assert.strictEqual(half[0].d, 960);
+});
+
+test('reuse places the same part elsewhere and the sheet sees a theme', () => {
+  const { s } = filledSession();
+  const chorus = sec(s, 'Chorus');
+  const intro = sec(s, 'Intro');
+  const verse = sec(s, 'Verse');
+  const lead = lane(s, 'lead');
+  assert.strictEqual(M.themes(s).size, 0);
+  const n = M.reuseSlot(s, chorus.id, lead.id, { [intro.id]: 'outline', [verse.id]: 'fragment' });
+  assert.strictEqual(n, 2);
+  assert.strictEqual(intro.slots[lead.id].sourceId, chorus.slots[lead.id].sourceId);
+  assert.strictEqual(intro.slots[lead.id].form, 'outline');
+  const th = M.themes(s).get(chorus.slots[lead.id].sourceId);
+  assert.strictEqual(th.letter, 'A');
+  assert.deepStrictEqual(th.uses.map((u) => u.section.name).sort(), ['Chorus', 'Intro', 'Verse']);
+  // rendered differently in each
+  const ev = (x) => R.sectionEvents(s, x, { only: lead.id, shape: false }).length;
+  assert.ok(ev(intro) > 0 && ev(verse) > 0);
+  assert.ok(Odd.recipes.describe(s, intro).includes('(outline)'));
+  // full stores no form
+  M.reuseSlot(s, chorus.id, lead.id, { [verse.id]: 'full' });
+  assert.ok(!('form' in verse.slots[lead.id]));
+});
+
+test('a groove that simply repeats is not a theme; a reshaped one is', () => {
+  const { s } = filledSession();
+  const chorus = sec(s, 'Chorus');
+  const verse = sec(s, 'Verse');
+  const drums = lane(s, 'drums');
+  M.reuseSlot(s, chorus.id, drums.id, { [verse.id]: 'full' });
+  assert.ok(!M.themes(s).has(chorus.slots[drums.id].sourceId));
+  M.reuseSlot(s, chorus.id, drums.id, { [verse.id]: 'half' });
+  assert.ok(M.themes(s).has(chorus.slots[drums.id].sourceId));
+});
