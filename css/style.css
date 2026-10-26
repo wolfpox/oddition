@@ -862,6 +862,31 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .tiny-toggle.is-on { color: var(--ink); border-color: var(--role); }
 .hint { margin: 0; font-size: var(--fs-xs); color: var(--faint); }
 
+/* booth: edit notes, keep bars */
+.take-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.take-tools .tiny-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.locks { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.locks-label { font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-right: 3px; }
+.lock-btn {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.lock-btn:hover { color: var(--ink); border-color: var(--muted); }
+.lock-btn.is-on { color: var(--ink); border-color: var(--role); background: color-mix(in srgb, var(--role) 16%, transparent); }
+.edit-hint { font-size: var(--fs-xs); color: var(--muted); }
+.screen.is-editing { cursor: crosshair; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--role) 60%, transparent); touch-action: none; }
+
 /* section type, energy curve, the bars a part plays */
 .sec-line-3 { gap: 6px; }
 .type-btn {

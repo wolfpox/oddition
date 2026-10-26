@@ -20,7 +20,7 @@
       loopSong: false,
       playing: null,
       lastPlay: { kind: 'booth', id: null },
-      booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {} },
+      booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {}, edit: false, locks: [] },
       shelf: { role: 'all', query: '', starred: false, sort: 'new' },
     },
   };
@@ -88,7 +88,7 @@
     const length = part.bars * T.BAR;
     const tgt = R.sectionTarget(s, sec, length);
     return {
-      events: R.partEvents(part, tgt),
+      events: R.partEvents(part, Object.assign({ withIndex: true }, tgt)),
       length,
       chords: R.chordLabels(sec.prog, tgt.tonic, s.scale, length),
     };
@@ -537,9 +537,44 @@
       prog: T.sliceProg(sec.prog, 0, b.bars * T.BAR), params,
       band: app.boothBand(),
     });
-    part.id = M.uid('p');
-    addTake(part, o.replace);
+    const kept = withLocks(part);
+    kept.id = M.uid('p');
+    addTake(kept, o.replace);
+    return kept;
+  }
+
+  /** a new take keeps the current take's locked bars, if any */
+  function withLocks(part) {
+    const b = app.ui.booth;
+    if (!b.locks || !b.locks.length) return part;
+    const cur = app.currentTake();
+    const merged = cur && cur.role === part.role ? Odd.edit.splice(cur, part, b.locks) : null;
+    if (merged) {
+      merged.parent = cur.id;
+      return merged;
+    }
+    // the bars can't be kept (another length or other chords): start over
+    b.locks = [];
+    D.toast('Kept bars were let go: the new take has a different length or chords.');
     return part;
+  }
+
+  /** replace the current take with an edited copy (a new id, so Keep stores the edit) */
+  function setEditedTake(part, opts) {
+    const tk = app.takesFor(part.role);
+    const cur = tk.list[tk.index];
+    if (!cur) return;
+    part.take = cur.take;
+    if (!cur.edited || M.findPart(app.ws, cur.id)) {
+      part.parent = cur.id;
+      part.id = M.uid('p');
+    }
+    part.edited = true;
+    tk.list[tk.index] = part;
+    if (!(opts && opts.quiet)) {
+      paint(['booth']);
+      if (app.isPlaying('booth')) refreshPlayback();
+    }
   }
 
   function addTake(part, replace) {
@@ -566,7 +601,7 @@
     const cur = app.currentTake();
     if (!cur) return newTake();
     const band = cur.bars === app.ui.booth.bars ? app.boothBand() : null;
-    const v = Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35, band });
+    const v = withLocks(Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35, band }));
     v.id = M.uid('p');
     v.parent = cur.id;
     addTake(v);
@@ -703,6 +738,7 @@
   function setRole(role, opts) {
     const b = app.ui.booth;
     if (!Odd.gen.ROLES.includes(role)) return;
+    if (b.role !== role) b.locks = [];
     b.role = role;
     const s = app.session();
     const lane = M.findLane(s, app.ui.laneId);
@@ -1395,6 +1431,13 @@
       }))));
     },
     'cell-reuse': () => reuseDialog(),
+    'booth-edit': () => { app.ui.booth.edit = !app.ui.booth.edit; paint(['booth']); },
+    'lock-bar': (el) => {
+      const b = app.ui.booth;
+      const i = Number(el.dataset.index);
+      b.locks = b.locks.includes(i) ? b.locks.filter((x) => x !== i) : b.locks.concat(i).sort((x, y) => x - y);
+      paint(['booth']);
+    },
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),
@@ -1524,7 +1567,7 @@
     },
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
-    'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },
+    'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); app.ui.booth.locks = []; savePrefs(); rerollTake(); },
     'booth-listen': (el) => { app.ui.booth.listen = el.checked; savePrefs(); rerollTake(); },
     'booth-context': (el) => { app.ui.booth.context = el.checked; savePrefs(); refreshIfAudition(); },
     param: (el) => {
@@ -1597,6 +1640,56 @@
     },
   };
 
+  /**
+   * Booth note editing. Click empty space to add a note, click a note to
+   * remove it, drag a note up or down to play it harder or softer.
+   */
+  function onRollPointer(e) {
+    if (e.button !== 0) return;
+    const screen = e.target.closest && e.target.closest('.booth .screen.is-editing');
+    if (!screen) return;
+    const base = $('canvas.roll-base', screen);
+    const take = app.currentTake();
+    if (!base || !take) return;
+    const h = Odd.roll.hit(base, e.clientX, e.clientY);
+    if (!h) return;
+    e.preventDefault();
+    const s = app.session();
+    const target = R.sectionTarget(s, app.selectedSection(), take.bars * T.BAR);
+    const drum = T.isDrumRole(take.role);
+    if (!h.hit) {
+      const t = Math.floor(h.t / T.STEP) * T.STEP;
+      setEditedTake(Odd.edit.addNote(take, target, { t, d: drum ? 60 : 2 * T.STEP, p: h.p, v: 96 }));
+      return;
+    }
+    const idx = h.hit.i;
+    if (idx == null || !take.notes[idx]) return;
+    const startY = e.clientY;
+    const v0 = take.notes[idx].v;
+    let moved = false;
+    let edited = take;
+    const tip = $('.edit-hint', roots.booth);
+    const move = (ev) => {
+      const dy = startY - ev.clientY;
+      if (!moved && Math.abs(dy) < 4) return;
+      moved = true;
+      edited = Odd.edit.setVelocity(take, idx, v0 + dy * 0.7);
+      const r = app.boothRoll(edited);
+      Odd.roll.draw(base, Object.assign({}, base._opts, { events: r.events }));
+      if (tip) tip.textContent = 'Velocity ' + edited.notes[idx].v;
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      if (moved) setEditedTake(edited);
+      else setEditedTake(Odd.edit.removeNote(take, idx));
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
+  }
+
   function wire() {
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
@@ -1619,6 +1712,9 @@
     document.addEventListener('keyup', (e) => {
       if (e.key === ' ' && !isTyping(e.target) && !overlayOpen()) e.preventDefault();
     });
+
+    // edit notes on the booth roll
+    document.addEventListener('pointerdown', onRollPointer);
 
     // drag shelf parts onto slots; drag MIDI out to the desktop (Chrome)
     document.addEventListener('dragstart', (e) => {

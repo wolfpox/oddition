@@ -30,6 +30,7 @@ js/gen/band.js        what a section already plays      Odd.band
 js/gen/index.js       generate / vary entry points      Odd.gen
 js/core/shape.js      energy, transitions, human feel   Odd.shape
 js/core/render.js     part -> playable events (refit)   Odd.render
+js/core/edit.js       keep bars, add/remove notes       Odd.edit
 js/core/midi-file.js  Standard MIDI File writer/reader  Odd.midiFile
 js/core/zip.js        store-only .zip writer            Odd.zip
 js/core/model.js      workspace, sessions, sections     Odd.model
@@ -266,6 +267,19 @@ Generators are deterministic for a given request. Each part also records
 `seeds`, one per internal random stream (motif rhythm, motif pitch, form,
 fills...). `vary()` re-rolls some streams and keeps the rest, which is why a
 variation keeps the hook of a melody but changes how it develops.
+
+## Booth edits (`Odd.edit`)
+
+`splice(old, new, lockedBars)` joins two takes of the same role, length and
+chords: the old one's notes in locked bars, the new one's elsewhere, cut at
+the borders. The booth runs every new take (Reject, Vary, a control change)
+through it while bars are locked. `addNote(part, target, { t, d, p, v })`
+takes a pitch as the booth shows it over `target` (a section) and stores it
+as a degree in the part's own frame, undoing the refit, so it plays where it
+was drawn. `removeNote` / `setVelocity` work on note indices: the booth
+renders with `withIndex: true`, which gives each event `i`. `Odd.roll.draw`
+keeps its layout on the canvas and `Odd.roll.hit(canvas, x, y)` maps a
+pointer to `{ t, p, row, hit }`.
 
 ## Audio (`Odd.audio`, `Odd.synth`, `Odd.transport`)
 

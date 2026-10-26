@@ -195,7 +195,8 @@
             '<span class="take-no">Take ' + String(take.take || 1).padStart(3, '0') + '</span>' +
             '<span class="slate-sep"></span>' +
             '<span class="mono">seed ' + (take.seed >>> 0).toString(16).padStart(8, '0') + '</span>' +
-            (take.parent ? '<span class="pill">variation</span>' : '') +
+            (take.parent && !take.edited ? '<span class="pill">variation</span>' : '') +
+            (take.edited ? '<span class="pill">edited</span>' : '') +
             (kept ? '<span class="pill pill-keep">' + icon('check', 'ico-xs') + 'on the shelf</span>' : '') +
           '</div>' +
           '<h3 class="take-name">' + esc(take.name) + '</h3>' +
@@ -203,8 +204,11 @@
             esc(Odd.model.styleOf(take.style).label) + ' · ' + esc(keyName(s, sec)) + ' · ' + r.events.length + ' notes</p>' +
           (take.heard && take.heard.length ? '<p class="take-heard" title="How this take fits the parts already in the section">' + icon('headphones', 'ico-xs') + esc(take.heard.join(' · ')) + '</p>' : '') +
         '</div>' +
-        '<div class="screen" draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)">' +
-          rollSlot(rolls, { events: r.events, length: r.length, drums: T.isDrumRole(take.role), role: take.role, chords: r.chords }, 'roll-base') +
+        '<div class="screen' + (b.edit ? ' is-editing' : '') + '"' + (b.edit ? '' : ' draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)"') + '>' +
+          rollSlot(rolls, {
+            events: r.events, length: r.length, drums: T.isDrumRole(take.role), role: take.role, chords: r.chords,
+            rowsAlways: b.edit ? EDIT_ROWS[take.role] : null, locked: lockedBars(b, take),
+          }, 'roll-base') +
           '<canvas class="roll-head" id="booth-head" aria-hidden="true"></canvas>' +
         '</div>';
     } else {
@@ -212,6 +216,23 @@
     }
 
     const list = takes.list;
+    // edit notes, and bars to keep when re-rolling
+    let tools = '';
+    if (take) {
+      const locks = lockedBars(b, take);
+      let barBtns = '';
+      for (let i = 0; i < take.bars; i++) {
+        const on = locks.includes(i);
+        barBtns += '<button type="button" class="lock-btn' + (on ? ' is-on' : '') + '" data-act="lock-bar" data-index="' + i + '" aria-pressed="' + on + '" title="' + (on ? 'Bar ' + (i + 1) + ' is kept: Reject and Vary only change the other bars' : 'Keep bar ' + (i + 1) + ' when re-rolling') + '">' + (on ? icon('lock', 'ico-xs') : '') + (i + 1) + '</button>';
+      }
+      tools = '<div class="take-tools">' +
+        '<button type="button" class="tiny-toggle' + (b.edit ? ' is-on' : '') + '" data-act="booth-edit" aria-pressed="' + !!b.edit + '" title="Click the roll to add a note, click a note to remove it, drag a note up or down to change how hard it is played">' + icon('edit', 'ico-xs') + ' Edit notes</button>' +
+        '<span class="locks" title="Kept bars stay when you press Reject or Vary; only the others change">' +
+          '<span class="locks-label">Keep bars</span>' + barBtns +
+        '</span>' +
+        (b.edit ? '<span class="edit-hint">Click to add · click a note to remove · drag a note up or down for louder or softer</span>' : '') +
+      '</div>';
+    }
     const strip = list.length
       ? '<div class="takes" aria-label="Takes for ' + esc(roleLabel(b.role)) + '">' +
         '<button type="button" class="icon-btn icon-btn-sm" data-act="take-prev" aria-label="Previous take" title="Previous take (←)"' + (takes.index > 0 ? '' : ' disabled') + '>' + icon('back') + '</button>' +
@@ -245,7 +266,7 @@
         '</div>' +
       '</div>' +
       '<div class="roles" role="tablist" aria-label="Stem">' + roles + '</div>' +
-      '<div class="take-area" data-role="' + b.role + '">' + slate + strip + '</div>' +
+      '<div class="take-area" data-role="' + b.role + '">' + slate + tools + strip + '</div>' +
       '<div class="pads">' +
         '<button type="button" class="pad pad-reject" data-act="reject" title="Reject and play a new take (X)">' + icon('x') + '<span>' + (take ? 'Reject' : 'New take') + '</span><kbd>X</kbd></button>' +
         '<button type="button" class="pad pad-vary" data-act="vary" title="Variation of this take (V)"' + (take ? '' : ' disabled') + '>' + icon('vary') + '<span>Vary</span><kbd>V</kbd></button>' +
@@ -268,6 +289,17 @@
         '<button type="button" class="btn btn-ghost btn-sm params-reset" data-act="params-reset" title="Reset these controls">Reset</button>' +
       '</div>';
     return { html, rolls };
+  }
+
+  // drum rows always offered while editing, so a sound that isn't there yet can be added
+  const EDIT_ROWS = {
+    drums: ['KICK', 'SNARE', 'CLAP', 'RIM', 'HAT', 'OPEN HAT', 'TOM LO', 'TOM HI', 'CRASH'],
+    perc: ['CONGA', 'BONGO', 'SHAKER', 'BELL', 'PERC', 'TIMBALE'],
+  };
+
+  /** bars kept from re-rolling, for this take */
+  function lockedBars(b, take) {
+    return (b.locks || []).filter((i) => i < take.bars);
   }
 
   function fmtParam(p, v) {

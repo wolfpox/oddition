@@ -72,11 +72,15 @@
 
   /**
    * opts: { events, length, drums, role | color, chords: [{start,end,label}],
-   *         mini (no labels), background (bool, default true) }
+   *         mini (no labels), background (bool, default true),
+   *         rowsAlways (drum row labels to show even when empty, for editing),
+   *         locked (bar indices to mark as kept) }
+   * The layout is kept on the canvas so hit() can map a pointer to a note.
    */
   function draw(canvas, opts) {
     if (!canvas || !canvas.getContext) return;
     const o = opts || {};
+    canvas._opts = o;
     const { w, h, dpr } = fit(canvas);
     const ctx = canvas.getContext('2d');
     const tk = tokens();
@@ -103,6 +107,10 @@
     if (o.drums) {
       const present = new Set();
       for (const e of events) present.add(DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER);
+      for (const label of o.rowsAlways || []) {
+        const ri = DRUM_ROWS.findIndex((r) => r.label === label);
+        if (ri >= 0) present.add(ri);
+      }
       rows = DRUM_ROWS.map((r, i) => i).filter((i) => present.has(i));
       if (!rows.length) rows = [DRUM_ROWS.length - 1];
       const pos = {};
@@ -123,6 +131,23 @@
       rowOf = (p) => hi - p;
     }
     const rowH = plotH / rows.length;
+    // what a click on each row would add: the row's sound already in use, else its first
+    const rowNote = o.drums
+      ? rows.map((ri) => {
+        const used = events.find((e) => (DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER) === ri);
+        return used ? used.p : DRUM_ROWS[ri].notes[0];
+      })
+      : rows.slice();
+    canvas._roll = { plotX, plotW, plotH, rowH, rows, rowNote, drums: !!o.drums, length, dpr, events };
+
+    // kept bars
+    if (o.locked && o.locked.length) {
+      ctx.fillStyle = tk.black;
+      for (const b of o.locked) {
+        const x0 = xOf(b * T.BAR), x1 = xOf((b + 1) * T.BAR);
+        ctx.fillRect(x0, 0, x1 - x0, plotH);
+      }
+    }
 
     // black-key shading
     if (!o.drums && !mini) {
@@ -204,6 +229,36 @@
     }
   }
 
+  /**
+   * Where a pointer is on a drawn roll: { t, p, row, hit } in ticks and MIDI
+   * pitch, with `hit` the event under it (or null). null outside the notes area.
+   */
+  function hit(canvas, clientX, clientY) {
+    const L = canvas && canvas._roll;
+    if (!L) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * L.dpr;
+    const y = (clientY - rect.top) * L.dpr;
+    if (x < L.plotX || x > L.plotX + L.plotW || y < 0 || y >= L.plotH) return null;
+    const t = ((x - L.plotX) / L.plotW) * L.length;
+    const row = Math.max(0, Math.min(L.rows.length - 1, Math.floor(y / L.rowH)));
+    const p = L.rowNote[row];
+    const rowOfEvent = (e) => (L.drums ? L.rowNote.indexOf(e.p) === row || rowIndexFor(L, e.p) === row : e.p === p);
+    const slack = L.length / 64;
+    let found = null;
+    for (const e of L.events) {
+      if (!rowOfEvent(e)) continue;
+      const end = e.t + (L.drums ? Math.max(T.STEP, Math.min(e.d, T.STEP)) : e.d);
+      if (t >= e.t - (L.drums ? slack / 2 : 0) && t < end + (L.drums ? slack / 2 : 0)) { found = e; break; }
+    }
+    return { t, p, row, hit: found };
+  }
+
+  function rowIndexFor(L, p) {
+    const ri = DRUM_INDEX[p] != null ? DRUM_INDEX[p] : OTHER;
+    return L.rows.indexOf(ri);
+  }
+
   /** playhead overlay on its own transparent canvas; tick null clears it */
   function head(canvas, tick, length, opts) {
     if (!canvas) return;
@@ -221,5 +276,5 @@
     ctx.stroke();
   }
 
-  Odd.roll = { draw, head, roleColor, resetTokens, DRUM_ROWS };
+  Odd.roll = { draw, head, hit, roleColor, resetTokens, DRUM_ROWS };
 })(globalThis.Odd = globalThis.Odd || {});

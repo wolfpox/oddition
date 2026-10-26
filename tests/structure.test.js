@@ -6,7 +6,7 @@ const path = require('node:path');
 
 for (const f of [
   'core/rng', 'core/theory', 'gen/styles', 'gen/names', 'gen/drums', 'gen/perc', 'gen/bass', 'gen/chords', 'gen/pad',
-  'gen/lead', 'gen/arp', 'gen/band', 'gen/index', 'core/shape', 'core/render', 'core/model', 'core/recipes',
+  'gen/lead', 'gen/arp', 'gen/band', 'gen/index', 'core/shape', 'core/render', 'core/edit', 'core/model', 'core/recipes',
 ]) require(path.join(__dirname, '..', 'js', f + '.js'));
 
 const Odd = globalThis.Odd;

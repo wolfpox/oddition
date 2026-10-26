@@ -49,6 +49,21 @@ file** to keep a copy or move it to another machine.
    section has a length, chords (edit them as roman numerals: `i VI III VII`),
    and an optional key shift. The strip above the sheet is the song order.
 
+### Keep bars, edit notes
+
+Under the booth's piano roll:
+
+- **Keep bars**: lock the bars you like (1, 2, 3…). **Reject** and **Vary**
+  then only change the other bars, so you can keep a great first bar and
+  re-roll the answer to it. Locks stay on until you switch stem or length.
+- **Edit notes**: click empty space to add a note, click a note to remove
+  it, drag a note up or down to play it harder or softer. Drum rolls show
+  the main kit rows even when empty, so you can add a sound that isn't
+  there yet. An edited take is marked *edited*; Keep stores the edit.
+
+To edit a part that is already in the song, open it from its shelf card's
+menu (**Open in the booth**), edit it, and use **Keep & place**.
+
 ### Parts follow the chords
 
 Pitched notes are stored as scale degrees, not fixed pitches. When a part sits

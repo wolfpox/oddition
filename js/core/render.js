@@ -72,7 +72,8 @@
   }
 
   /**
-   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form }
+   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form,
+   *           withIndex (each event gets `i`, the index of the note it came from) }
    */
   function partEvents(part, target) {
     const tg = target || {};
@@ -89,12 +90,15 @@
     const out = [];
 
     for (let loopStart = 0; loopStart < length; loopStart += partLen) {
-      for (const n of notes) {
+      for (let idx = 0; idx < notes.length; idx++) {
+        const n = notes[idx];
         const t = loopStart + n.t;
         if (t >= length) continue;
         const d = Math.max(1, Math.min(n.d, length - t));
         if (isDrum || n.p != null) {
-          out.push({ t, d, p: n.p, v: n.v });
+          const ev = { t, d, p: n.p, v: n.v };
+          if (tg.withIndex) ev.i = idx;
+          out.push(ev);
           continue;
         }
         let deg = n.deg;
@@ -108,7 +112,9 @@
           const srcScale = part.ctx && part.ctx.scale ? part.ctx.scale : scale;
           if (acc === T.chordAlt(sc, srcScale)[T.mod(n.deg, 7)]) acc = T.chordAlt(gc, scale)[T.mod(deg, 7)];
         }
-        out.push({ t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v });
+        const ev = { t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v };
+        if (tg.withIndex) ev.i = idx;
+        out.push(ev);
       }
     }
     out.sort(byTime);

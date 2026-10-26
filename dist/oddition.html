@@ -871,6 +871,31 @@ input[type="range"] { accent-color: var(--ink); min-width: 0; }
 .tiny-toggle.is-on { color: var(--ink); border-color: var(--role); }
 .hint { margin: 0; font-size: var(--fs-xs); color: var(--faint); }
 
+/* booth: edit notes, keep bars */
+.take-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.take-tools .tiny-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.locks { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.locks-label { font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-right: 3px; }
+.lock-btn {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.lock-btn:hover { color: var(--ink); border-color: var(--muted); }
+.lock-btn.is-on { color: var(--ink); border-color: var(--role); background: color-mix(in srgb, var(--role) 16%, transparent); }
+.edit-hint { font-size: var(--fs-xs); color: var(--muted); }
+.screen.is-editing { cursor: crosshair; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--role) 60%, transparent); touch-action: none; }
+
 /* section type, energy curve, the bars a part plays */
 .sec-line-3 { gap: 6px; }
 .type-btn {
@@ -5358,7 +5383,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   /**
-   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form }
+   * target: { tonic, scale, prog, length (ticks), oct (octave shift), refit (default true), form,
+   *           withIndex (each event gets `i`, the index of the note it came from) }
    */
   function partEvents(part, target) {
     const tg = target || {};
@@ -5375,12 +5401,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const out = [];
 
     for (let loopStart = 0; loopStart < length; loopStart += partLen) {
-      for (const n of notes) {
+      for (let idx = 0; idx < notes.length; idx++) {
+        const n = notes[idx];
         const t = loopStart + n.t;
         if (t >= length) continue;
         const d = Math.max(1, Math.min(n.d, length - t));
         if (isDrum || n.p != null) {
-          out.push({ t, d, p: n.p, v: n.v });
+          const ev = { t, d, p: n.p, v: n.v };
+          if (tg.withIndex) ev.i = idx;
+          out.push(ev);
           continue;
         }
         let deg = n.deg;
@@ -5394,7 +5423,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
           const srcScale = part.ctx && part.ctx.scale ? part.ctx.scale : scale;
           if (acc === T.chordAlt(sc, srcScale)[T.mod(n.deg, 7)]) acc = T.chordAlt(gc, scale)[T.mod(deg, 7)];
         }
-        out.push({ t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v });
+        const ev = { t, d, p: T.pitchOf(deg, acc, tonic, scale, base), v: n.v };
+        if (tg.withIndex) ev.i = idx;
+        out.push(ev);
       }
     }
     out.sort(byTime);
@@ -5602,6 +5633,133 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     FORMS, FORM_LABELS, FORM_HINTS, formNotes,
     partEvents, applySwing, sectionTarget, spanWindows, sectionEvents, songEvents, tracksFor, roleMap, perform, sequence, chordLabels, byTime,
   };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/edit.js */
+/* Oddition — small edits to a take: keep some bars while re-rolling the
+ * rest, and add, remove or re-weight single notes.
+ *
+ * Edits happen on what the user sees: the booth draws a take refitted to
+ * the section it is auditioned over, so a note added at a pitch on screen
+ * is turned back into a scale degree in the part's own frame (the inverse
+ * of Odd.render's refit) before it is stored.
+ */
+(function (Odd) {
+  'use strict';
+  const T = Odd.theory;
+  const BAR = T.BAR;
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function vel(x) { return Math.max(1, Math.min(127, Math.round(x))); }
+
+  function sameProg(a, b) {
+    return JSON.stringify((a || []).map((c) => [c.deg, c.acc || 0, c.mode || '', c.beats])) ===
+      JSON.stringify((b || []).map((c) => [c.deg, c.acc || 0, c.mode || '', c.beats]));
+  }
+
+  /**
+   * A new take that keeps the old take's notes in `locked` bars (a Set or
+   * array of bar indices) and the new take's notes everywhere else. Notes
+   * are cut at the border so neither side spills into the other's bars.
+   * Returns null when the two can't be joined (different role, length or
+   * chords): the caller then uses the new take as it is.
+   */
+  function splice(oldPart, newPart, locked) {
+    const lock = new Set(locked || []);
+    if (!lock.size || !oldPart || !newPart) return null;
+    if (oldPart.role !== newPart.role || oldPart.bars !== newPart.bars) return null;
+    const pitched = !T.isDrumRole(newPart.role);
+    if (pitched && !(sameProg(oldPart.ctx && oldPart.ctx.prog, newPart.ctx && newPart.ctx.prog) &&
+      oldPart.ctx.tonic === newPart.ctx.tonic && oldPart.ctx.scale === newPart.ctx.scale)) return null;
+    const total = newPart.bars * BAR;
+    const barOf = (t) => Math.floor(t / BAR);
+    // end of the run of bars on the same side as bar b
+    const runEnd = (b, isLocked) => {
+      let e = b + 1;
+      while (e * BAR < total && lock.has(e) === isLocked) e++;
+      return e * BAR;
+    };
+    const take = (n, isLocked) => {
+      const end = runEnd(barOf(n.t), isLocked);
+      return Object.assign({}, n, { d: Math.max(15, Math.min(n.d, end - n.t)) });
+    };
+    const notes = [];
+    for (const n of oldPart.notes) if (lock.has(barOf(n.t))) notes.push(take(n, true));
+    for (const n of newPart.notes) if (!lock.has(barOf(n.t))) notes.push(take(n, false));
+    notes.sort((a, b) => a.t - b.t || (a.p != null ? a.p - b.p : a.deg - b.deg));
+    const out = clone(newPart);
+    out.notes = notes;
+    // a pitched part keeps the register it was written in
+    if (pitched) out.base = oldPart.base;
+    out.locked = [...lock].sort((a, b) => a - b);
+    return out;
+  }
+
+  /** the refit shift (in scale steps) the booth applies to a note at tick t */
+  function shiftAt(part, target, t) {
+    if (T.isDrumRole(part.role) || target.refit === false) return 0;
+    const srcProg = part.ctx && part.ctx.prog && part.ctx.prog.length ? part.ctx.prog : [{ deg: 0, beats: 4 }];
+    const tgtProg = target.prog && target.prog.length ? target.prog : srcProg;
+    const sc = T.chordAt(srcProg, t).chord;
+    const gc = T.chordAt(tgtProg, t).chord;
+    return { delta: T.wrapDelta(gc.deg - sc.deg), sc, gc };
+  }
+
+  /**
+   * A note drawn at pitch p (as the booth shows it over `target`) in the
+   * part's own terms: { t, d, v, p } for drums, { t, d, v, deg, acc } otherwise.
+   */
+  function toPartNote(part, target, n) {
+    if (T.isDrumRole(part.role)) return { t: n.t, d: n.d, v: vel(n.v), p: n.p };
+    const tonic = target.tonic != null ? target.tonic : part.ctx.tonic;
+    const scale = target.scale || part.ctx.scale;
+    const base = (part.base != null ? part.base : 60) + 12 * (target.oct || 0);
+    const shown = T.degreeOf(n.p, tonic, scale, base);
+    const sh = shiftAt(part, target, n.t);
+    if (!sh) return { t: n.t, d: n.d, v: vel(n.v), deg: shown.deg, acc: shown.acc };
+    const deg = shown.deg - sh.delta;
+    // an accidental that is just the target chord's colour follows the chord;
+    // anything else is deliberate and stays
+    const srcScale = part.ctx && part.ctx.scale ? part.ctx.scale : scale;
+    let acc = shown.acc;
+    if (acc === T.chordAlt(sh.gc, scale)[T.mod(shown.deg, 7)]) acc = T.chordAlt(sh.sc, srcScale)[T.mod(deg, 7)];
+    return { t: n.t, d: n.d, v: vel(n.v), deg, acc };
+  }
+
+  /** add a note drawn on screen at { t, d, p, v } */
+  function addNote(part, target, n) {
+    const out = clone(part);
+    const total = out.bars * BAR;
+    const t = Math.max(0, Math.min(total - 15, Math.round(n.t)));
+    const d = Math.max(15, Math.min(total - t, Math.round(n.d)));
+    out.notes.push(toPartNote(out, target, { t, d, v: n.v == null ? 96 : n.v, p: n.p }));
+    out.notes.sort((a, b) => a.t - b.t || (a.p != null ? a.p - b.p : a.deg - b.deg));
+    // a note on the same pitch that overlaps the new one is cut short
+    const key = (x) => (x.p != null ? 'p' + x.p : x.deg + ':' + (x.acc || 0));
+    const last = new Map();
+    for (const x of out.notes) {
+      const k = key(x);
+      const prev = last.get(k);
+      if (prev && prev.t + prev.d > x.t) prev.d = Math.max(15, x.t - prev.t);
+      last.set(k, x);
+    }
+    out.notes = out.notes.filter((x, i, arr) => !(i > 0 && arr[i - 1].t === x.t && key(arr[i - 1]) === key(x)));
+    return out;
+  }
+
+  function removeNote(part, index) {
+    const out = clone(part);
+    if (index >= 0 && index < out.notes.length) out.notes.splice(index, 1);
+    return out;
+  }
+
+  function setVelocity(part, index, v) {
+    const out = clone(part);
+    if (out.notes[index]) out.notes[index].v = vel(v);
+    return out;
+  }
+
+  Odd.edit = { splice, toPartNote, addNote, removeNote, setVelocity, sameProg };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/midi-file.js */
@@ -9800,6 +9958,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     play: '<path d="M7 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor" stroke="none"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
     check: '<path d="M4.5 12.5l5 5L19.5 7"/>',
     vary: '<path d="M4 7h11l-3-3M20 17H9l3 3"/><path d="M15 7c2.8 0 5 2.2 5 5M9 17c-2.8 0-5-2.2-5-5"/>',
     back: '<path d="M15 5l-7 7 7 7"/>',
@@ -9911,11 +10070,15 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   /**
    * opts: { events, length, drums, role | color, chords: [{start,end,label}],
-   *         mini (no labels), background (bool, default true) }
+   *         mini (no labels), background (bool, default true),
+   *         rowsAlways (drum row labels to show even when empty, for editing),
+   *         locked (bar indices to mark as kept) }
+   * The layout is kept on the canvas so hit() can map a pointer to a note.
    */
   function draw(canvas, opts) {
     if (!canvas || !canvas.getContext) return;
     const o = opts || {};
+    canvas._opts = o;
     const { w, h, dpr } = fit(canvas);
     const ctx = canvas.getContext('2d');
     const tk = tokens();
@@ -9942,6 +10105,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     if (o.drums) {
       const present = new Set();
       for (const e of events) present.add(DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER);
+      for (const label of o.rowsAlways || []) {
+        const ri = DRUM_ROWS.findIndex((r) => r.label === label);
+        if (ri >= 0) present.add(ri);
+      }
       rows = DRUM_ROWS.map((r, i) => i).filter((i) => present.has(i));
       if (!rows.length) rows = [DRUM_ROWS.length - 1];
       const pos = {};
@@ -9962,6 +10129,23 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       rowOf = (p) => hi - p;
     }
     const rowH = plotH / rows.length;
+    // what a click on each row would add: the row's sound already in use, else its first
+    const rowNote = o.drums
+      ? rows.map((ri) => {
+        const used = events.find((e) => (DRUM_INDEX[e.p] != null ? DRUM_INDEX[e.p] : OTHER) === ri);
+        return used ? used.p : DRUM_ROWS[ri].notes[0];
+      })
+      : rows.slice();
+    canvas._roll = { plotX, plotW, plotH, rowH, rows, rowNote, drums: !!o.drums, length, dpr, events };
+
+    // kept bars
+    if (o.locked && o.locked.length) {
+      ctx.fillStyle = tk.black;
+      for (const b of o.locked) {
+        const x0 = xOf(b * T.BAR), x1 = xOf((b + 1) * T.BAR);
+        ctx.fillRect(x0, 0, x1 - x0, plotH);
+      }
+    }
 
     // black-key shading
     if (!o.drums && !mini) {
@@ -10043,6 +10227,36 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
   }
 
+  /**
+   * Where a pointer is on a drawn roll: { t, p, row, hit } in ticks and MIDI
+   * pitch, with `hit` the event under it (or null). null outside the notes area.
+   */
+  function hit(canvas, clientX, clientY) {
+    const L = canvas && canvas._roll;
+    if (!L) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * L.dpr;
+    const y = (clientY - rect.top) * L.dpr;
+    if (x < L.plotX || x > L.plotX + L.plotW || y < 0 || y >= L.plotH) return null;
+    const t = ((x - L.plotX) / L.plotW) * L.length;
+    const row = Math.max(0, Math.min(L.rows.length - 1, Math.floor(y / L.rowH)));
+    const p = L.rowNote[row];
+    const rowOfEvent = (e) => (L.drums ? L.rowNote.indexOf(e.p) === row || rowIndexFor(L, e.p) === row : e.p === p);
+    const slack = L.length / 64;
+    let found = null;
+    for (const e of L.events) {
+      if (!rowOfEvent(e)) continue;
+      const end = e.t + (L.drums ? Math.max(T.STEP, Math.min(e.d, T.STEP)) : e.d);
+      if (t >= e.t - (L.drums ? slack / 2 : 0) && t < end + (L.drums ? slack / 2 : 0)) { found = e; break; }
+    }
+    return { t, p, row, hit: found };
+  }
+
+  function rowIndexFor(L, p) {
+    const ri = DRUM_INDEX[p] != null ? DRUM_INDEX[p] : OTHER;
+    return L.rows.indexOf(ri);
+  }
+
   /** playhead overlay on its own transparent canvas; tick null clears it */
   function head(canvas, tick, length, opts) {
     if (!canvas) return;
@@ -10060,7 +10274,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     ctx.stroke();
   }
 
-  Odd.roll = { draw, head, roleColor, resetTokens, DRUM_ROWS };
+  Odd.roll = { draw, head, hit, roleColor, resetTokens, DRUM_ROWS };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/ui/views.js */
@@ -10261,7 +10475,8 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
             '<span class="take-no">Take ' + String(take.take || 1).padStart(3, '0') + '</span>' +
             '<span class="slate-sep"></span>' +
             '<span class="mono">seed ' + (take.seed >>> 0).toString(16).padStart(8, '0') + '</span>' +
-            (take.parent ? '<span class="pill">variation</span>' : '') +
+            (take.parent && !take.edited ? '<span class="pill">variation</span>' : '') +
+            (take.edited ? '<span class="pill">edited</span>' : '') +
             (kept ? '<span class="pill pill-keep">' + icon('check', 'ico-xs') + 'on the shelf</span>' : '') +
           '</div>' +
           '<h3 class="take-name">' + esc(take.name) + '</h3>' +
@@ -10269,8 +10484,11 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
             esc(Odd.model.styleOf(take.style).label) + ' · ' + esc(keyName(s, sec)) + ' · ' + r.events.length + ' notes</p>' +
           (take.heard && take.heard.length ? '<p class="take-heard" title="How this take fits the parts already in the section">' + icon('headphones', 'ico-xs') + esc(take.heard.join(' · ')) + '</p>' : '') +
         '</div>' +
-        '<div class="screen" draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)">' +
-          rollSlot(rolls, { events: r.events, length: r.length, drums: T.isDrumRole(take.role), role: take.role, chords: r.chords }, 'roll-base') +
+        '<div class="screen' + (b.edit ? ' is-editing' : '') + '"' + (b.edit ? '' : ' draggable="true" data-drag="take" title="Drag out as a MIDI file (Chrome)"') + '>' +
+          rollSlot(rolls, {
+            events: r.events, length: r.length, drums: T.isDrumRole(take.role), role: take.role, chords: r.chords,
+            rowsAlways: b.edit ? EDIT_ROWS[take.role] : null, locked: lockedBars(b, take),
+          }, 'roll-base') +
           '<canvas class="roll-head" id="booth-head" aria-hidden="true"></canvas>' +
         '</div>';
     } else {
@@ -10278,6 +10496,23 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     }
 
     const list = takes.list;
+    // edit notes, and bars to keep when re-rolling
+    let tools = '';
+    if (take) {
+      const locks = lockedBars(b, take);
+      let barBtns = '';
+      for (let i = 0; i < take.bars; i++) {
+        const on = locks.includes(i);
+        barBtns += '<button type="button" class="lock-btn' + (on ? ' is-on' : '') + '" data-act="lock-bar" data-index="' + i + '" aria-pressed="' + on + '" title="' + (on ? 'Bar ' + (i + 1) + ' is kept: Reject and Vary only change the other bars' : 'Keep bar ' + (i + 1) + ' when re-rolling') + '">' + (on ? icon('lock', 'ico-xs') : '') + (i + 1) + '</button>';
+      }
+      tools = '<div class="take-tools">' +
+        '<button type="button" class="tiny-toggle' + (b.edit ? ' is-on' : '') + '" data-act="booth-edit" aria-pressed="' + !!b.edit + '" title="Click the roll to add a note, click a note to remove it, drag a note up or down to change how hard it is played">' + icon('edit', 'ico-xs') + ' Edit notes</button>' +
+        '<span class="locks" title="Kept bars stay when you press Reject or Vary; only the others change">' +
+          '<span class="locks-label">Keep bars</span>' + barBtns +
+        '</span>' +
+        (b.edit ? '<span class="edit-hint">Click to add · click a note to remove · drag a note up or down for louder or softer</span>' : '') +
+      '</div>';
+    }
     const strip = list.length
       ? '<div class="takes" aria-label="Takes for ' + esc(roleLabel(b.role)) + '">' +
         '<button type="button" class="icon-btn icon-btn-sm" data-act="take-prev" aria-label="Previous take" title="Previous take (←)"' + (takes.index > 0 ? '' : ' disabled') + '>' + icon('back') + '</button>' +
@@ -10311,7 +10546,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '</div>' +
       '</div>' +
       '<div class="roles" role="tablist" aria-label="Stem">' + roles + '</div>' +
-      '<div class="take-area" data-role="' + b.role + '">' + slate + strip + '</div>' +
+      '<div class="take-area" data-role="' + b.role + '">' + slate + tools + strip + '</div>' +
       '<div class="pads">' +
         '<button type="button" class="pad pad-reject" data-act="reject" title="Reject and play a new take (X)">' + icon('x') + '<span>' + (take ? 'Reject' : 'New take') + '</span><kbd>X</kbd></button>' +
         '<button type="button" class="pad pad-vary" data-act="vary" title="Variation of this take (V)"' + (take ? '' : ' disabled') + '>' + icon('vary') + '<span>Vary</span><kbd>V</kbd></button>' +
@@ -10334,6 +10569,17 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         '<button type="button" class="btn btn-ghost btn-sm params-reset" data-act="params-reset" title="Reset these controls">Reset</button>' +
       '</div>';
     return { html, rolls };
+  }
+
+  // drum rows always offered while editing, so a sound that isn't there yet can be added
+  const EDIT_ROWS = {
+    drums: ['KICK', 'SNARE', 'CLAP', 'RIM', 'HAT', 'OPEN HAT', 'TOM LO', 'TOM HI', 'CRASH'],
+    perc: ['CONGA', 'BONGO', 'SHAKER', 'BELL', 'PERC', 'TIMBALE'],
+  };
+
+  /** bars kept from re-rolling, for this take */
+  function lockedBars(b, take) {
+    return (b.locks || []).filter((i) => i < take.bars);
   }
 
   function fmtParam(p, v) {
@@ -10645,7 +10891,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       loopSong: false,
       playing: null,
       lastPlay: { kind: 'booth', id: null },
-      booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {} },
+      booth: { role: 'drums', bars: 4, context: true, listen: true, takeNo: 0, takes: {}, edit: false, locks: [] },
       shelf: { role: 'all', query: '', starred: false, sort: 'new' },
     },
   };
@@ -10713,7 +10959,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const length = part.bars * T.BAR;
     const tgt = R.sectionTarget(s, sec, length);
     return {
-      events: R.partEvents(part, tgt),
+      events: R.partEvents(part, Object.assign({ withIndex: true }, tgt)),
       length,
       chords: R.chordLabels(sec.prog, tgt.tonic, s.scale, length),
     };
@@ -11162,9 +11408,44 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       prog: T.sliceProg(sec.prog, 0, b.bars * T.BAR), params,
       band: app.boothBand(),
     });
-    part.id = M.uid('p');
-    addTake(part, o.replace);
+    const kept = withLocks(part);
+    kept.id = M.uid('p');
+    addTake(kept, o.replace);
+    return kept;
+  }
+
+  /** a new take keeps the current take's locked bars, if any */
+  function withLocks(part) {
+    const b = app.ui.booth;
+    if (!b.locks || !b.locks.length) return part;
+    const cur = app.currentTake();
+    const merged = cur && cur.role === part.role ? Odd.edit.splice(cur, part, b.locks) : null;
+    if (merged) {
+      merged.parent = cur.id;
+      return merged;
+    }
+    // the bars can't be kept (another length or other chords): start over
+    b.locks = [];
+    D.toast('Kept bars were let go: the new take has a different length or chords.');
     return part;
+  }
+
+  /** replace the current take with an edited copy (a new id, so Keep stores the edit) */
+  function setEditedTake(part, opts) {
+    const tk = app.takesFor(part.role);
+    const cur = tk.list[tk.index];
+    if (!cur) return;
+    part.take = cur.take;
+    if (!cur.edited || M.findPart(app.ws, cur.id)) {
+      part.parent = cur.id;
+      part.id = M.uid('p');
+    }
+    part.edited = true;
+    tk.list[tk.index] = part;
+    if (!(opts && opts.quiet)) {
+      paint(['booth']);
+      if (app.isPlaying('booth')) refreshPlayback();
+    }
   }
 
   function addTake(part, replace) {
@@ -11191,7 +11472,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const cur = app.currentTake();
     if (!cur) return newTake();
     const band = cur.bars === app.ui.booth.bars ? app.boothBand() : null;
-    const v = Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35, band });
+    const v = withLocks(Odd.gen.vary(cur, { seed: Odd.rng.newSeed(), amount: 0.35, band }));
     v.id = M.uid('p');
     v.parent = cur.id;
     addTake(v);
@@ -11328,6 +11609,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   function setRole(role, opts) {
     const b = app.ui.booth;
     if (!Odd.gen.ROLES.includes(role)) return;
+    if (b.role !== role) b.locks = [];
     b.role = role;
     const s = app.session();
     const lane = M.findLane(s, app.ui.laneId);
@@ -12020,6 +12302,13 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       }))));
     },
     'cell-reuse': () => reuseDialog(),
+    'booth-edit': () => { app.ui.booth.edit = !app.ui.booth.edit; paint(['booth']); },
+    'lock-bar': (el) => {
+      const b = app.ui.booth;
+      const i = Number(el.dataset.index);
+      b.locks = b.locks.includes(i) ? b.locks.filter((x) => x !== i) : b.locks.concat(i).sort((x, y) => x - y);
+      paint(['booth']);
+    },
     'edit-chords': (el) => { const sec = M.findSection(app.session(), el.dataset.section); if (sec) editChords(sec); },
     'new-chords': (el) => { const s = app.session(); const sec = M.findSection(s, el.dataset.section); if (sec) commit('New chords', () => { sec.prog = M.newProgression(s, sec.bars); }); },
     'add-section': () => commit('Add section', (s) => { const sec = M.addSection(s, { bars: 8 }); app.ui.sectionId = sec.id; }),
@@ -12149,7 +12438,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     },
     'booth-section': (el) => { app.ui.sectionId = el.value; paint(['booth', 'shelf', 'song']); refreshIfAudition(); },
     'booth-lane': (el) => { app.ui.laneId = el.value; paint(['booth', 'song']); refreshIfAudition(); },
-    'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); savePrefs(); rerollTake(); },
+    'booth-bars': (el) => { app.ui.booth.bars = Number(el.value); app.ui.booth.locks = []; savePrefs(); rerollTake(); },
     'booth-listen': (el) => { app.ui.booth.listen = el.checked; savePrefs(); rerollTake(); },
     'booth-context': (el) => { app.ui.booth.context = el.checked; savePrefs(); refreshIfAudition(); },
     param: (el) => {
@@ -12222,6 +12511,56 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     },
   };
 
+  /**
+   * Booth note editing. Click empty space to add a note, click a note to
+   * remove it, drag a note up or down to play it harder or softer.
+   */
+  function onRollPointer(e) {
+    if (e.button !== 0) return;
+    const screen = e.target.closest && e.target.closest('.booth .screen.is-editing');
+    if (!screen) return;
+    const base = $('canvas.roll-base', screen);
+    const take = app.currentTake();
+    if (!base || !take) return;
+    const h = Odd.roll.hit(base, e.clientX, e.clientY);
+    if (!h) return;
+    e.preventDefault();
+    const s = app.session();
+    const target = R.sectionTarget(s, app.selectedSection(), take.bars * T.BAR);
+    const drum = T.isDrumRole(take.role);
+    if (!h.hit) {
+      const t = Math.floor(h.t / T.STEP) * T.STEP;
+      setEditedTake(Odd.edit.addNote(take, target, { t, d: drum ? 60 : 2 * T.STEP, p: h.p, v: 96 }));
+      return;
+    }
+    const idx = h.hit.i;
+    if (idx == null || !take.notes[idx]) return;
+    const startY = e.clientY;
+    const v0 = take.notes[idx].v;
+    let moved = false;
+    let edited = take;
+    const tip = $('.edit-hint', roots.booth);
+    const move = (ev) => {
+      const dy = startY - ev.clientY;
+      if (!moved && Math.abs(dy) < 4) return;
+      moved = true;
+      edited = Odd.edit.setVelocity(take, idx, v0 + dy * 0.7);
+      const r = app.boothRoll(edited);
+      Odd.roll.draw(base, Object.assign({}, base._opts, { events: r.events }));
+      if (tip) tip.textContent = 'Velocity ' + edited.notes[idx].v;
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      if (moved) setEditedTake(edited);
+      else setEditedTake(Odd.edit.removeNote(take, idx));
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
+  }
+
   function wire() {
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
@@ -12244,6 +12583,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     document.addEventListener('keyup', (e) => {
       if (e.key === ' ' && !isTyping(e.target) && !overlayOpen()) e.preventDefault();
     });
+
+    // edit notes on the booth roll
+    document.addEventListener('pointerdown', onRollPointer);
 
     // drag shelf parts onto slots; drag MIDI out to the desktop (Chrome)
     document.addEventListener('dragstart', (e) => {

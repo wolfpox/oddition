@@ -5,6 +5,7 @@
     play: '<path d="M7 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
     stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor" stroke="none"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    lock: '<rect x="5.5" y="10.5" width="13" height="9" rx="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
     check: '<path d="M4.5 12.5l5 5L19.5 7"/>',
     vary: '<path d="M4 7h11l-3-3M20 17H9l3 3"/><path d="M15 7c2.8 0 5 2.2 5 5M9 17c-2.8 0-5-2.2-5-5"/>',
     back: '<path d="M15 5l-7 7 7 7"/>',
