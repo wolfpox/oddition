@@ -1409,10 +1409,193 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 .lead-note { display: flex; gap: 6px; align-items: flex-start; }
 .lead-note .ico { flex: none; margin-top: 2px; }
 
+/* ======================= Bones to Gold: the idea audition screen =======================
+ * One screen at a time: body[data-screen] is "bones" (this) or "studio" (the sheet,
+ * booth and shelf). Bobby Beatdown hosts; three cards per round; history below. */
+:root {
+  --b-gold: var(--r-lead);
+  --b-on-gold: #1d1600;
+  --b-bone: #b9b3a4;
+  --b-bone2: #cfc091;
+  --b-face-line: #ecebe6;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --b-on-gold: #ffffff; --b-bone: #7d7564; --b-bone2: #8a7428; --b-face-line: #1a1c22; }
+}
+:root[data-theme="light"] { --b-on-gold: #ffffff; --b-bone: #7d7564; --b-bone2: #8a7428; --b-face-line: #1a1c22; }
+
+body[data-screen="bones"] #topbar,
+body[data-screen="bones"] #desk,
+body[data-screen="bones"] #tabs { display: none !important; }
+body:not([data-screen="bones"]) #bones { display: none; }
+
+.b2g { min-height: 100vh; display: flex; flex-direction: column; overflow-x: clip; }
+.b2g button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.b-top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px max(20px, env(safe-area-inset-right, 0px)) 10px max(20px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.b-brand { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.b-brand > span:last-child { color: var(--muted); font-size: 14px; }
+.b-chips { display: flex; gap: 6px; flex: 1; justify-content: center; flex-wrap: wrap; align-items: center; min-width: 0; }
+.b-chip { display: flex; align-items: center; gap: 7px; padding: 6px 12px 6px 9px; border-radius: 999px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); }
+.b-chip i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+.b-chip small { font-family: var(--font-mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.b-chip.todo { border-style: dashed; color: var(--faint); }
+.b-chip.now { color: var(--ink); background: var(--raised); border-color: var(--b-gold); }
+.b-chip.lead { color: var(--ink); }
+.b-chip.pop { animation: b-fadeup 0.5s cubic-bezier(.2,.8,.2,1) backwards; }
+.b-top-r { display: flex; align-items: center; gap: 12px; }
+.b-meta { font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+.b-ghost { background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 0 16px; min-height: 44px; font-size: 14px; }
+.b-ghost:hover { background: var(--raised); }
+.b-ghost:disabled { opacity: 0.6; }
+.b-primary { background: var(--b-gold); color: var(--b-on-gold); border: 0; border-radius: 10px; min-height: 44px; padding: 0 18px; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+.b-primary:hover { filter: brightness(1.06); }
+.b-stage { width: 100%; max-width: 1060px; margin: 0 auto; padding: 24px 16px 72px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; }
+
+.b-bobby { display: flex; align-items: flex-end; gap: 16px; justify-content: center; min-height: 112px; width: 100%; }
+.b-face { flex: none; }
+.b-cloth { fill: var(--raised); stroke: var(--b-face-line); stroke-width: 2; }
+.b-bubble { position: relative; background: var(--raised); border: 1px solid var(--line); border-radius: 18px; padding: 12px 18px 14px; max-width: 580px; font-size: 16px; line-height: 1.45; margin-bottom: 18px; }
+.b-bubble::before { content: ''; position: absolute; left: -8px; bottom: 18px; width: 14px; height: 14px; background: var(--raised); border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.b-who { display: block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--b-bone2); margin-bottom: 3px; }
+
+.b-start { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 110px 0 140px; text-align: center; }
+.b-go { background: var(--b-gold); color: var(--b-on-gold); border: 0; border-radius: 16px; padding: 22px 36px; font-family: var(--font-display); font-weight: 800; font-stretch: 115%; font-size: 24px; box-shadow: 0 0 60px color-mix(in srgb, var(--b-gold) 18%, transparent); }
+.b-go:hover { filter: brightness(1.06); }
+.b-start p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.b-callouts { display: grid; column-gap: 28px; align-items: end; min-height: 176px; margin-top: 4px; }
+.b-reqs { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 24px; position: relative; animation: b-fadeup 0.3s ease-out backwards; }
+.b-reqs::after { content: ''; position: absolute; left: 50%; bottom: -14px; width: 2px; height: 12px; margin-left: -1px; background: var(--line); }
+.b-req { background: var(--raised); border: 1px solid var(--line); color: var(--ink); border-radius: 16px; min-height: 36px; padding: 0 16px; font-size: 14px; white-space: nowrap; }
+.b-req:hover { border-color: var(--b-bone2); }
+.b-req.on { border-color: var(--b-gold); color: var(--b-gold); }
+.b-reqs-in { display: none; }
+
+.b-cards { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding-top: 4px; }
+.b-card {
+  position: relative; box-sizing: border-box; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px;
+  transition: transform 0.28s cubic-bezier(.2,.8,.2,1), box-shadow 0.28s, border-color 0.28s;
+  animation-duration: 0.5s; animation-timing-function: cubic-bezier(.2,.8,.2,1); animation-fill-mode: backwards;
+}
+.b-card:hover { border-color: color-mix(in srgb, var(--line) 60%, var(--ink)); }
+.b-card.lifted { transform: translateY(-16px); border-color: var(--b-gold); box-shadow: 0 22px 44px rgba(0,0,0,.5), 0 0 0 1px color-mix(in srgb, var(--b-gold) 40%, transparent); }
+.b-card.is-wait { border-style: dashed; border-color: color-mix(in srgb, var(--b-gold) 55%, transparent); }
+.b-card.is-wait .b-vis { opacity: 0.35; transition: opacity 0.3s; }
+.b-card .b-promote { display: none; }
+.b-card.lifted .b-promote { display: flex; }
+.b-hit { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; border: 0; border-radius: 14px; z-index: 1; padding: 0; }
+.b-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.b-letter { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--muted); }
+.b-tag { font-weight: 600; font-size: 15px; }
+.b-stat { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+.b-vis { position: relative; width: 272px; height: 92px; background: var(--screen); border-radius: 8px; overflow: hidden; }
+.b-vis i { position: absolute; display: block; }
+.b-gl { top: 0; bottom: 0; width: 1px; background: var(--grid); }
+.b-gl.bar { background: color-mix(in srgb, var(--ink) 15%, transparent); }
+.b-blk { border-radius: 3px; }
+.b-blk.acc { background: var(--b-bone); }
+.b-blk.soft { background: color-mix(in srgb, var(--b-bone) 55%, transparent); }
+.b-blk.ghost { background: color-mix(in srgb, var(--r-lead) 28%, transparent); }
+.b-blk.half { opacity: 0.55; }
+.b-blk.kick { filter: brightness(1.2); }
+.b-dot { width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--b-bone2); }
+.b-dot.land { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--b-gold); }
+.b-ln { height: 2px; margin-top: -1px; background: var(--b-bone2); opacity: 0.75; transform-origin: 0 50%; }
+.b-cell { height: 9px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.b-cell.on { background: var(--b-bone2); }
+.b-cell.root { background: var(--b-gold); }
+.b-chd { position: absolute; height: 20px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.b-chd.maj { background: color-mix(in srgb, var(--r-chords) 24%, transparent); color: var(--r-chords); }
+.b-chd.min { background: color-mix(in srgb, var(--r-chords) 10%, transparent); color: var(--r-chords); }
+.b-chd.col { background: color-mix(in srgb, var(--b-gold) 16%, transparent); color: var(--b-gold); border: 1px solid color-mix(in srgb, var(--b-gold) 50%, transparent); }
+.b-nlab { position: absolute; font-family: var(--font-mono); font-size: 10px; color: var(--ink); }
+.b-vis .b-ph { display: none; top: 0; bottom: 0; width: 2px; background: var(--b-gold); box-shadow: 0 0 8px var(--b-gold); }
+.is-playing .b-ph { display: block; }
+.b-promote { position: relative; z-index: 2; margin-top: 12px; width: 100%; justify-content: center; }
+
+.b-actions { display: flex; gap: 14px; justify-content: center; align-items: center; margin-top: 30px; flex-wrap: wrap; text-align: center; }
+.b-hint { color: var(--faint); font-size: 13px; }
+
+.b-dirs { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); gap: 16px; justify-content: center; width: 100%; margin-top: 20px; }
+.b-dir { position: relative; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 18px; color: var(--ink); display: flex; flex-direction: column; gap: 6px; min-height: 92px; }
+.b-animate .b-dir { animation: b-pop 0.45s cubic-bezier(.2,.8,.2,1) backwards; }
+.b-dir:hover { border-color: color-mix(in srgb, var(--line) 60%, var(--ink)); background: var(--raised); }
+.b-dir.tip { border-color: var(--b-gold); box-shadow: 0 0 0 1px color-mix(in srgb, var(--b-gold) 35%, transparent); }
+.b-dir.done { background: var(--screen); }
+.b-dir-top { display: flex; align-items: center; gap: 9px; }
+.b-dir-top b { font-size: 16px; font-weight: 600; }
+.b-dot-c { width: 11px; height: 11px; border-radius: 50%; display: block; flex: none; }
+.b-dir-sub { color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+.b-pickb { margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 600; background: var(--b-gold); color: var(--b-on-gold); padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.b-doneb { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.b-history { width: 100%; margin-top: 46px; border-top: 1px solid var(--line); padding-top: 18px; }
+.b-h-title { display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; flex-wrap: wrap; }
+.b-row { display: flex; gap: 22px; align-items: center; padding: 16px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); flex-wrap: wrap; }
+.b-row.drop { animation: b-drop 0.5s cubic-bezier(.2,.8,.2,1) backwards; }
+.b-row-label { width: 170px; flex: none; }
+.b-row-label b { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.b-row-label span { font-size: 13px; color: var(--muted); }
+.b-back { display: inline-flex; align-items: center; margin-top: 8px; min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 13px; }
+.b-back:hover { background: var(--raised); border-color: var(--b-bone2); }
+.b-row-cards { display: flex; gap: 16px; flex-wrap: wrap; }
+.b-mini-wrap { position: relative; }
+.b-mini { position: relative; width: 186px; height: 94px; flex: none; }
+.b-mini .b-card { position: absolute; left: 0; top: 0; transform: scale(0.62); transform-origin: 0 0; animation: none; }
+.b-mini.passed .b-card { opacity: 0.62; }
+.b-mini.picked .b-card { border-color: var(--b-bone2); }
+.b-mini.is-playing .b-card, .b-mini.is-wait .b-card { opacity: 1; border-color: var(--b-gold); box-shadow: 0 0 0 1px var(--b-gold); }
+.b-badge { position: absolute; top: -9px; left: 10px; z-index: 3; font-family: var(--font-mono); font-size: 10px; font-weight: 600; background: var(--b-bone2); color: var(--b-on-gold); padding: 2px 6px; border-radius: 4px; }
+
+.b-gold { display: flex; flex-direction: column; align-items: center; gap: 22px; margin-top: 8px; width: 100%; }
+.b-gold-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.b-lineage { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 860px; }
+.b-lin { display: flex; flex-direction: column; gap: 6px; }
+.b-animate .b-lin { animation: b-fadeup 0.5s cubic-bezier(.2,.8,.2,1) backwards; }
+.b-lin-l { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.b-lin-l i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+.b-plus { color: var(--faint); font-size: 18px; padding-bottom: 36px; }
+.b-lin-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+
+@keyframes b-pop { from { opacity: 0; transform: translateY(22px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes b-rise { from { opacity: .3; transform: translateY(90px) scale(1.04); } to { opacity: 1; transform: none; } }
+@keyframes b-drop { from { opacity: 0; transform: translateY(-60px); } to { opacity: 1; transform: none; } }
+@keyframes b-fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 1000px) {
+  .b-callouts { display: none; }
+  .b-reqs-in { display: block; position: relative; z-index: 2; }
+  .b-reqs-in .b-reqs { flex-direction: row; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
+  .b-reqs-in .b-reqs::after { display: none; }
+  .b-cards { padding-top: 20px; }
+  .b-dirs { grid-template-columns: minmax(0, 340px); }
+}
+@media (max-width: 560px) {
+  .b-top { padding-left: 16px; padding-right: 16px; gap: 10px; }
+  .b-meta { display: none; }
+  .b-row-label { width: 100%; }
+  .b-req { white-space: normal; }
+  .b-bobby { gap: 8px; }
+  .b-face { width: 64px; height: 64px; }
+  .b-bubble { font-size: 15px; }
+  .b-start { padding: 60px 0 90px; }
+  .b-go { font-size: 20px; padding: 18px 26px; }
+}
+@media (max-width: 360px) {
+  .b-stage { padding-left: 12px; padding-right: 12px; }
+  .b-card { padding-left: 10px; padding-right: 10px; width: 292px; }
+}
+
 </style>
 </head>
 <body>
-<!-- Oddition single-file build 2026-10-26 (generated by tools/build.js; edit the sources, not this file) -->
+<!-- Oddition single-file build 2026-10-27 (generated by tools/build.js; edit the sources, not this file) -->
+<div id="bones" aria-label="Bones to Gold"></div>
 <header class="topbar" id="topbar"></header>
 <main class="desk" id="desk">
   <section class="panel song" id="song" aria-label="Song"></section>
@@ -6948,8 +7131,9 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
  * whole riff section can each be one idea. Voices can be split off into ideas
  * of their own, and ideas can be joined.
  *
- *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags }
- *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split')
+ *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags, bones }
+ *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split' | 'bones')
+ *           bones: (optional) the Bones to Gold idea it was built from (Odd.audition), to keep building it there
  *   voice = { role, name, sourceId, part, oct, form, core }
  *           part: a copy of the part as found (null for a voice that is only a core)
  *           oct, form: how the part was played where it was found (slot octave and form)
@@ -7426,6 +7610,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
       created: Number(raw.created) || Date.now(),
       starred: !!raw.starred,
       tags: Array.isArray(raw.tags) ? raw.tags : [],
+      ...(raw.bones && typeof raw.bones === 'object' && raw.bones.melody ? { bones: raw.bones } : {}),
     };
   }
 
@@ -8235,6 +8420,862 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   }
 
   Odd.relate = { BOXES, BOX_ORDER, HEARD, readHeard, verb, analyse, sectionLanes, forSection, song, STAND, STEER };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/audition.js */
+/* Oddition — Bones to Gold: audition an idea from the bottom up.
+ *
+ * An idea grows one layer at a time, and each layer is made only from the
+ * layers below it. Nothing picks a style or genre first and reveals it:
+ *
+ *   seed1  rhythm and scale   a rhythm made from density and push, walked up
+ *                             and down a scale so its mood is heard
+ *   seed2  shape              where the melody goes and the note it lands on
+ *   then, in any order, each made against the melody (it always leads):
+ *          chords, bass, perc (claps and taps), beat (grows the perc),
+ *          pads (support), sound (instrument, tempo and swing: the genre)
+ *
+ * The only fixed assumptions: 4/4, 2 bars on a 16th grid, 100 BPM until a
+ * sound is picked, key of C.
+ *
+ * Every round offers three options spread along that layer's most telling
+ * difference (sparse..busy, answer..question, dark..bright, ...). Requests
+ * steer the spread ("Busier", "Darker", "Surprise me").
+ *
+ *   idea  = { melody, layers: { [dir]: option }, order: [dir] }
+ *   melody = { r: rhythm, scale, shape }   shape null until round 2
+ *   rhythm = { id, hits: [[step, length, weight]], n, off }
+ *   round = { dir, batch, steer: { p, s, x } }
+ *
+ * flow.* are pure state steps for the screen (Odd.bones); seq() turns an idea
+ * into a transport sequence; toParts() into parts for the idea shelf.
+ */
+(function (Odd) {
+  'use strict';
+
+  const STEPS = 32;
+  const STEP_TICKS = 120; // a 16th at PPQ 480
+  const LENGTH = STEPS * STEP_TICKS;
+  const ABC = 'ABC';
+  const NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  const IV = ['root', '♭2nd', '2nd', '♭3rd', '3rd', '4th', '♯4th', '5th', '♭6th', '6th', '♭7th', '7th'];
+
+  const mod = (a, n) => ((a % n) + n) % n;
+  const maxOf = (a) => Math.max.apply(null, a);
+  const minOf = (a) => Math.min.apply(null, a);
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+
+  // a small memo: options are rebuilt often while the screen repaints
+  const CACHE = new Map();
+  function cached(key, fn) {
+    if (CACHE.has(key)) return CACHE.get(key);
+    const v = fn();
+    CACHE.set(key, v);
+    if (CACHE.size > 300) CACHE.delete(CACHE.keys().next().value);
+    return v;
+  }
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function weighted(R, W) {
+    let tot = 0;
+    for (const k in W) tot += Math.max(0, W[k]);
+    let x = R() * tot;
+    for (const k in W) { x -= Math.max(0, W[k]); if (x <= 0) return k; }
+    return Object.keys(W)[0];
+  }
+
+  // ---------------------------------------------------------------- layers and words
+
+  const WHY = { label: 'Why does that work?', why: true };
+  const DIRS = {
+    seed1: { label: 'Rhythm and scale', color: '#f1cd58', low: 'sparse', high: 'busy' },
+    seed2: { label: 'Shape', color: '#f1cd58', low: 'falls like an answer', high: 'rises like a question' },
+    chords: { label: 'Chords', color: '#4ec8b2', sub: 'Worked out from your melody', low: 'darker', high: 'brighter' },
+    bass: { label: 'Bass', color: '#a395ff', sub: 'Locks onto it, or fills its gaps', low: 'fills the gaps', high: 'locks onto the melody' },
+    perc: { label: 'Percussion', color: '#a9d15a', sub: 'Claps and taps, nothing heavy yet', low: 'sparse', high: 'driving' },
+    beat: { label: 'Grow the beat', color: '#f27b62', sub: 'Turn the claps into a full beat', low: 'right on the grid', high: 'leaning against it' },
+    pads: { label: 'Pads and support', color: '#6fb0ff', sub: 'Pads, strings, a second voice', low: 'thin', high: 'full' },
+    sound: { label: 'Sound and feel', color: '#ef84c7', sub: 'Its instrument, tempo and swing', low: 'calm', high: 'with energy' },
+  };
+  const NEXT_ORDER = ['chords', 'bass', 'perc', 'beat', 'pads', 'sound'];
+  const LAYER_ORDER = ['chords', 'bass', 'pads', 'perc', 'beat'];
+  const REQS = {
+    seed1: [{ label: 'Busier', p: 1, reply: 'Busier. Okay, let’s hear it.' }, { label: 'Sparser', p: -1, reply: 'More space. Here.' }, { label: 'Darker scale', s: -1, reply: 'Darker scales. Give me a second.' }, { label: 'Brighter scale', s: 1, reply: 'Brighter. Here we go.' }, WHY],
+    seed2: [{ label: 'Smoother', x: 'smooth', reply: 'Smoother, fewer jumps. Listen.' }, { label: 'More jumps', x: 'jumpy', reply: 'Jumpier. Here.' }, { label: 'Land on home', x: 'home', reply: 'All three land on home now. Hear how finished that sounds?' }, WHY],
+    chords: [{ label: 'Darker', p: -1, reply: 'Darker. Same melody, more shadow.' }, { label: 'Brighter', p: 1, reply: 'Brighter. Here.' }, { label: 'Surprise me', x: 'colour', reply: 'Okay, a chord or two from outside the scale. Still fits.' }, WHY],
+    bass: [{ label: 'Busier', s: 1, reply: 'Busier bass. Here.' }, { label: 'Simpler', s: -1, reply: 'Simpler. Less is more, sometimes.' }, { label: 'Lock tighter', p: 1, reply: 'Tighter to the melody. Listen.' }, WHY],
+    perc: [{ label: 'More drive', p: 1, reply: 'More drive. Here.' }, { label: 'Calmer', p: -1, reply: 'Calmer. Just a touch.' }, { label: 'Follow the melody', x: 'follow', reply: 'These ones follow the melody’s rhythm.' }, WHY],
+    beat: [{ label: 'Straighter', p: -1, reply: 'Straighter. Right on the grid.' }, { label: 'Looser', p: 1, reply: 'Looser. Let it lean.' }, { label: 'Harder', s: 1, reply: 'Harder. Here.' }, WHY],
+    pads: [{ label: 'Fuller', p: 1, reply: 'Fuller. Here.' }, { label: 'Thinner', p: -1, reply: 'Thinner. Just a shadow.' }, { label: 'Higher', s: 1, reply: 'Higher up. Listen.' }, WHY],
+    sound: [{ label: 'More energy', p: 1, reply: 'More energy. Here.' }, { label: 'Calmer', p: -1, reply: 'Calmer. Here.' }, { label: 'Surprise me', x: 'any', reply: 'Anything goes. Let’s see what fits.' }, WHY],
+  };
+
+  // Bobby's lines. Lists are picked from by a counter so he doesn't repeat himself.
+  const LINES = {
+    start: 'Hey, I’m Bobby. Let’s find an idea. We start with bones: a rhythm and a scale. No genre yet.',
+    pause: ['Just a moment.', 'Okay, let’s hear that one.', 'Hang on. Fresh ears.', 'Right. This one.', 'Let that settle. Okay.', 'Clear your ears. Now this.', 'Breathe. Next one.', 'Give it a second.'],
+    entry: {
+      seed1: ['Three starting points. Each is a rhythm and a scale, walking up and down so you hear its mood. One sparse, one busy, one in between.'],
+      seed2: ['Same rhythm, same scale. Now it gets a shape: where it goes and where it lands. One falls like an answer, one rises like a question, one stays near home.'],
+      chords: ['Chords worked out from your melody. One darker, one brighter, one in between.', 'Three sets of chords, all made to fit your melody. Dark, bright, and one in the middle.'],
+      bass: ['Three basses under your melody. One fills its gaps, one locks right onto it, one in between.', 'Bass time. One answers in the gaps, one hits with the melody, one sits between.'],
+      perc: ['Claps and taps, nothing heavy. One sparse, one driving, one in between.', 'Some hands on the table. One barely there, one driving, one in between.'],
+      beat: ['Let’s grow those claps into a beat. One right on the grid, one leaning against it, one in between.'],
+      pads: ['Something to fill the space around the melody. One thin, one full, one in between.', 'Support for the melody. One just a shadow, one wide and full, one in between.'],
+      sound: ['Same idea, three ways to dress it. One calm, one with energy, one in between.', 'Now the clothes: instrument, tempo, swing. Calm, energetic, and one between.'],
+    },
+    more: ['Three more. The others dropped down below; nothing gets thrown away.', 'Fresh three. The last ones are down in the history if you miss them.', 'Here’s three more. Nothing’s lost: scroll down for the others.'],
+    next: ['The melody leads; everything we add backs it up. Where to?', 'Where next? Nothing’s wrong from here, only different.', 'Your melody is the boss. What should back it up?'],
+    melody: ['That’s your melody. Here it is on its own. From now on, it leads.'],
+    added: ['Here it is with the {x} in.', 'There it is, with the {x}. Hear how the melody sits now.', 'With the {x}. Still the melody up front.'],
+    skipped: ['Fine by me. Where else?', 'Not every idea needs that. Pick another way.'],
+    gold: ['That’s gold. A while ago it was a rhythm and a scale. Play the climb to hear how it got here.', 'Gold. Bones, a shape, then everything around it. Play the climb.'],
+    climbFirst: 'Bones: the rhythm and the scale.',
+    climbMelody: 'The melody, with its shape.',
+    back: 'Back to that {x} round, as it was. Everything you did after it is still down in the history.',
+    walk: 'The plain walk it is. Sometimes the bones are the best part.',
+    picked: 'Your pick from that round. What came after grew out of this one.',
+    passed: 'One you passed on. Still here: nothing gets thrown away.',
+    saved: 'Saved to Ideas. You can find it on the shelf in the Studio.',
+  };
+  function line(list, n) { return Array.isArray(list) ? list[mod(n || 0, list.length)] : list; }
+
+  // ---------------------------------------------------------------- rhythm
+
+  const CELLS = { q: [[0, 4]], e: [[0, 2], [2, 2]], off: [[2, 2]], s: [[0, 1], [1, 1], [2, 1], [3, 1]], dot: [[0, 3], [3, 1]], sync: [[0, 1], [1, 2], [3, 1]], es: [[0, 2], [2, 1], [3, 1]], ant: [[3, 1]], rest: [], hold: [] };
+
+  /** a 2-bar rhythm from density d and push y (0..1), one beat-cell at a time */
+  function makeRhythm(seed, d, y) {
+    const R = rng(seed);
+    const W = { rest: 1.1 * (1 - d), hold: 1.4 * (1 - d), q: 1, e: 0.4 + 1.2 * d, off: 0.9 * y, s: 1.6 * d * d, dot: 0.5 + 0.3 * y, sync: 1.4 * y * d, es: 0.7 * d, ant: 0.6 * y };
+    const first = { q: 1, e: 0.4 + d, dot: 0.6, s: d * d, es: 0.6 * d, sync: y * d };
+    const bar1 = [weighted(R, first)];
+    for (let b = 1; b < 4; b++) bar1.push(weighted(R, W));
+    // bar 2 echoes the start of bar 1 more often than not
+    const bar2 = bar1.map((c, i) => (i < 2 && R() < 0.6 ? c : i === 0 ? weighted(R, first) : weighted(R, W)));
+    const hits = [];
+    bar1.concat(bar2).forEach((c, b) => {
+      if (c === 'hold') { const p = hits[hits.length - 1]; if (p && p[0] + p[1] === b * 4) p[1] += 4; return; }
+      CELLS[c].forEach((x) => hits.push([b * 4 + x[0], x[1]]));
+    });
+    if (hits.length < 3) return null;
+    const last = hits[hits.length - 1];
+    last[1] = Math.min(STEPS - last[0], Math.max(last[1], 4));
+    hits.forEach((h) => { h[2] = h[0] % 8 === 0 ? 2 : h[0] % 4 === 0 ? 1 : h[1] >= 3 ? 2 : 0; });
+    hits[0][2] = 2;
+    return hits;
+  }
+  function rhythmPool() {
+    return cached('rpool', () => {
+      const seen = {}, out = [];
+      const DS = [0.05, 0.3, 0.55, 0.8, 1], YS = [0, 0.35, 0.7, 1];
+      for (let i = 0; i < 80; i++) {
+        const hits = makeRhythm(1009 + i * 7919, DS[i % 5], YS[Math.floor(i / 5) % 4]);
+        if (!hits) continue;
+        const key = JSON.stringify(hits);
+        if (seen[key]) continue;
+        seen[key] = 1;
+        out.push({ id: 'r' + i, hits, n: hits.length, off: hits.filter((h) => h[0] % 4 !== 0).length });
+      }
+      return out;
+    });
+  }
+  function rhythmTag(r) {
+    const w = r.n <= 6 ? 'Spare' : r.n <= 10 ? 'Relaxed' : r.n <= 16 ? 'Moving' : r.n <= 21 ? 'Busy' : 'Packed';
+    return r.off / r.n > 0.35 ? w + ', pushing' : w;
+  }
+
+  // ---------------------------------------------------------------- scales
+
+  const SCALES = {
+    phrygian: [0, 1, 3, 5, 7, 8, 10], minor: [0, 2, 3, 5, 7, 8, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
+    penta: [0, 2, 4, 7, 9], mixolydian: [0, 2, 4, 5, 7, 9, 10], major: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11],
+  };
+  const SCALE_ORDER = ['phrygian', 'minor', 'harmonic', 'dorian', 'penta', 'mixolydian', 'major', 'lydian']; // dark to bright
+  // the studio's name for each scale (pentatonic lives inside major)
+  const STUDIO_SCALE = { phrygian: 'phrygian', minor: 'minor', harmonic: 'harmonicMinor', dorian: 'dorian', penta: 'major', mixolydian: 'mixolydian', major: 'major', lydian: 'lydian' };
+  const MODE = {
+    phrygian: { name: 'Phrygian', mood: 'tense', why: 'Phrygian has the note just above home only a half step away. That closeness sounds tense.' },
+    minor: { name: 'Minor', mood: 'dark', why: 'Minor lowers the 3rd note of the scale, and that one note does most of the darkening.' },
+    harmonic: { name: 'Harmonic minor', mood: 'dramatic', why: 'Harmonic minor raises minor’s 7th, leaving a wide gap that sounds dramatic, almost exotic.' },
+    dorian: { name: 'Dorian', mood: 'cool', why: 'Dorian is minor with one brighter note, the 6th. That’s why it sounds cool rather than sad.' },
+    penta: { name: 'Pentatonic', mood: 'open', why: 'Pentatonic keeps five notes and drops the two that rub, so any order of them sounds fine.' },
+    mixolydian: { name: 'Mixolydian', mood: 'loose', why: 'Mixolydian is major with a lowered 7th, which takes away the pull home. It feels laid back.' },
+    major: { name: 'Major', mood: 'bright', why: 'Major puts a major 3rd above home, and that interval is most of what we hear as bright.' },
+    lydian: { name: 'Lydian', mood: 'floating', why: 'Lydian raises the 4th. That note wants to go up, so the tune seems to float.' },
+  };
+  function degMidi(scale, deg) { const s = SCALES[scale]; return 60 + 12 * Math.floor(deg / s.length) + s[mod(deg, s.length)]; }
+  function parentScale(scale) { return SCALES[scale].length === 7 ? SCALES[scale] : SCALES.major; }
+  function landFeel(iv) { return iv === 0 ? 'finished, like home' : iv === 3 || iv === 4 ? 'settled' : iv === 7 ? 'open, like there’s more to say' : 'like it wants to keep going'; }
+
+  // ---------------------------------------------------------------- shape
+
+  const SHAPES = ['walkup', 'walkdown', 'turn', 'twice', 'arch', 'climb', 'hover', 'fall', 'wave', 'leap', 'valley', 'echo', 'early'];
+  const SHAPE_TAG = { walk: 'Plain walk', walkup: 'Walk, then home', walkdown: 'Walk down', turn: 'Turns', twice: 'Says it twice', arch: 'Arch', climb: 'Climb', hover: 'Hover', fall: 'Fall', wave: 'Wave', leap: 'Leaps', valley: 'Dip', echo: 'Echo', early: 'Early peak' };
+  const WALK = [0, 1, 2, 3, 4, 3, 2, 1];
+
+  /** heights in scale steps for n notes */
+  function shapeOf(kind, n) {
+    const out = [];
+    const L = Math.max(1, n - 1);
+    const half = Math.ceil(n / 2);
+    for (let i = 0; i < n; i++) {
+      const p = i / L;
+      const last = i === n - 1;
+      let h = 0;
+      // walk-based shapes keep round 1's stepwise feel and change only where it goes
+      if (kind === 'walk') h = last ? 0 : WALK[i % 8];
+      else if (kind === 'walkup') h = last ? 0 : Math.min(i, 4) - (i > 4 ? i - 4 : 0) * 0.5;
+      else if (kind === 'walkdown') h = last ? 0 : [4, 3, 2, 1, 0, 1, 2, 3][i % 8];
+      else if (kind === 'turn') h = last ? 0 : [0, 1, 0, -1, 0, 1, 2, 1][i % 8];
+      else if (kind === 'twice') h = last ? 0 : [0, 1, 2, 1, 2, 3][(i < half ? i : i - half) % 6];
+      else if (kind === 'arch') h = 4 * Math.sin(Math.PI * Math.min(1, p * 1.05));
+      else if (kind === 'climb') h = 7 * p - (i % 2 && p > 0.2 && p < 0.9 ? 1 : 0);
+      else if (kind === 'hover') h = last ? 2 : [0, 1, 0, -1][i % 4];
+      else if (kind === 'fall') h = 6 - 7 * p;
+      else if (kind === 'wave') h = 2.4 * Math.sin(p * Math.PI * 2.5 + 0.3);
+      else if (kind === 'leap') h = last ? 0 : (i % 2 ? 4 : 0) + 2 * p;
+      else if (kind === 'valley') h = -4 * Math.sin(Math.PI * p);
+      else if (kind === 'echo') { const j = i < half ? i : i - half; h = 3 * Math.sin(Math.PI * 0.8 * (j / Math.max(1, half - 1))) + (i < half ? 0 : 1); }
+      else if (kind === 'early') h = 5 * Math.exp(-((p - 0.15) * (p - 0.15)) / 0.03);
+      out.push(h);
+    }
+    return out;
+  }
+  function shapeSteps(kind, n, amp) { return shapeOf(kind, n).map((h) => Math.round(h * amp)); }
+
+  /** the melody's notes: { s, d, w, deg, m }. walk = round 1 (rhythm and scale only) */
+  function melodyNotes(mel, walk) {
+    const hs = mel.r.hits, n = hs.length;
+    let steps, start = 0;
+    if (walk || !mel.shape) steps = hs.map((_, i) => (i === n - 1 ? 0 : WALK[i % 8]));
+    else { steps = shapeSteps(mel.shape.kind, n, mel.shape.amp); start = mel.shape.start; }
+    return hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
+  }
+
+  // ---------------------------------------------------------------- chords, worked out from the melody
+
+  /** how much each pitch class sounds in each half-bar slot: long, strong and accented notes count most */
+  function slotWeights(notes) {
+    const W = [0, 1, 2, 3].map(() => new Array(12).fill(0));
+    notes.forEach((e) => {
+      for (let sl = 0; sl < 4; sl++) {
+        const a = Math.max(e.s, sl * 8), b = Math.min(e.s + e.d, (sl + 1) * 8);
+        if (b <= a) continue;
+        let w = (b - a) * (e.s === sl * 8 ? 1.5 : e.s % 4 === 0 ? 1.2 : 1) * (e.w === 2 ? 1.3 : 1);
+        if (e.s < sl * 8) w *= 0.6; // carried over from the slot before
+        W[sl][mod(e.m, 12)] += w;
+      }
+    });
+    return W;
+  }
+  function chordName(c) { return NAMES[c.root] + (c.q === 'm' ? 'm' : c.q); }
+  /** triads of the scale, plus "colour" chords borrowed from outside it */
+  function chordCands(scale) {
+    const sc = parentScale(scale), out = [];
+    for (let d = 0; d < 7; d++) {
+      const pcs = [0, 2, 4].map((o) => sc[(d + o) % 7]);
+      const t = mod(pcs[1] - pcs[0], 12), f = mod(pcs[2] - pcs[0], 12);
+      out.push({ root: sc[d], q: t === 4 ? (f === 8 ? '+' : '') : f === 6 ? '°' : 'm', pcs, colour: false });
+    }
+    const extra = sc[2] === 4 ? [[10, ''], [5, 'm'], [8, ''], [2, '']] : [[7, ''], [5, ''], [1, '']];
+    extra.forEach((x) => {
+      const r = x[0], q = x[1];
+      if (out.some((c) => c.root === r && c.q === q)) return;
+      out.push({ root: r, q, pcs: [r, mod(r + (q === 'm' ? 3 : 4), 12), mod(r + 7, 12)], colour: true });
+    });
+    return out;
+  }
+  /** chord paths (one chord per half bar), best fit first, each differing from the others in 2+ slots */
+  function chordPool(mel, colour) {
+    return cached('cp' + JSON.stringify(mel) + colour, () => {
+      const W = slotWeights(melodyNotes(mel));
+      const C = chordCands(mel.scale);
+      const S = W.map((ws) => C.map((c) => {
+        let s = 0;
+        ws.forEach((w, pc) => { if (w) s += c.pcs.includes(pc) ? w : -0.45 * w; });
+        if (c.q === '°' || c.q === '+') s -= 1.2;
+        if (c.colour) s += colour ? 0.4 : -0.9;
+        return s;
+      }));
+      const N = C.length, all = [];
+      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) for (let c = 0; c < N; c++) for (let d = 0; d < N; d++) {
+        const p = [a, b, c, d];
+        if (colour && !p.some((i) => C[i].colour)) continue;
+        let s = S[0][a] + S[1][b] + S[2][c] + S[3][d] + (C[a].root === 0 && !C[a].colour ? 1.5 : 0);
+        for (let i = 1; i < 4; i++) if (p[i] !== p[i - 1]) s -= 0.35;
+        all.push({ p, s });
+      }
+      all.sort((x, y) => y.s - x.s);
+      const diff = (x, y) => x.filter((v, i) => v !== y[i]).length;
+      const picked = [];
+      for (const c of all) { if (picked.length >= 24) break; if (picked.every((q) => diff(q.p, c.p) >= 2)) picked.push(c); }
+      return picked.map((x) => {
+        const chords = x.p.map((i) => C[i]);
+        let on = 0, tot = 0;
+        W.forEach((ws, sl) => ws.forEach((w, pc) => { tot += w; if (chords[sl].pcs.includes(pc)) on += w; }));
+        return {
+          chords, fit: tot ? Math.round(100 * on / tot) : 100,
+          bright: chords.reduce((a, c) => a + (c.q === '' ? 1 : c.q === 'm' ? -1 : -0.5), 0),
+          changes: x.p.filter((v, i) => i > 0 && v !== x.p[i - 1]).length, colour: chords.some((c) => c.colour),
+        };
+      });
+    });
+  }
+  /** the chords other layers play against: the picked ones, or the melody's best fit */
+  function chordsFor(idea) { return idea.layers.chords ? idea.layers.chords.chords : chordPool(idea.melody, false)[0].chords; }
+
+  // ---------------------------------------------------------------- the other layers, each made against the melody
+
+  function coverage(notes) {
+    const covered = new Array(STEPS).fill(false);
+    notes.forEach((n) => { for (let t = n.s; t < Math.min(STEPS, n.s + n.d); t++) covered[t] = true; });
+    return covered;
+  }
+  function onsetsOf(notes) { const o = {}; notes.forEach((n) => { o[n.s] = 1; }); return o; }
+
+  function bassStyles(idea) {
+    const notes = melodyNotes(idea.melody), chords = chordsFor(idea);
+    const covered = coverage(notes);
+    const ch = (s) => chords[Math.floor(mod(s, STEPS) / 8)];
+    const root = (s) => 36 + ch(s).root;
+    const tone = (s, k) => 36 + ch(s).root + mod(ch(s).pcs[k] - ch(s).root, 12);
+    const gapsAt = [];
+    for (let t = 0; t < STEPS; t++) if (!covered[t] && (t === 0 || covered[t - 1])) { let e = t; while (e < STEPS && !covered[e]) e++; gapsAt.push([t, e - t]); }
+    const evens = Array.from({ length: 16 }, (_, i) => i * 2);
+    const S = [
+      { id: 'lock', tag: 'Locks on', notes: notes.filter((n) => n.w >= 1).map((n) => ({ s: n.s, d: Math.min(n.d, 4), m: root(n.s) })) },
+      { id: 'double', tag: 'Every note with it', notes: notes.map((n) => ({ s: n.s, d: Math.min(n.d, 3), m: root(n.s) })) },
+      { id: 'steady', tag: 'Steady roots', notes: [0, 8, 16, 24].map((s) => ({ s, d: 7, m: root(s) })) },
+      { id: 'pedal', tag: 'Long pedal', notes: [0, 16].map((s) => ({ s, d: 15, m: root(s) })) },
+      { id: 'bounce', tag: 'Bouncing octaves', notes: evens.map((s) => ({ s, d: 2, m: root(s) + (s % 4 === 2 ? 12 : 0) })) },
+      { id: 'walk', tag: 'Walking', notes: [0, 4, 8, 12, 16, 20, 24, 28].map((s, i) => ({ s, d: 4, m: i % 4 === 3 ? root(s + 4) - 1 : tone(s, i % 4) })) },
+      { id: 'gaps', tag: 'Fills the gaps', notes: gapsAt.filter((g) => g[1] >= 2).map((g, i) => ({ s: g[0], d: Math.min(g[1], 4), m: i % 2 ? tone(g[0], 2) : root(g[0]) })) },
+      { id: 'answer', tag: 'Answers back', notes: [].concat.apply([], gapsAt.filter((g) => g[1] >= 3).map((g) => { const out = []; for (let t = g[0]; t < g[0] + g[1]; t += 2) out.push({ s: t, d: 2, m: (t - g[0]) % 4 ? tone(t, 1) : root(t) }); return out; })) },
+    ];
+    const onsets = onsetsOf(notes);
+    return S.filter((x) => x.notes.length).map((x) => Object.assign(x, { lock: x.notes.filter((n) => onsets[n.s]).length / x.notes.length, n: x.notes.length }));
+  }
+
+  function padStyles(idea) {
+    const notes = melodyNotes(idea.melody), chords = chordsFor(idea), sc = idea.melody.scale;
+    const voiced = (c, base) => c.pcs.map((pc) => base + mod(pc - base, 12));
+    const S = [
+      { id: 'drone', tag: 'One quiet drone', voice: 'pad', notes: [{ s: 0, d: STEPS, ms: [60 + chords[0].root] }] },
+      { id: 'shadow', tag: 'Shadow voice', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 2)] })) },
+      { id: 'above', tag: 'Harmony above', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg + 2)] })) },
+      { id: 'dyad', tag: 'Two-note pad', voice: 'pad', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: [c.pcs[1], c.pcs[2]].map((pc) => 60 + mod(pc, 12)) })) },
+      { id: 'held', tag: 'Held chords', voice: 'pad', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: voiced(c, 55) })) },
+      { id: 'wide', tag: 'Wide strings', voice: 'strings', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: [48 + c.root].concat(voiced(c, 55), [67 + mod(c.pcs[2] - 7, 12)]) })) },
+      { id: 'high', tag: 'High shimmer', voice: 'glass', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: voiced(c, 72) })) },
+    ];
+    return S.map((x) => {
+      const tot = x.notes.reduce((a, n) => a + n.d, 0) || 1;
+      const voices = x.notes.reduce((a, n) => a + n.ms.length * n.d, 0) / tot;
+      const reg = x.notes.reduce((a, n) => a + n.ms.reduce((b, m) => b + m, 0) / n.ms.length, 0) / x.notes.length;
+      return Object.assign(x, { voices: Math.round(voices * 10) / 10, reg });
+    });
+  }
+
+  function percStyles(idea) {
+    const notes = melodyNotes(idea.melody);
+    const at = (arr, k, v) => arr.map((s) => ({ s, k, v: v || 1 }));
+    const evens = Array.from({ length: 16 }, (_, i) => i * 2);
+    const backs = [4, 12, 20, 28];
+    const S = [
+      { id: 'accents', tag: 'Claps on its accents', hits: notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 })) },
+      { id: 'back', tag: 'Backbeat claps', hits: at(backs, 'clap') },
+      { id: 'taps', tag: 'Taps with the melody', hits: notes.map((n) => ({ s: n.s, k: 'tap', v: [0.5, 0.75, 1][n.w] })) },
+      { id: 'onetwo', tag: 'Tap, clap', hits: at([0, 8, 16, 24], 'tap').concat(at(backs, 'clap')) },
+      { id: 'shake8', tag: 'Shaker and claps', hits: evens.map((s) => ({ s, k: 'shaker', v: s % 4 ? 0.6 : 1 })).concat(at(backs, 'clap')) },
+      { id: 'shake16', tag: 'Busy shaker', hits: Array.from({ length: STEPS }, (_, s) => ({ s, k: 'shaker', v: s % 2 ? 0.5 : 0.9 })).concat(notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 }))) },
+      { id: 'tamb', tag: 'Off-beat tambourine', hits: at([2, 6, 10, 14, 18, 22, 26, 30], 'tamb').concat(at([12, 28], 'clap')) },
+    ];
+    const onsets = onsetsOf(notes);
+    return S.filter((x) => x.hits.length).map((x) => Object.assign(x, { n: x.hits.length, follow: x.hits.filter((h) => onsets[h.s]).length / x.hits.length }));
+  }
+
+  const EVENS = Array.from({ length: 16 }, (_, i) => i * 2);
+  const KITS = [
+    { id: 'four', tag: 'Four on the floor', k: [0, 4, 8, 12, 16, 20, 24, 28], s: [4, 12, 20, 28], h: [2, 6, 10, 14, 18, 22, 26, 30], swing: 0 },
+    { id: 'back', tag: 'Backbeat', k: [0, 10, 16, 26], s: [4, 12, 20, 28], h: EVENS, swing: 0 },
+    { id: 'half', tag: 'Half-time', k: [0, 11, 14, 22], s: [8, 24], h: Array.from({ length: STEPS }, (_, i) => i), swing: 0 },
+    { id: 'boombap', tag: 'Boom bap swing', k: [0, 7, 10, 16, 23, 26], s: [4, 12, 20, 28], h: EVENS, swing: 0.6 },
+    { id: 'broken', tag: 'Broken', k: [0, 6, 10, 19, 22], s: [4, 13, 20, 29], h: EVENS, swing: 0 },
+    { id: 'bounce', tag: 'Bouncing kick', k: [0, 3, 8, 11, 16, 19, 24, 27], s: [4, 12, 20, 28], h: [2, 6, 10, 14, 18, 22, 26, 30], swing: 0 },
+  ].map((x) => Object.assign(x, { off: x.k.concat(x.s).filter((s) => s % 4 !== 0).length / (x.k.length + x.s.length) + x.swing * 0.5, n: x.k.length + x.s.length + x.h.length }));
+
+  // a genre is the last thing picked: a bundle of tempo, swing and instruments
+  const GENRES = {
+    lofi: { name: 'Lo-fi', bpm: 80, swing: 0.62, inst: 'electric piano', patches: { lead: 'epiano', chords: 'keys', bass: 'bass-sub', kit: 'kit-lofi' }, why: 'your notes leave gaps, and swing fills them with a lazy bounce' },
+    ambient: { name: 'Ambient', bpm: 70, swing: 0, inst: 'bell', patches: { lead: 'bell', chords: 'pad-glass', bass: 'bass-sub', kit: 'kit-lofi' }, why: 'long notes and space: it gets room to breathe' },
+    boombap: { name: 'Boom bap', bpm: 90, swing: 0.58, inst: 'dusty keys', patches: { lead: 'keys', chords: 'epiano', bass: 'bass-pluck', kit: 'kit-lofi' }, why: 'it sits in the pocket, and a little swing gives it a nod' },
+    pop: { name: 'Pop', bpm: 108, swing: 0, inst: 'pluck', patches: { lead: 'pluck', chords: 'keys', bass: 'bass-pluck', kit: 'kit-acoustic' }, why: 'it sits on the beat, so it’s easy to sing along to' },
+    synthwave: { name: 'Synthwave', bpm: 100, swing: 0, inst: 'saw lead', patches: { lead: 'lead-saw', chords: 'stab', bass: 'bass-saw', kit: 'kit-808' }, why: 'long notes get room to ring over a steady drive' },
+    house: { name: 'House', bpm: 122, swing: 0, inst: 'organ', patches: { lead: 'organ', chords: 'stab', bass: 'bass-saw', kit: 'kit-909' }, why: 'off-beat notes sound great against a steady pulse' },
+    trap: { name: 'Trap', bpm: 140, swing: 0, inst: 'bell', up: 12, patches: { lead: 'bell', chords: 'pad-warm', bass: 'bass-808', kit: 'kit-808' }, why: 'quick notes ride on top of rolling hi-hats' },
+    dnb: { name: 'Drum and bass', bpm: 172, swing: 0, inst: 'square lead', patches: { lead: 'lead-square', chords: 'pad-warm', bass: 'bass-sub', kit: 'kit-acoustic' }, why: 'it’s busy enough to keep up with a fast break' },
+  };
+  /** genres ranked by how well they suit the melody's rhythm (top five, or all with "Surprise me") */
+  function soundStyles(idea, any) {
+    const r = idea.melody.r, offR = r.off / r.n, avg = r.hits.reduce((a, h) => a + h[1], 0) / r.n;
+    const fit = {
+      lofi: 2 - Math.abs(r.n - 8) / 6 + 0.6 * offR, ambient: (r.n <= 6 ? 1.5 : 0) + avg / 4, boombap: 1.2 + 0.5 * offR - Math.abs(r.n - 9) / 10,
+      pop: (1 - offR) * 1.6 + 0.3, synthwave: avg / 3 + 0.4, house: 2.4 * offR + (avg < 3 ? 0.8 : 0), trap: r.n / 8 + 0.3, dnb: r.n / 10 + offR,
+    };
+    const ids = Object.keys(fit).sort((a, b) => fit[b] - fit[a]);
+    return (any ? ids : ids.slice(0, 5)).map((id) => ({ id, tag: GENRES[id].name, name: GENRES[id].name, bpm: GENRES[id].bpm, swing: GENRES[id].swing, inst: GENRES[id].inst, up: GENRES[id].up || 0, why: GENRES[id].why }));
+  }
+
+  // ---------------------------------------------------------------- three options, spread along what matters
+
+  /**
+   * Three candidates that differ most along `a` (the layer's telling
+   * difference): the low end, the high end and the one nearest the middle.
+   * Steering halves the pool toward one end first (p on a, s on b). Each
+   * "three more" batch takes the next nearest to each target, up to six
+   * batches before they repeat.
+   */
+  function spread(cands, steer, batch) {
+    let pool = cands.slice();
+    const half = (arr, f, dir) => { const s = arr.slice().sort((a, b) => f(a) - f(b)); const k = Math.max(3, Math.ceil(s.length / 2)); return dir < 0 ? s.slice(0, k) : s.slice(s.length - k); };
+    for (let i = 0; i < Math.abs(steer.s || 0); i++) pool = half(pool, (c) => c.b, steer.s);
+    for (let i = 0; i < Math.abs(steer.p || 0); i++) pool = half(pool, (c) => c.a, steer.p);
+    pool.sort((x, y) => x.a - y.a || x.b - y.b);
+    if (pool.length <= 3) return pool.slice(0, 3);
+    const lo = pool[0].a, hi = pool[pool.length - 1].a, used = [];
+    // how many fresh batches before they come round again: more for a bigger pool, never so many the ends blur
+    const fresh = Math.max(2, Math.min(6, Math.floor(pool.length / 3)));
+    return [lo, (lo + hi) / 2, hi].map((target) => {
+      const near = pool.filter((c) => used.indexOf(c) < 0).sort((x, y) => Math.abs(x.a - target) - Math.abs(y.a - target));
+      const c = near[Math.min(near.length - 1, batch % Math.min(fresh, near.length))];
+      used.push(c);
+      return c;
+    }).sort((x, y) => x.a - y.a);
+  }
+
+  function shapeCands(mel) {
+    const n = mel.r.hits.length;
+    const seen = {}, cands = [];
+    SHAPES.forEach((kind) => [0.6, 1, 1.5].forEach((amp) => {
+      const s = shapeSteps(kind, n, amp), key = s.join();
+      if (seen[key]) return;
+      seen[key] = 1;
+      let leap = 0;
+      for (let i = 1; i < n; i++) leap = Math.max(leap, Math.abs(s[i] - s[i - 1]));
+      cands.push({ kind, amp, s, end: s[n - 1] - s[0], range: maxOf(s) - minOf(s), leap });
+    }));
+    return cands;
+  }
+
+  /** the scale step a shape starts on so that it lands on `target` semitones above home */
+  function startFor(scale, steps, target) {
+    const sc = SCALES[scale];
+    let start = sc.indexOf(target) - steps[steps.length - 1];
+    while (start < -4) start += sc.length;
+    while (start > 5) start -= sc.length;
+    return start;
+  }
+
+  /** the three options of a round: { a, ...layer fields } */
+  function options(dir, round, idea) {
+    const st = round.steer || {};
+    return cached('o' + dir + round.batch + JSON.stringify(st) + JSON.stringify(idea), () => {
+      const b = round.batch || 0;
+      if (dir === 'seed1') {
+        const rs = spread(rhythmPool().map((r) => ({ r, a: r.n + 0.3 * r.off, b: 0 })), { p: st.p }, b);
+        let sl = SCALE_ORDER.slice();
+        if (st.s < 0) sl = sl.slice(0, 4);
+        if (st.s > 0) sl = sl.slice(4);
+        const ps = [0, Math.floor(sl.length / 2), sl.length - 1].map((i) => sl[(i + b) % sl.length]);
+        const perm = [[1, 0, 2], [2, 1, 0], [0, 2, 1]][b % 3];
+        return rs.map((c, i) => ({ a: c.a, mel: { r: c.r, scale: ps[perm[i]], shape: null } }));
+      }
+      if (dir === 'seed2') {
+        const mel = idea.melody, sc = SCALES[mel.scale];
+        const cands = shapeCands(mel);
+        // by default only smooth shapes that move like round 1 did; jumps only when asked for
+        let pool = cands.filter((c) => c.leap <= 2 && c.amp <= 1);
+        if (st.x === 'smooth') pool = cands.filter((c) => c.leap <= 1);
+        if (st.x === 'jumpy') pool = cands.filter((c) => c.leap >= 3);
+        if (pool.length < 3) pool = cands.filter((c) => c.leap <= 2);
+        if (pool.length < 3) pool = cands;
+        return spread(pool.map((c) => Object.assign({}, c, { a: c.end + c.range * 0.01, b: c.range })), { p: st.p, s: st.s }, b).map((c) => {
+          const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
+          const start = startFor(mel.scale, c.s, land);
+          return { a: c.a, land, leap: c.leap, range: c.range, end: c.end, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
+        });
+      }
+      if (dir === 'chords') return spread(chordPool(idea.melody, st.x === 'colour').slice(0, 18).map((c) => Object.assign({ a: c.bright, b: c.changes }, c)), st, b);
+      if (dir === 'bass') return spread(bassStyles(idea).map((c) => Object.assign(c, { a: c.lock, b: c.n })), st, b);
+      if (dir === 'pads') return spread(padStyles(idea).map((c) => Object.assign(c, { a: c.voices, b: c.reg })), st, b);
+      if (dir === 'perc') {
+        let pool = percStyles(idea);
+        if (st.x === 'follow') { const f = pool.filter((c) => c.follow >= 0.5); if (f.length >= 3) pool = f; }
+        return spread(pool.map((c) => Object.assign(c, { a: c.n, b: c.follow })), st, b);
+      }
+      if (dir === 'beat') return spread(KITS.map((c) => Object.assign({}, c, { a: c.off, b: c.n })), st, b);
+      return spread(soundStyles(idea, st.x === 'any').map((c) => Object.assign(c, { a: c.bpm, b: 0 })), st, b);
+    });
+  }
+
+  /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
+  function walkOption(mel) {
+    return { a: 0, land: 0, leap: 1, range: 4, end: 0, walk: true, mel: { r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } } };
+  }
+
+  // ---------------------------------------------------------------- words
+
+  function tagOf(dir, o) {
+    if (dir === 'seed1') return rhythmTag(o.mel.r);
+    if (dir === 'seed2') return SHAPE_TAG[o.mel.shape.kind];
+    if (dir === 'chords') return (o.bright <= -2 ? 'Dark' : o.bright >= 2 ? 'Bright' : 'In between') + (o.colour ? ' + colour' : '');
+    return o.tag;
+  }
+  function statOf(dir, o) {
+    if (dir === 'seed1') return MODE[o.mel.scale].name.toLowerCase();
+    if (dir === 'seed2') return 'lands on ' + IV[o.land];
+    if (dir === 'chords') return o.fit + '% fit';
+    if (dir === 'bass') return o.n + (o.n === 1 ? ' note' : ' notes');
+    if (dir === 'pads') return o.voices + (o.voices === 1 ? ' voice' : ' voices');
+    if (dir === 'perc') return o.n + ' hits';
+    if (dir === 'beat') return o.swing ? 'swung' : Math.round(o.off * 100) + '% off grid';
+    return o.bpm + ' BPM';
+  }
+  function rankOf(opts, i) {
+    const as = opts.map((o) => o.a);
+    return as[i] === minOf(as) ? 'low' : as[i] === maxOf(as) ? 'high' : 'mid';
+  }
+  /** Bobby on the option just heard, set against the other two */
+  function comment(dir, opts, i) {
+    const o = opts[i], rk = rankOf(opts, i);
+    if (dir === 'seed1') {
+      const r = o.mel.r, m = MODE[o.mel.scale];
+      const sc = m.name + ', so it sounds ' + m.mood + '.';
+      if (rk === 'high') return 'Not bad, it’s got motion. Busiest of the three' + (r.off ? ', ' + r.off + ' notes pushing off the beat' : '') + '. ' + sc;
+      if (rk === 'low') return 'Lots of air: just ' + r.n + ' notes. ' + sc;
+      return 'Middle ground, ' + r.n + ' notes. ' + sc;
+    }
+    if (dir === 'seed2') {
+      let t = o.end < 0 ? 'Falls and lands on the ' + IV[o.land] + '. Sounds like an answer.' : o.end > 0 ? 'Ends higher than it starts, on the ' + IV[o.land] + ': a question. Leaves you wanting the next bar.' : 'Stays near home and lands on the ' + IV[o.land] + ': settled, but not closed.';
+      if (o.leap >= 3) t += ' Some jumps in there; they grab the ear.';
+      return t;
+    }
+    if (dir === 'chords') {
+      const names = o.chords.map(chordName).filter((n, i, a) => i === 0 || n !== a[i - 1]).join(', ');
+      let t = rk === 'low' ? 'Darkest of the three: ' + names + '. Minor chords put a shadow under the same notes.' : rk === 'high' ? 'Brightest: ' + names + '. Same melody, sunnier floor.' : names + '. A bit of both.';
+      const col = o.chords.find((c) => c.colour);
+      if (col) t += ' That ' + chordName(col) + ' isn’t from the scale. Your melody makes it work.';
+      return t;
+    }
+    if (dir === 'bass') return rk === 'high' ? 'Locks onto the melody: they hit together, so it sounds heavier.' : rk === 'low' ? 'Waits for the melody to breathe, then answers in the gaps. Call and response.' : o.tag + '. Holds the floor without crowding the melody.';
+    if (dir === 'perc') return rk === 'low' ? 'Barely there. The melody still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
+    if (dir === 'beat') return rk === 'low' ? 'Right on the grid. Solid, dance-floor straight.' : rk === 'high' ? 'Leans against the grid: kicks land between the beats. More swagger.' : o.tag + '. Somewhere between steady and loose.';
+    if (dir === 'pads') return rk === 'low' ? 'Barely there. Gives the melody a shadow, nothing more.' : rk === 'high' ? 'Full and wide. The melody floats on top.' : o.tag + '. Fills in without taking over.';
+    const t = o.name + ' at ' + o.bpm + '. ' + cap(o.why) + '.';
+    return rk === 'low' ? t + ' Calmest of the three.' : rk === 'high' ? t + ' Most energy of the three.' : t;
+  }
+  function whyText(dir, o) {
+    if (dir === 'seed1') return MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
+    if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.');
+    if (dir === 'chords') { const col = o.chords.find((c) => c.colour); return 'Each chord was picked so the melody’s long, strong notes are notes of the chord: ' + o.fit + '% of the melody sits on them. ' + (col ? chordName(col) + ' is borrowed from outside the scale; it works because the melody note above it belongs to it.' : 'Minor chords under the same notes sound darker, major ones brighter.'); }
+    if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
+    if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight the melody. ' + (o.voices <= 1.2 ? 'One quiet voice adds depth without crowding.' : 'More voices fill the space around the melody, so it floats on top.');
+    if (dir === 'perc') return 'Claps on the melody’s accents make those notes jump out. A steady shaker gives a pulse the melody can lean against.';
+    if (dir === 'beat') return o.off > 0.3 ? 'Kicks and snares between the beats are syncopation: the beat leans, and that leaning is swagger.' : 'Kick and snare right on the beat give a grid you can trust. That’s why dance music lives there.';
+    return 'A genre is a bundle of habits: tempo, drums, sounds. It comes last, so the same idea can live in many of them. This one, because ' + o.why + '.';
+  }
+  /** the layer Bobby would add next (shown as a highlighted card, not said) */
+  function suggestion(idea) {
+    const has = (d) => !!idea.layers[d];
+    const notes = melodyNotes(idea.melody), r = idea.melody.r;
+    const gaps = coverage(notes).filter((c) => !c).length;
+    if (!has('chords') && notes.some((n) => n.d >= 6)) return 'chords';
+    if (!has('bass') && gaps >= 8) return 'bass';
+    if (!has('perc') && r.off / r.n > 0.3) return 'perc';
+    if (has('perc') && !has('beat')) return 'beat';
+    if (has('chords') && !has('pads')) return 'pads';
+    for (const d of NEXT_ORDER) if (!has(d) && (d !== 'beat' || has('perc'))) return d;
+    return '';
+  }
+  /** directions open from here: Grow the beat needs percussion first */
+  function directions(idea) { return NEXT_ORDER.filter((d) => d !== 'beat' || !!idea.layers.perc); }
+
+  // ---------------------------------------------------------------- sound
+
+  const NEUTRAL = { lead: 'lead-soft', chords: 'keys', bass: 'bass-pluck', kit: 'kit-acoustic' };
+  const PAD_PATCH = { pad: 'pad-warm', voice: 'epiano', strings: 'strings', glass: 'pad-glass' };
+  const DRUM = { clap: 39, tap: 76, shaker: 70, tamb: 54, kick: 36, snare: 38, hat: 42 };
+  const MIX = { mel: 0.9, chd: 0.5, bas: 0.8, pad: 0.45, prc: 0.75, bt: 0.75 };
+  const TRACK = { mel: 'b2g-mel', chd: 'b2g-chd', bas: 'b2g-bas', pad: 'b2g-pad', prc: 'b2g-prc', bt: 'b2g-bt' };
+
+  function emptyIdea() { return { melody: null, layers: {}, order: [] }; }
+  /** the idea with only its first `count` layers */
+  function upTo(idea, count) {
+    const layers = {};
+    idea.order.slice(0, count).forEach((d) => { layers[d] = idea.layers[d]; });
+    return { melody: idea.melody, layers, order: idea.order.slice(0, count) };
+  }
+
+  /**
+   * A looping transport sequence for the idea, or for the idea with one
+   * option auditioned in place: aud = { dir, spec }. While a layer is
+   * auditioned the layers already in sit back a little, so the new one is
+   * heard. Rhythm-and-scale options play as the plain walk.
+   */
+  function seq(idea, aud) {
+    const pick = (d) => (aud && aud.dir === d ? aud.spec : idea.layers[d]);
+    const sound = pick('sound'), beat = pick('beat');
+    const G = sound ? GENRES[sound.id] : null;
+    const P = G ? G.patches : NEUTRAL;
+    const swing = sound ? sound.swing : beat ? beat.swing : 0;
+    const shift = swing > 0.5 ? Math.round((swing * 4 - 2) * STEP_TICKS) : 0;
+    const tick = (s) => s * STEP_TICKS + (mod(s, 4) === 2 ? shift : 0);
+    const events = [];
+    const note = (track, s, d, p, v, gap) => {
+      const t = tick(s);
+      const end = s + d >= STEPS ? LENGTH : tick(s + d);
+      events.push({ t, d: Math.max(30, end - t - (gap == null ? 10 : gap)), p, v: Math.max(1, Math.min(127, Math.round(v))), track });
+    };
+    const hit = (track, s, p, v) => events.push({ t: tick(s), d: 60, p, v: Math.max(1, Math.min(127, Math.round(v))), track });
+    const seeding = aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
+    const g = (d) => (!aud || aud.dir === d || aud.dir === 'sound' ? 1 : 0.6);
+    const tracks = {};
+    const track = (key, patch, vol) => { tracks[TRACK[key]] = { patch, volume: vol, mute: false, solo: false, channel: key === 'prc' || key === 'bt' ? 9 : 0 }; };
+
+    const mel = seeding ? aud.spec.mel : idea.melody;
+    if (mel) {
+      const up = (sound && sound.up) || 0;
+      track('mel', P.lead, MIX.mel * (aud && !seeding && aud.dir !== 'sound' ? 0.75 : 1));
+      melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, [64, 90, 115][n.w], 14));
+    }
+    if (!seeding) {
+      LAYER_ORDER.forEach((d) => {
+        const o = pick(d);
+        if (!o) return;
+        if (d === 'chords') {
+          track('chd', P.chords, MIX.chd * g(d));
+          o.chords.forEach((c, i) => c.pcs.forEach((pc) => note(TRACK.chd, i * 8, 8, 48 + c.root + mod(pc - c.root, 12), 80, 20)));
+        } else if (d === 'bass') {
+          track('bas', P.bass, MIX.bas * g(d));
+          o.notes.forEach((n) => note(TRACK.bas, n.s, n.d, n.m, 100, 16));
+        } else if (d === 'pads') {
+          track('pad', PAD_PATCH[o.voice] || 'pad-warm', MIX.pad * g(d));
+          o.notes.forEach((n) => n.ms.forEach((m) => note(TRACK.pad, n.s, n.d, m, 80, 6)));
+        } else if (d === 'perc') {
+          track('prc', 'kit-perc', MIX.prc * g(d));
+          o.hits.forEach((h) => hit(TRACK.prc, h.s, DRUM[h.k] || DRUM.tap, 40 + 80 * (h.v || 1)));
+        } else if (d === 'beat') {
+          track('bt', P.kit, MIX.bt * g(d));
+          o.k.forEach((s) => hit(TRACK.bt, s, DRUM.kick, 112));
+          o.s.forEach((s) => hit(TRACK.bt, s, DRUM.snare, 105));
+          o.h.forEach((s) => hit(TRACK.bt, s, DRUM.hat, s % 2 ? 50 : 78));
+        }
+      });
+    }
+    events.sort((a, b) => a.t - b.t);
+    return { bpm: sound ? sound.bpm : 100, length: LENGTH, loop: true, tracks, events };
+  }
+
+  /** the climb: the bones (walk), the melody, then each layer added in the order it was picked */
+  function climb(idea) {
+    const out = [seq(emptyIdea(), { dir: 'seed1', spec: { mel: idea.melody } })];
+    for (let i = 0; i <= idea.order.length; i++) out.push(seq(upTo(idea, i), null));
+    return out;
+  }
+
+  /**
+   * The climb as one sequence that plays once: each pass after the last, at
+   * the final tempo, with earlier passes stretched so they keep their own
+   * tempo. A track that changes instrument along the way gets a track per
+   * instrument. passes: [{ start, length }] in ticks.
+   */
+  function climbSeq(idea) {
+    const parts = climb(idea);
+    const bpm = parts[parts.length - 1].bpm;
+    const tracks = {}, events = [], passes = [];
+    let at = 0;
+    for (const p of parts) {
+      const k = bpm / p.bpm;
+      const len = Math.round(p.length * k);
+      for (const e of p.events) {
+        const tr = p.tracks[e.track];
+        const key = e.track + '~' + tr.patch;
+        if (!tracks[key]) tracks[key] = Object.assign({}, tr);
+        events.push({ t: at + Math.round(e.t * k), d: Math.max(30, Math.round(e.d * k)), p: e.p, v: e.v, track: key });
+      }
+      passes.push({ start: at, length: len });
+      at += len;
+    }
+    events.sort((a, b) => a.t - b.t);
+    return { bpm, length: at, loop: false, tracks, events, passes };
+  }
+
+  /** each step of how the idea got here: [{ dir, spec, stage }] */
+  function lineage(idea) {
+    const ns = melodyNotes(idea.melody);
+    const steps = [
+      { dir: 'seed1', spec: { mel: idea.melody }, stage: 'Rhythm and scale' },
+      { dir: 'seed2', spec: { mel: idea.melody, land: mod(ns[ns.length - 1].m, 12), end: 0, leap: 0 }, stage: 'Melody' },
+    ];
+    idea.order.forEach((d) => steps.push({ dir: d, spec: idea.layers[d], stage: DIRS[d].label }));
+    return steps;
+  }
+
+  // ---------------------------------------------------------------- into the studio's ideas
+
+  function ideaName(idea) {
+    const m = idea.melody;
+    if (!m) return 'Bones';
+    const shape = m.shape ? SHAPE_TAG[m.shape.kind].toLowerCase() : rhythmTag(m.r).toLowerCase();
+    const s = idea.layers.sound;
+    return MODE[m.scale].name + ' ' + shape + (s ? ' (' + s.name + ')' : '');
+  }
+
+  /**
+   * Parts for each layer, as the studio stores them (key of C, the idea's
+   * scale), ready for Odd.idea.fromParts: [{ part, label }].
+   */
+  function toParts(idea) {
+    const T = Odd.theory;
+    const M = Odd.model;
+    if (!T || !idea.melody) return [];
+    const scale = STUDIO_SCALE[idea.melody.scale] || 'major';
+    const sound = idea.layers.sound;
+    const uid = (p) => (M && M.uid ? M.uid(p) : p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+    const QUAL = { '': 'maj', m: 'min', '°': 'dim', '+': 'aug' };
+    const chords = chordsFor(idea);
+    const prog = chords.map((c) => {
+      const at = T.degreeOf(60 + c.root, 0, scale, 60);
+      const ch = T.resolveChord ? T.resolveChord(scale, at.deg, at.acc, QUAL[c.q] || 'maj') : { deg: at.deg };
+      return Object.assign(T.chordOnly(ch), { beats: 2 });
+    });
+    const ctx = { tonic: 0, scale, prog };
+    const tk = (s) => s * STEP_TICKS;
+    const pitched = (role, name, base, notes) => ({
+      id: uid('p'), role, name, style: null, bars: 2, base, ctx: clone(ctx), tags: ['bones'], created: Date.now(), starred: false,
+      notes: notes.map((n) => Object.assign({ t: tk(n.s), d: Math.max(30, tk(n.d) - 10), v: n.v || 96 }, T.degreeOf(n.m, 0, scale, base))),
+    });
+    const drums = (role, name, hits) => ({
+      id: uid('p'), role, name, style: null, bars: 2, base: null, ctx: clone(ctx), tags: ['bones'], created: Date.now(), starred: false,
+      notes: hits.map((h) => ({ t: tk(h.s), d: 60, p: h.p, v: h.v })).sort((a, b) => a.t - b.t),
+    });
+    const out = [];
+    const up = (sound && sound.up) || 0;
+    out.push({ label: 'Melody', part: pitched('lead', 'Melody: ' + ideaName(idea), 60 + up, melodyNotes(idea.melody).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
+    for (const d of idea.order) {
+      const o = idea.layers[d];
+      if (d === 'chords') out.push({ label: 'Chords', part: pitched('chords', 'Chords: ' + o.chords.map(chordName).join(' '), 48, [].concat.apply([], o.chords.map((c, i) => c.pcs.map((pc) => ({ s: i * 8, d: 8, m: 48 + c.root + mod(pc - c.root, 12), v: 80 }))))) });
+      if (d === 'bass') out.push({ label: 'Bass', part: pitched('bass', 'Bass: ' + o.tag, 36, o.notes.map((n) => ({ s: n.s, d: n.d, m: n.m, v: 100 }))) });
+      if (d === 'pads') out.push({ label: 'Pads', part: pitched('pad', 'Pad: ' + o.tag, 48, [].concat.apply([], o.notes.map((n) => n.ms.map((m) => ({ s: n.s, d: n.d, m, v: 80 }))))) });
+      if (d === 'perc') out.push({ label: 'Percussion', part: drums('perc', 'Percussion: ' + o.tag, o.hits.map((h) => ({ s: h.s, p: DRUM[h.k] || DRUM.tap, v: Math.round(40 + 80 * (h.v || 1)) }))) });
+      if (d === 'beat') out.push({ label: 'Beat', part: drums('drums', 'Beat: ' + o.tag, o.k.map((s) => ({ s, p: DRUM.kick, v: 112 })).concat(o.s.map((s) => ({ s, p: DRUM.snare, v: 105 })), o.h.map((s) => ({ s, p: DRUM.hat, v: s % 2 ? 50 : 78 })))) });
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- flow: pure steps for the screen
+
+  /*
+   * state = { phase: 'start' | 'round' | 'next' | 'gold', idea, round, hist, hid,
+   *           sel, seq, anim, kind, added, line, msg, saved }
+   *   seq   bumps whenever the cards on screen change (new round, more, request)
+   *   anim  bumps whenever the screen should animate in
+   *   hist  newest first: { id, dir, opts, chosen, note, idea, round, marker }
+   */
+  const MAX_HIST = 80;
+  const flow = {
+    fresh() {
+      return { phase: 'start', idea: emptyIdea(), round: null, hist: [], hid: 0, sel: -1, seq: 0, anim: 0, kind: 'pop', added: null, line: null, msg: null, saved: null };
+    },
+    enter(S, dir) {
+      return Object.assign({}, S, { phase: 'round', round: { dir, batch: 0, steer: { p: 0, s: 0, x: null } }, sel: -1, msg: null, line: null, seq: S.seq + 1, anim: S.anim + 1, kind: 'pop', added: null });
+    },
+    options(S) { return S.round ? options(S.round.dir, S.round, S.idea) : []; },
+    row(S, extra) {
+      const row = Object.assign({ id: S.hid + 1, dir: S.round.dir, opts: flow.options(S), chosen: -1, note: '', idea: S.idea, round: S.round }, extra);
+      return { hist: [row].concat(S.hist).slice(0, MAX_HIST), hid: S.hid + 1 };
+    },
+    /** promote option i (or `own`, an option of the screen's own such as the plain walk) */
+    pick(S, i, own) {
+      const r = S.round, o = own || flow.options(S)[i];
+      if (!r || !o) return S;
+      const idea = { melody: S.idea.melody, layers: Object.assign({}, S.idea.layers), order: S.idea.order.slice() };
+      const ns = Object.assign({}, S, flow.row(S, { chosen: own ? -1 : i, note: own ? 'Kept the plain walk' : 'Picked ' + ABC.charAt(i) + ': ' + tagOf(r.dir, o) }), { anim: S.anim + 1, msg: null, line: null, seq: S.seq + 1, idea, saved: null });
+      if (r.dir === 'seed1') {
+        idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null };
+        return Object.assign(ns, { phase: 'round', round: { dir: 'seed2', batch: 0, steer: { p: 0, s: 0, x: null } }, sel: 1, kind: 'rise', added: null });
+      }
+      if (r.dir === 'seed2') idea.melody = o.mel;
+      else { idea.layers[r.dir] = o; if (idea.order.indexOf(r.dir) < 0) idea.order.push(r.dir); }
+      // a new shape changes everything built on the melody, so its layers go (they stay in the history)
+      if (r.dir === 'seed2') { idea.layers = {}; idea.order = []; }
+      return Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added: r.dir });
+    },
+    keepWalk(S) { return flow.pick(S, -1, walkOption(S.idea.melody)); },
+    more(S) {
+      return Object.assign({}, S, flow.row(S, { note: 'Passed over' }), { round: Object.assign({}, S.round, { batch: S.round.batch + 1 }), seq: S.seq + 1, sel: -1, msg: 'more', line: null, anim: S.anim + 1, kind: 'pop' });
+    },
+    /** a request re-rolls the three with a steer; "why" only explains. Returns the new state; play the middle one */
+    request(S, rq) {
+      if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel]) : S.line });
+      const steer = Object.assign({}, S.round.steer);
+      if (rq.p) steer.p = Math.max(-2, Math.min(2, (steer.p || 0) + rq.p));
+      if (rq.s) steer.s = Math.max(-2, Math.min(2, (steer.s || 0) + rq.s));
+      if (rq.x) steer.x = steer.x === rq.x ? null : rq.x;
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: rq.reply });
+    },
+    /** go back to an earlier round as it was; everything after it stays in the history */
+    back(S, row) {
+      if (!row || !row.round) return S;
+      const mark = { id: S.hid + 1, dir: row.dir, opts: [], chosen: -1, note: 'You went back to this round', idea: row.idea, marker: true };
+      return Object.assign({}, S, {
+        phase: 'round', round: row.round, idea: row.idea, sel: -1, seq: S.seq + 1, anim: S.anim + 1, kind: 'pop', msg: null, added: null, saved: null,
+        line: LINES.back.replace('{x}', DIRS[row.dir].label.toLowerCase()),
+        hist: [mark].concat(S.hist).slice(0, MAX_HIST), hid: S.hid + 1,
+      });
+    },
+    skip(S) { return Object.assign({}, S, { phase: 'next', round: null, sel: -1, line: line(LINES.skipped, S.seq), added: null, anim: S.anim + 1 }); },
+    finish(S) { return Object.assign({}, S, { phase: 'gold', round: null, sel: -1, line: null, anim: S.anim + 1 }); },
+    keepBuilding(S) { return Object.assign({}, S, { phase: 'next', round: null, sel: -1, line: null, anim: S.anim + 1 }); },
+    canFinish(S) { return !!(S.idea.melody && S.idea.melody.shape) && S.phase !== 'gold'; },
+    /** a loaded state, or a fresh one when it doesn't hold together */
+    repair(raw) {
+      const S = flow.fresh();
+      if (!raw || typeof raw !== 'object' || !['start', 'round', 'next', 'gold'].includes(raw.phase)) return S;
+      try {
+        const out = Object.assign(S, raw, { hist: Array.isArray(raw.hist) ? raw.hist.slice(0, MAX_HIST) : [] });
+        if (!out.idea || typeof out.idea !== 'object') out.idea = emptyIdea();
+        if (!out.idea.layers) out.idea.layers = {};
+        if (!Array.isArray(out.idea.order)) out.idea.order = [];
+        if (out.phase === 'round' && (!out.round || !DIRS[out.round.dir])) return flow.fresh();
+        if (out.phase === 'round' && out.round.dir !== 'seed1' && !out.idea.melody) return flow.fresh();
+        if ((out.phase === 'next' || out.phase === 'gold') && !(out.idea.melody && out.idea.melody.shape)) return flow.fresh();
+        if (out.phase === 'round') flow.options(out); // throws on a broken idea
+        out.line = null;
+        return out;
+      } catch (e) { return flow.fresh(); }
+    },
+  };
+
+  Odd.audition = {
+    STEPS, STEP_TICKS, LENGTH, ABC, NAMES, IV, DIRS, NEXT_ORDER, LAYER_ORDER, REQS, LINES, line,
+    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, KITS, GENRES, TRACK,
+    makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, melodyNotes, startFor,
+    chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
+    spread, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,
+    emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
+  };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/recipes.js */
@@ -12113,6 +13154,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     const html =
       '<div class="top-row">' +
         '<div class="brand"><span class="wordmark">Oddition</span></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm bones-btn" data-act="screen-bones" title="Audition a starting idea with Bobby">Bones to Gold</button>' +
         '<button type="button" class="session-btn" data-act="session-menu" aria-haspopup="menu" aria-expanded="false" title="Sessions">' +
           '<span class="eyebrow">Session</span><span class="session-name">' + esc(s.name) + '</span>' + icon('chevron', 'ico-sm') +
         '</button>' +
@@ -12986,6 +14028,620 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   Odd.views = { top, booth, shelf, song, tabs, ladder, fit, fitHeadline, boxTag, keyName, chordText, chordShown, chordNames, mergeProg, fmtTime, roleLabel, sectionHue };
 })(globalThis.Odd = globalThis.Odd || {});
 
+/* js/ui/bones.js */
+/* Oddition — Bones to Gold screen: audition a starting idea with Bobby Beatdown.
+ *
+ * Draws the rounds Odd.audition.flow steps through and plays them on the
+ * app's transport. Listening paces itself: from silence a card plays at once;
+ * switching away from something playing stops it, lowers its card, and gives
+ * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
+ *
+ * Odd.bones.mount(el, host) once; host = { toStudio, stopStudio, saveIdea, toast }.
+ * Odd.bones.show(on) when the screen changes; Odd.bones.open(bones, ideaId)
+ * reopens a saved idea at its gold stage.
+ */
+(function (Odd) {
+  'use strict';
+  const A = Odd.audition;
+  const F = A.flow;
+  const L = A.LINES;
+
+  const PAUSE_MS = 2000;
+  const STORE_KEY = 'oddition.bones.v1';
+  const VW = 272, VH = 92;
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const xOf = (s) => 4 + s * (VW - 8) / A.STEPS;
+  const sw = (d) => d * (VW - 8) / A.STEPS;
+  const mod = (a, n) => ((a % n) + n) % n;
+  const VAR = { seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp' };
+  const col = (d) => 'var(' + VAR[d] + ')';
+  const PROMOTE = { seed1: 'Promote: give it a shape', seed2: 'Promote: that’s the melody' };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  let root = null;
+  let host = {};
+  let S = null;
+  let shown = false;
+  // what is sounding: src is the key of what plays (or played last), pending the one waiting out its pause
+  const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0 };
+  let built = '';
+  let lastAnim = -1, lastHid = -1, reqKey = '';
+  let raf = 0, saveTimer = 0;
+
+  // ---------------------------------------------------------------- state
+
+  function load() {
+    try {
+      const raw = window.localStorage.getItem(STORE_KEY);
+      return F.repair(raw ? JSON.parse(raw) : null);
+    } catch (e) { return F.fresh(); }
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { window.localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* storage full or blocked: the screen still works */ }
+    }, 300);
+  }
+  function set(ns) {
+    S = ns;
+    save();
+    render();
+  }
+  const curKey = (i) => 'c' + S.seq + '-' + i;
+
+  // ---------------------------------------------------------------- sound
+
+  function audioFor(key) {
+    let m;
+    if (key === 'all') return S.idea.melody ? { seq: () => A.seq(S.idea, null) } : null;
+    if ((m = /^c(\d+)-(\d)$/.exec(key))) {
+      if (!S.round || Number(m[1]) !== S.seq) return null;
+      const i = Number(m[2]), o = F.options(S)[i];
+      return o ? { seq: () => A.seq(S.idea, { dir: S.round.dir, spec: o }), extra: { sel: i } } : null;
+    }
+    if ((m = /^h(\d+)-(\d)$/.exec(key))) {
+      const row = S.hist.find((r) => r.id === Number(m[1]));
+      const o = row && row.opts[Number(m[2])];
+      return o ? { seq: () => A.seq(row.idea, { dir: row.dir, spec: o }) } : null;
+    }
+    if ((m = /^g(\d+)$/.exec(key))) {
+      const l = Number(m[1]);
+      if (!S.idea.melody) return null;
+      return { seq: () => (l === 0 ? A.seq(A.emptyIdea(), { dir: 'seed1', spec: { mel: S.idea.melody } }) : A.seq(A.upTo(S.idea, l - 1), null)) };
+    }
+    return null;
+  }
+
+  function run(seq) {
+    if (!Odd.transport) return false;
+    if (host.stopStudio) host.stopStudio();
+    P.playing = true;
+    P.passes = seq.passes || null;
+    Odd.transport.play(seq).catch((e) => {
+      P.playing = false;
+      if (host.toast) host.toast('Audio could not start: ' + (e && e.message ? e.message : e), { kind: 'warn' });
+      render();
+    });
+    loop();
+    return true;
+  }
+  /** silence without touching the screen state */
+  function halt() {
+    clearTimeout(P.timer);
+    P.timer = 0;
+    P.pending = '';
+    P.climb = -1;
+    P.passes = null;
+    const was = P.playing;
+    P.playing = false;
+    if (was && Odd.transport) Odd.transport.stop();
+  }
+  function stop() {
+    halt();
+    render();
+  }
+
+  /**
+   * Fresh ears. From silence a sound starts at once. Switching away from
+   * something playing is a transition: it stops, its card lowers, two seconds
+   * of quiet while Bobby talks, then the next card lifts and plays.
+   */
+  function hear(key, line, busy) {
+    const a = audioFor(key);
+    if (!a) return;
+    if (P.playing && P.src === key && !line) { stop(); return; }
+    const wasBusy = busy != null ? busy : P.playing || !!P.pending;
+    halt();
+    if (!wasBusy) {
+      run(a.seq());
+      P.src = key;
+      P.heard = key;
+      set(Object.assign({}, S, { line: line || null }, a.extra));
+      return;
+    }
+    P.pc = (P.pc + 1) % L.pause.length;
+    P.pending = key;
+    set(Object.assign({}, S, { line: line || L.pause[P.pc], sel: -1 }));
+    P.timer = setTimeout(() => {
+      if (P.pending !== key) return;
+      P.pending = '';
+      const b = audioFor(key);
+      if (!b) { render(); return; }
+      run(b.seq());
+      P.src = key;
+      P.heard = key;
+      set(Object.assign({}, S, { line: null }, b.extra));
+    }, PAUSE_MS);
+  }
+
+  function climbUp() {
+    if (P.playing && P.src === 'climb') { stop(); return; }
+    halt();
+    const cs = A.climbSeq(S.idea);
+    run(cs);
+    P.src = 'climb';
+    P.climb = 0;
+    P.heard = '';
+    set(Object.assign({}, S, { line: null }));
+  }
+
+  /** the playhead, and which pass of the climb is sounding */
+  function loop() {
+    if (raf) return;
+    const tick = () => {
+      raf = 0;
+      if (!P.playing || !shown || !root) return;
+      const pos = Odd.transport.position();
+      let step;
+      if (P.passes) {
+        let i = P.passes.findIndex((p) => pos < p.start + p.length);
+        if (i < 0) i = P.passes.length - 1;
+        const p = P.passes[i];
+        step = ((pos - p.start) / p.length) * A.STEPS;
+        if (i !== P.climb) { P.climb = i; patch(); }
+      } else {
+        step = mod(pos, A.LENGTH) / A.STEP_TICKS;
+      }
+      const left = r1(xOf(Math.max(0, Math.min(A.STEPS, step)))) + 'px';
+      root.querySelectorAll('.is-playing .b-ph').forEach((el) => { el.style.left = left; });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+  }
+
+  // ---------------------------------------------------------------- actions
+
+  function promote(i, own) {
+    if (!S.round) return;
+    const dir = S.round.dir;
+    const busy = P.playing || !!P.pending;
+    halt();
+    const ns = own ? F.keepWalk(S) : F.pick(S, i);
+    P.src = '';
+    P.heard = '';
+    set(ns);
+    if (ns.phase === 'next') {
+      const line = dir === 'seed2' ? (own ? L.walk : A.line(L.melody, ns.seq)) : A.line(L.added, ns.seq).replace('{x}', A.DIRS[dir].label.toLowerCase());
+      hear('all', line, busy);
+    }
+  }
+
+  function request(idx) {
+    const rq = (A.REQS[S.round.dir] || [])[idx];
+    if (!rq) return;
+    if (rq.why) { set(F.request(S, rq)); return; }
+    const busy = P.playing || !!P.pending;
+    halt();
+    const ns = F.request(S, rq);
+    set(ns);
+    hear(curKey(1), rq.reply, busy);
+  }
+
+  function step(fn) {
+    halt();
+    P.src = '';
+    set(fn(S));
+  }
+
+  function back(rowId) {
+    const row = S.hist.find((r) => r.id === rowId);
+    if (!row) return;
+    step((s) => F.back(s, row));
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+  }
+
+  function restart() {
+    const prev = S;
+    step(() => Object.assign(F.fresh(), { anim: prev.anim + 1 }));
+    if (host.toast && prev.phase !== 'start') {
+      host.toast('Started a new idea.', { action: { label: 'Bring the last one back', run: () => { halt(); set(prev); } } });
+    }
+  }
+
+  function saveIdea() {
+    if (!host.saveIdea || !S.idea.melody) return;
+    const id = host.saveIdea({ sources: A.toParts(S.idea), name: A.ideaName(S.idea), bones: clone(S.idea) });
+    if (id) set(Object.assign({}, S, { saved: id, line: L.saved }));
+  }
+
+  const ACTS = {
+    begin: () => step((s) => F.enter(s, 'seed1')),
+    hear: (el) => hear(el.dataset.key),
+    promote: (el) => promote(Number(el.dataset.i)),
+    walk: () => promote(-1, true),
+    req: (el) => request(Number(el.dataset.i)),
+    more: () => step(F.more),
+    skip: () => step(F.skip),
+    go: (el) => step((s) => F.enter(s, el.dataset.dir)),
+    finish: () => step(F.finish),
+    keep: () => step(F.keepBuilding),
+    all: () => hear('all'),
+    climb: () => climbUp(),
+    save: () => saveIdea(),
+    restart: () => restart(),
+    back: (el) => back(Number(el.dataset.row)),
+    studio: () => { halt(); if (host.toStudio) host.toStudio(); },
+  };
+
+  function onClick(e) {
+    const el = e.target.closest('[data-act]');
+    if (!el || !root.contains(el) || el.disabled) return;
+    const fn = ACTS[el.dataset.act];
+    if (fn) fn(el);
+  }
+
+  /** keys while the screen shows: Space play/stop, 1-3 hear A-C, Escape stop. true when handled */
+  function onKey(e) {
+    if (!shown || e.ctrlKey || e.metaKey || e.altKey) return false;
+    const k = e.key;
+    if (k === 'Escape') { stop(); return true; }
+    if (k === ' ') {
+      if (e.target && e.target.closest && e.target.closest('button') && e.target.closest('#bones')) return false; // the button handles it
+      e.preventDefault();
+      if (P.playing || P.pending) stop();
+      else if (S.phase === 'round') hear(curKey(Math.max(0, S.sel)));
+      else if (S.phase === 'next' || S.phase === 'gold') hear('all');
+      else ACTS.begin();
+      return true;
+    }
+    if (/^[1-3]$/.test(k) && S.phase === 'round') {
+      const i = Number(k) - 1;
+      if (F.options(S)[i]) hear(curKey(i));
+      return true;
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------------------- pictures
+
+  function blk(x, y, w, h, bg, cls) {
+    return '<i class="b-blk' + (cls ? ' ' + cls : '') + '" style="left:' + r1(x) + 'px;top:' + r1(y) + 'px;width:' + r1(w) + 'px;height:' + r1(h) + 'px' + (bg ? ';background:' + bg : '') + '"></i>';
+  }
+
+  /** what makes the option special, drawn on a 272 x 92 screen */
+  function vis(dir, o, idea) {
+    let h = '';
+    for (let i = 1; i < 8; i++) h += '<i class="b-gl' + (i === 4 ? ' bar' : '') + '" style="left:' + Math.round(xOf(i * 4)) + 'px"></i>';
+    // the melody, faintly, under every layer: everything is made against it
+    const ghost = (top, hgt) => {
+      if (!idea || !idea.melody || !idea.melody.shape) return;
+      const ns = A.melodyNotes(idea.melody), ms = ns.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
+      ns.forEach((n) => { h += blk(xOf(n.s), top + (hi - n.m) / span * (hgt - 4), Math.max(3, sw(n.d) - 2), 4, '', 'ghost'); });
+    };
+    if (dir === 'seed1') {
+      o.mel.r.hits.forEach((x) => { const hh = [12, 20, 30][x[2]]; h += blk(xOf(x[0]), VH - 24 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+      const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
+      for (let pc = 0; pc < 12; pc++) h += '<i class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
+    } else if (dir === 'seed2') {
+      const ns = A.melodyNotes(o.mel), ds = ns.map((n) => n.deg), lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds), span = Math.max(1, hi - lo);
+      const yOf = (d) => 12 + (hi - d) / span * (VH - 36);
+      ns.forEach((n) => { h += blk(xOf(n.s), VH - 9, Math.max(3, sw(n.d) - 2), 4, '', 'soft'); });
+      const pts = ns.map((n) => ({ x: xOf(n.s) + 3, y: yOf(n.deg) }));
+      pts.forEach((p, i) => {
+        if (i > 0) {
+          const q = pts[i - 1];
+          h += '<i class="b-ln" style="left:' + r1(q.x) + 'px;top:' + r1(q.y) + 'px;width:' + r1(Math.hypot(p.x - q.x, p.y - q.y)) + 'px;transform:rotate(' + r1(Math.atan2(p.y - q.y, p.x - q.x) * 180 / Math.PI) + 'deg)"></i>';
+        }
+      });
+      pts.forEach((p, i) => { h += '<i class="b-dot' + (i === pts.length - 1 ? ' land' : '') + '" style="left:' + r1(p.x) + 'px;top:' + r1(p.y) + 'px"></i>'; });
+      const last = pts[pts.length - 1];
+      h += '<span class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
+    } else if (dir === 'chords') {
+      ghost(6, 50);
+      o.chords.forEach((c, i) => { h += '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(i * 8)) + 'px;top:62px;width:' + r1(sw(8) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
+    } else if (dir === 'bass') {
+      ghost(6, 30);
+      const ms = o.notes.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
+      o.notes.forEach((n) => { h += blk(xOf(n.s), 46 + (hi - n.m) / span * 34, Math.max(4, sw(n.d) - 2), 7, col('bass')); });
+    } else if (dir === 'pads') {
+      ghost(6, 26);
+      const all = [].concat.apply([], o.notes.map((n) => n.ms)), lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), span = Math.max(1, hi - lo);
+      o.notes.forEach((n) => n.ms.forEach((m) => { h += blk(xOf(n.s), 42 + (hi - m) / span * 38, Math.max(4, sw(n.d) - 2), 6, col('pads'), 'half'); }));
+    } else if (dir === 'perc') {
+      ghost(6, 26);
+      const row = { clap: 44, tap: 58, tamb: 72, shaker: 72 };
+      o.hits.forEach((x) => { const sh = x.k === 'shaker'; h += blk(xOf(x.s), row[x.k], sh ? 4 : 6, sh ? 6 : 10, col('perc'), sh ? 'half' : ''); });
+    } else if (dir === 'beat') {
+      ghost(6, 22);
+      o.h.forEach((s) => { h += blk(xOf(s), 40, 4, 6, col('beat'), 'half'); });
+      o.s.forEach((s) => { h += blk(xOf(s), 55, 7, 10, col('beat')); });
+      o.k.forEach((s) => { h += blk(xOf(s), 72, 7, 12, col('beat'), 'kick'); });
+    } else {
+      ghost(8, 70);
+      h += '<span class="b-nlab" style="left:10px;top:74px">' + esc(o.inst + (o.swing ? ' · swung' : '')) + '</span>';
+    }
+    return h + '<i class="b-ph"></i>';
+  }
+
+  function card(dir, o, idea, x) {
+    const tag = A.tagOf(dir, o);
+    const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter">' + x.letter + '</span>' : '') + '<span class="b-tag">' + esc(tag) + '</span><span class="b-stat">' + esc(A.statOf(dir, o)) + '</span></div>';
+    const label = (x.letter ? 'option ' + x.letter + ': ' : '') + tag;
+    return '<div class="b-card' + (x.cls ? ' ' + x.cls : '') + '" data-key="' + x.key + '"' + (x.i != null ? ' data-i="' + x.i + '"' : '') + (x.style ? ' style="' + x.style + '"' : '') + '>' +
+      '<button type="button" class="b-hit" data-act="hear" data-key="' + x.key + '" aria-label="Listen to ' + esc(label) + '"></button>' +
+      (x.i != null ? '<div class="b-reqs-in" aria-label="Ask Bobby"></div>' : '') +
+      head +
+      '<div class="b-vis" aria-hidden="true">' + vis(dir, o, idea) + '</div>' +
+      (x.promote ? '<button type="button" class="b-primary b-promote" data-act="promote" data-i="' + x.i + '">' +
+        '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        esc(x.promote) + '</button>' : '') +
+      '</div>';
+  }
+
+  function mini(dir, o, idea, key, extra, letter) {
+    return '<div class="b-mini ' + (extra || '') + '" data-key="' + key + '">' + card(dir, o, idea, { key, letter }) + '</div>';
+  }
+
+  // ---------------------------------------------------------------- the screen
+
+  const BOBBY_SVG =
+    '<svg class="b-face" width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">' +
+      '<path class="b-cloth" d="M30 92 C30 76, 66 76, 66 92 Z"/>' +
+      '<circle cx="48" cy="54" r="19" fill="#c79f7c"/>' +
+      '<path d="M30 56 C31 82, 65 82, 66 56 C61 66, 35 66, 30 56 Z" fill="#3b2b22"/>' +
+      '<rect x="34" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<rect x="50" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<path d="M46 48 L50 48" stroke="#0e1014" stroke-width="2"/>' +
+      '<path d="M42 65 Q48 69 54 65" stroke="#ecebe6" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<path class="b-cloth" d="M30 36 C30 14, 66 14, 66 36 Z"/>' +
+      '<rect x="31" y="29" width="34" height="5" fill="#f1cd58"/>' +
+      '<ellipse class="b-cloth" cx="48" cy="37" rx="36" ry="6"/>' +
+    '</svg>';
+
+  function bobby(opts) {
+    if (S.phase === 'start') return L.start;
+    if (P.src === 'climb' && P.playing && P.climb >= 0) {
+      if (P.climb === 0) return L.climbFirst;
+      if (P.climb === 1) return L.climbMelody;
+      const d = S.idea.order[P.climb - 2];
+      return d ? '+ ' + A.DIRS[d].label + '.' + (P.climb - 1 === S.idea.order.length ? ' That’s gold.' : '') : 'That’s gold.';
+    }
+    if (S.line) return S.line;
+    if (P.playing && P.src.charAt(0) === 'h') {
+      const pr = P.src.slice(1).split('-').map(Number), row = S.hist.find((x) => x.id === pr[0]);
+      if (row) return row.chosen === pr[1] ? L.picked : L.passed;
+    }
+    if (S.phase === 'next') return A.line(L.next, S.seq);
+    if (S.phase === 'gold') return A.line(L.gold, S.hid);
+    if (S.msg === 'more') return A.line(L.more, S.seq);
+    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
+    return A.line(L.entry[S.round.dir], S.seq);
+  }
+
+  function chipsHtml() {
+    const idea = S.idea, out = [];
+    const chip = (label, sub, cls, color) => '<span class="b-chip ' + cls + '"><i style="background:' + color + '"></i>' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>';
+    if (S.phase === 'start') return '';
+    const dir = S.round ? S.round.dir : '';
+    if (!idea.melody || !idea.melody.shape) {
+      out.push(chip('Rhythm and scale', idea.melody ? 'picked' : '', idea.melody ? '' : 'now', col('seed1')));
+      out.push(chip('Shape', '', idea.melody ? 'now' : 'todo', idea.melody ? col('seed2') : 'transparent'));
+    } else {
+      out.push(chip('Melody', 'leads', 'lead', col('seed2')));
+      idea.order.forEach((d) => out.push(chip(A.DIRS[d].label, '', (S.added === d && S.anim !== lastAnim ? 'pop' : '') + (dir === d ? ' now' : ''), col(d))));
+      if (S.round && idea.order.indexOf(dir) < 0) out.push(chip(A.DIRS[dir].label, 'choosing', 'now', col(dir)));
+    }
+    return out.join('');
+  }
+
+  function roundHtml(animate) {
+    const dir = S.round.dir, opts = F.options(S);
+    const kind = S.kind;
+    const cards = opts.map((o, i) => {
+      let anim = 'b-pop', delay = (i * 0.08).toFixed(2) + 's';
+      if (kind === 'rise') { if (i === 1) { anim = 'b-rise'; delay = '0s'; } else delay = (0.18 + i * 0.05).toFixed(2) + 's'; }
+      const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
+      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: PROMOTE[dir] || 'Add it', style });
+    }).join('');
+    const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
+    return '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
+      '<div class="b-cards">' + cards + '</div>' +
+      '<div class="b-actions">' +
+        '<button type="button" class="b-ghost" data-act="more">Three more</button>' +
+        (dir === 'seed2' ? '<button type="button" class="b-ghost" data-act="walk">Keep the plain walk</button>' : '') +
+        (/^seed/.test(dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">Not now</button>') +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Bobby gives your ears a moment between options.</span>' +
+      '</div>';
+  }
+
+  function nextHtml(animate) {
+    const sugg = A.suggestion(S.idea);
+    const dirs = A.directions(S.idea).map((d, i) => {
+      const has = S.idea.layers[d];
+      return '<button type="button" class="b-dir' + (d === sugg ? ' tip' : '') + (has ? ' done' : '') + '" data-act="go" data-dir="' + d + '"' + (animate ? ' style="animation-delay:' + (i * 0.05).toFixed(2) + 's"' : ' style="animation:none"') + '>' +
+        '<span class="b-dir-top"><i class="b-dot-c" style="background:' + col(d) + '"></i><b>' + esc(A.DIRS[d].label) + '</b>' +
+          (d === sugg ? '<span class="b-pickb">Bobby’s pick</span>' : '') +
+          (has ? '<span class="b-doneb">Added · try again</span>' : '') +
+        '</span>' +
+        '<span class="b-dir-sub">' + esc(has ? 'Now: ' + A.tagOf(d, has) : A.DIRS[d].sub) + '</span>' +
+      '</button>';
+    }).join('');
+    return '<div class="b-dirs">' + dirs + '</div>' +
+      '<div class="b-actions"><button type="button" class="b-ghost" data-act="all" data-label="all">Play the idea so far</button></div>';
+  }
+
+  function goldHtml(animate) {
+    const steps = A.lineage(S.idea);
+    const lin = steps.map((x, l) =>
+      (l > 0 ? '<span class="b-plus" aria-hidden="true">+</span>' : '') +
+      '<div class="b-lin"' + (animate ? ' style="animation-delay:' + (l * 0.08).toFixed(2) + 's"' : ' style="animation:none"') + '>' +
+        '<span class="b-lin-l"><i style="background:' + col(x.dir) + '"></i>' + esc(x.stage) + '</span>' +
+        mini(x.dir, x.spec, S.idea, 'g' + l, 'picked') +
+      '</div>').join('');
+    return '<div class="b-gold">' +
+      '<div class="b-gold-actions">' +
+        '<button type="button" class="b-primary" data-act="climb" data-label="climb"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2v10l9-5z" fill="currentColor"/></svg><span>Play the climb</span></button>' +
+        '<button type="button" class="b-ghost" data-act="all" data-label="all">Play the idea so far</button>' +
+        '<button type="button" class="b-ghost" data-act="keep">Keep building</button>' +
+        '<button type="button" class="b-ghost" data-act="save" data-label="save">Save to Ideas</button>' +
+        '<button type="button" class="b-ghost" data-act="restart">Start a new idea</button>' +
+      '</div>' +
+      '<span class="b-lin-title">How it got here</span>' +
+      '<div class="b-lineage">' + lin + '</div>' +
+    '</div>';
+  }
+
+  function historyHtml() {
+    if (!S.hist.length) return '';
+    const dropNew = S.hid !== lastHid;
+    const rows = S.hist.map((row, ri) => {
+      const others = [0, 1, 2].filter((x) => x !== row.chosen);
+      const ord = row.chosen >= 0 ? [others[0], row.chosen, others[1]] : [0, 1, 2];
+      const cards = ord.filter((ci) => row.opts[ci]).map((ci) => {
+        const picked = ci === row.chosen;
+        return '<div class="b-mini-wrap">' + (picked ? '<span class="b-badge">Picked</span>' : '') +
+          mini(row.dir, row.opts[ci], row.idea, 'h' + row.id + '-' + ci, picked ? 'picked' : 'passed', A.ABC.charAt(ci)) + '</div>';
+      }).join('');
+      return '<div class="b-row' + (ri === 0 && dropNew ? ' drop' : '') + '">' +
+        '<div class="b-row-label"><b><i class="b-dot-c" style="background:' + col(row.dir) + '"></i>' + esc(A.DIRS[row.dir].label) + '</b><span>' + esc(row.note) + '</span>' +
+          (!row.marker && row.round ? '<button type="button" class="b-back" data-act="back" data-row="' + row.id + '">Back to this round</button>' : '') +
+        '</div>' +
+        '<div class="b-row-cards">' + cards + '</div>' +
+      '</div>';
+    }).join('');
+    return '<section class="b-history" aria-label="Earlier rounds">' +
+      '<div class="b-h-title"><span>Earlier rounds</span><span>Newest first. Click any card to hear it.</span></div>' + rows + '</section>';
+  }
+
+  function full() {
+    const animate = S.anim !== lastAnim;
+    const G = S.idea.layers.sound;
+    let body = '';
+    if (S.phase === 'start') {
+      body = '<div class="b-start"><button type="button" class="b-go" data-act="begin">Audition a starting idea</button><p>A melody, 2 bars. No genre yet: just bones.</p></div>';
+    } else if (S.phase === 'round') body = roundHtml(animate);
+    else if (S.phase === 'next') body = nextHtml(animate);
+    else body = goldHtml(animate);
+    root.innerHTML =
+      '<div class="b2g' + (animate ? ' b-animate' : '') + '">' +
+        '<header class="b-top">' +
+          '<div class="b-brand"><span class="wordmark">Oddition</span><span>Bones to Gold</span></div>' +
+          '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
+          '<div class="b-top-r">' +
+            '<span class="b-meta">' + esc(G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + '</span>' +
+            (F.canFinish(S) ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
+            '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
+          '</div>' +
+        '</header>' +
+        '<main class="b-stage">' +
+          '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span></div></section>' +
+          body +
+          historyHtml() +
+        '</main>' +
+      '</div>';
+    lastAnim = S.anim;
+    lastHid = S.hid;
+    reqKey = '';
+  }
+
+  /** what changes without redrawing: who is lifted, playing or waiting, Bobby's line, button labels */
+  function patch() {
+    if (!root || !root.firstChild) return;
+    const opts = S.phase === 'round' ? F.options(S) : [];
+    const say = root.querySelector('.b-say');
+    const text = bobby(opts);
+    if (say && say.textContent !== text) say.textContent = text;
+    const climbing = P.playing && P.src === 'climb';
+    root.querySelectorAll('[data-key]').forEach((el) => {
+      if (el.classList.contains('b-hit')) return;
+      const key = el.dataset.key;
+      const on = (P.playing && P.src === key) || (climbing && key === 'g' + P.climb);
+      el.classList.toggle('is-playing', on);
+      el.classList.toggle('is-wait', P.pending === key);
+      if (el.dataset.i != null && el.classList.contains('b-card')) el.classList.toggle('lifted', S.sel === Number(el.dataset.i) && S.phase === 'round');
+      const hit = el.querySelector('.b-hit');
+      if (hit) hit.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    // requests sit above the lifted card
+    const rk = S.phase === 'round' ? S.seq + '|' + S.sel + '|' + P.pending + '|' + JSON.stringify(S.round.steer) : '';
+    if (rk !== reqKey) {
+      reqKey = rk;
+      root.querySelectorAll('.b-call, .b-reqs-in').forEach((el) => { el.innerHTML = ''; });
+      if (S.phase === 'round' && S.sel >= 0 && !P.pending) {
+        const st = S.round.steer || {};
+        const html = '<div class="b-reqs" aria-label="Ask Bobby">' + (A.REQS[S.round.dir] || []).map((rq, i) => {
+          const active = (rq.x && st.x === rq.x) || (rq.p && Math.sign(st.p || 0) === Math.sign(rq.p)) || (rq.s && Math.sign(st.s || 0) === Math.sign(rq.s));
+          return '<button type="button" class="b-req' + (active ? ' on' : '') + '" data-act="req" data-i="' + i + '">' + esc(rq.label) + '</button>';
+        }).join('') + '</div>';
+        const call = root.querySelector('.b-call[data-i="' + S.sel + '"]');
+        if (call) call.innerHTML = html;
+        const inCard = root.querySelector('.b-card[data-i="' + S.sel + '"] .b-reqs-in');
+        if (inCard) inCard.innerHTML = html;
+      }
+    }
+    root.querySelectorAll('[data-label="all"]').forEach((b) => { b.textContent = P.playing && P.src === 'all' ? 'Stop' : 'Play the idea so far'; });
+    const cb = root.querySelector('[data-label="climb"] span');
+    if (cb) cb.textContent = climbing ? 'Stop the climb' : 'Play the climb';
+    const sb = root.querySelector('[data-label="save"]');
+    if (sb) { sb.textContent = S.saved ? 'Saved to Ideas' : 'Save to Ideas'; sb.disabled = !!S.saved; }
+  }
+
+  function render() {
+    if (!root || !shown) return;
+    const key = [S.phase, S.seq, S.hid, S.anim, S.round ? S.round.dir : '', S.idea.order.join(',')].join('|');
+    if (key !== built) { built = key; full(); }
+    patch();
+  }
+
+  // ---------------------------------------------------------------- outside
+
+  function mount(el, h) {
+    root = el;
+    host = h || {};
+    S = load();
+    root.addEventListener('click', onClick);
+    if (Odd.transport && Odd.transport.on) {
+      Odd.transport.on('end', () => { if (P.playing) { P.playing = false; P.climb = -1; P.passes = null; render(); } });
+      Odd.transport.on('stall', () => { if (P.playing) { P.playing = false; P.climb = -1; render(); } });
+    }
+  }
+
+  function show(on) {
+    shown = !!on;
+    if (!shown) { halt(); return; }
+    built = '';
+    render();
+  }
+
+  /** reopen a saved idea at its gold stage */
+  function open(bones, ideaId) {
+    halt();
+    P.src = '';
+    const ns = F.repair(Object.assign(F.fresh(), { phase: 'gold', idea: clone(bones), anim: (S ? S.anim : 0) + 1, saved: ideaId || null }));
+    set(ns);
+  }
+
+  Odd.bones = {
+    mount, show, open, onKey,
+    get state() { return S; },
+    get playing() { return P.playing; },
+  };
+})(globalThis.Odd = globalThis.Odd || {});
+
 /* js/app.js */
 /* Oddition — app controller: state, actions, playback, keyboard, boot. */
 (function (Odd) {
@@ -13001,6 +14657,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   const app = {
     ws: null,
     ui: {
+      screen: 'bones', // 'bones' (Bones to Gold) | 'studio'
       tab: 'booth',
       sectionId: null,
       laneId: null,
@@ -14724,6 +16381,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
         if (name) commit('Rename idea', () => { idea.name = name; }, ['shelf']);
       } },
       { label: 'Ladder: hear it step by step…', run: () => ladderDialog(idea) },
+      ...(idea.bones && Odd.bones ? [{ label: 'Keep building in Bones to Gold', run: () => { Odd.bones.open(idea.bones, idea.id); setScreen('bones'); } }] : []),
       { label: 'Place in ' + sec.name, disabled: !idea.voices.some((v) => v.part), run: () => placeIdea(idea) },
       { label: 'Join with another idea…', disabled: (app.ws.ideas || []).length < 2, run: () => joinDialog(idea) },
     ];
@@ -14990,6 +16648,50 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     });
   }
 
+  // ======================= screens =======================
+  /** 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
+  function setScreen(name, opts) {
+    const o = opts || {};
+    const next = name === 'studio' ? 'studio' : 'bones';
+    const was = app.ui.screen;
+    app.ui.screen = next;
+    document.body.dataset.screen = next;
+    if (next === 'bones') {
+      stop();
+      if (Odd.bones) Odd.bones.show(true);
+    } else {
+      if (Odd.bones) Odd.bones.show(false);
+      paint();
+    }
+    if (was !== next && !o.boot) {
+      app.ws.prefs.screen = next;
+      persist();
+      try { window.scrollTo(0, 0); } catch (e) { /* no window */ }
+    }
+  }
+
+  /** what the Bones to Gold screen asks of the app */
+  const bonesHost = {
+    toStudio: () => setScreen('studio'),
+    stopStudio: () => { if (app.ui.playing) stop(); },
+    toast: (msg, opts) => D.toast(msg, opts),
+    /** a finished idea onto the shelf; returns its id */
+    saveIdea({ sources, name, bones }) {
+      const idea = Odd.idea.fromParts(sources, { name, from: 'bones' });
+      if (!idea) { D.toast('That idea has no notes to save yet.'); return null; }
+      idea.bones = bones;
+      const f = app.ui.shelf;
+      f.view = 'ideas';
+      f.role = 'all';
+      f.starred = false;
+      f.query = '';
+      savePrefs();
+      commit('Save idea', (ss, ws) => { M.addIdea(ws, idea); }, ['shelf', 'tabs']);
+      D.toast('Saved “' + idea.name + '” to Ideas', { action: { label: 'Show in the Studio', run: () => { setScreen('studio'); if (window.innerWidth <= 900) goTab('shelf'); } } });
+      return idea.id;
+    },
+  };
+
   function goTab(tab) {
     if (app.ui.tab === tab) return;
     app.ui.tab = tab;
@@ -15000,6 +16702,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
   // ======================= event wiring =======================
   const actions = {
     // top
+    'screen-bones': () => setScreen('bones'),
     'play-song': () => toggle('song'),
     'session-menu': (el) => sessionMenu(el),
     'export-menu': (el) => exportMenu(el),
@@ -15361,6 +17064,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
       if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+      if (el.closest('#bones')) return; // Bones to Gold handles its own clicks
       // clicks on controls inside a cell belong to the control, not the cell
       if (el.dataset.act === 'select-cell' && e.target.closest('select, input, label')) return;
       const fn = actions[el.dataset.act];
@@ -15473,6 +17177,10 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
   function onKey(e) {
     if (overlayOpen()) return;
+    if (app.ui.screen === 'bones') {
+      if (!isTyping(e.target) && Odd.bones) Odd.bones.onKey(e);
+      return;
+    }
     if (isTyping(e.target)) {
       if (e.key === 'Escape') e.target.blur();
       return;
@@ -15523,6 +17231,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     roots.shelf = $('#shelf');
     roots.song = $('#song');
     roots.tabs = $('#tabs');
+    roots.bones = $('#bones');
 
     let ws = Odd.store.load();
     const firstRun = !ws;
@@ -15554,12 +17263,16 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
     fixSelection();
     genTake();
     wire();
+    if (Odd.bones && roots.bones) Odd.bones.mount(roots.bones, bonesHost);
+    app.ui.screen = pr.screen === 'studio' || !Odd.bones ? 'studio' : 'bones';
+    document.body.dataset.screen = app.ui.screen;
     paint();
+    if (app.ui.screen === 'bones') Odd.bones.show(true);
     if (firstRun) persist();
     requestAnimationFrame(frame);
     document.body.classList.add('is-ready');
 
-    if (firstRun) {
+    if (firstRun && app.ui.screen === 'studio') {
       D.toast('This starter session already has a few parts. Press play at the top to hear the song, or press Space to audition takes.', { duration: 9000 });
     }
 

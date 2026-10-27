@@ -20,8 +20,10 @@ dependencies. It runs offline.
 - **From source:** open `index.html` directly, or serve the folder
   (`python3 -m http.server`) and visit `http://localhost:8000`.
 
-The page opens on the song sheet, with the booth and the shelf below it.
-The top bar holds tempo, key, mode, style and volume; **More settings**
+The page opens on **Bones to Gold**, where you audition a starting idea
+with Bobby Beatdown (below). **Studio** switches to the song sheet, with the
+booth and the shelf below it; **Bones to Gold** in its top bar switches back.
+The app remembers which one you were on. In the Studio, the top bar holds tempo, key, mode, style and volume; **More settings**
 opens harmony, swing, feel, song shape and sound quality. The **i VI**
 button on the song panel switches chords between roman numerals and chord
 names (Am F C G); you still type numerals to edit them.
@@ -29,7 +31,42 @@ names (Am F C G); you still type numerals to edit them.
 Your work saves automatically in the browser. Use **Session › Save project
 file** to keep a copy or move it to another machine.
 
-## How it works
+## Bones to Gold: audition a starting idea
+
+Press **Audition a starting idea** and an idea grows from the bottom up, one
+layer at a time. Every round offers three options, spread along what matters
+most for that layer, so they sound clearly different. Click a card to hear it
+(or press `1` `2` `3`); promote the one you like. Nothing is thrown away:
+every round, with the options you passed over, stays in the history below,
+where you can hear any card again or go **Back to this round** and build
+again from there.
+
+1. **Rhythm and scale.** A 2-bar rhythm walked up and down a scale, so you
+   hear its mood. One sparse, one busy, one in between. No genre yet.
+2. **Shape.** Same rhythm and scale; now where the melody goes and the note
+   it lands on: one falls like an answer, one rises like a question, one
+   stays near home. Shapes move smoothly by default. **Keep the plain walk**
+   keeps round 1's walk as the melody.
+3. **Where next.** The melody now leads, and you choose what backs it up, in
+   any order: **Chords** (dark to bright), **Bass** (fills the gaps to locks
+   on), **Percussion** (claps and taps, sparse to driving; then **Grow the
+   beat**, on the grid to against it), **Pads and support** (thin to full) and
+   **Sound and feel** (instrument, tempo and swing: calm to energetic). Each
+   is worked out from the melody and the layers under it, nothing else.
+   Bobby's pick is highlighted.
+
+Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
+**Land on home**, **Surprise me** and so on re-roll the three with that
+steer; **Why does that work?** has him explain. **Three more** deals a fresh
+three. When something is playing and you pick another card, it stops, its
+card lowers, and Bobby gives your ears two seconds before the next one plays.
+
+**That's the idea** (available once there is a melody) shows how it got
+here: **Play the climb** plays the bones, then the melody, then each layer as
+it was added. **Save to Ideas** puts it on the Studio's shelf as an idea with
+a part per layer; its menu there has **Keep building in Bones to Gold**.
+
+## How it works (the Studio)
 
 1. **Booth.** Pick a stem (keys `1`–`7`) and a section to audition over. Each
    take is generated from a seed, the session's style, key and mode, and the
@@ -398,6 +435,9 @@ stops with a message and a **Play again** button rather than going silent.
 WAV export always renders at full quality.
 
 ## Keyboard
+
+In Bones to Gold: `1` `2` `3` hear options A, B, C; `Space` plays or stops;
+`Esc` stops. In the Studio:
 
 | Key | Action |
 | --- | --- |

@@ -11,8 +11,9 @@
  * whole riff section can each be one idea. Voices can be split off into ideas
  * of their own, and ideas can be joined.
  *
- *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags }
- *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split')
+ *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags, bones }
+ *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split' | 'bones')
+ *           bones: (optional) the Bones to Gold idea it was built from (Odd.audition), to keep building it there
  *   voice = { role, name, sourceId, part, oct, form, core }
  *           part: a copy of the part as found (null for a voice that is only a core)
  *           oct, form: how the part was played where it was found (slot octave and form)
@@ -489,6 +490,7 @@
       created: Number(raw.created) || Date.now(),
       starred: !!raw.starred,
       tags: Array.isArray(raw.tags) ? raw.tags : [],
+      ...(raw.bones && typeof raw.bones === 'object' && raw.bones.melody ? { bones: raw.bones } : {}),
     };
   }
 

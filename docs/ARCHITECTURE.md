@@ -37,6 +37,7 @@ js/core/model.js      workspace, sessions, sections     Odd.model
 js/core/idea.js       the core of parts: ideas          Odd.idea
 js/core/harmonise.js  melody first: chords from a tune  Odd.harmonise
 js/core/relate.js     who leads: roles and links        Odd.relate
+js/core/audition.js   Bones to Gold engine and flow      Odd.audition
 js/core/recipes.js    section types (intro builds...)   Odd.recipes
 js/core/export.js     .mid / .zip / project builders    Odd.exporter
 js/core/store.js      localStorage autosave, undo       Odd.store, Odd.history
@@ -45,6 +46,7 @@ js/audio/webmidi.js   optional Web MIDI output          Odd.webmidi
 js/audio/transport.js lookahead scheduler               Odd.transport
 js/ui/*.js            dom helpers, icons, piano roll,   Odd.dom, Odd.icon,
                       view builders                     Odd.roll, Odd.views
+js/ui/bones.js        the Bones to Gold screen          Odd.bones
 js/app.js             state, actions, playback, boot    Odd.app
 ```
 
@@ -342,6 +344,76 @@ playback, export and the views need no special case. The booth asks
 `refit: false` over the chords it would give, and so does the band behind
 it. `migrate` keeps a lead only while its slot exists; `setScale` rescales
 `prev` too.
+
+## Bones to Gold (`Odd.audition`, `Odd.bones`)
+
+The opening screen. `body[data-screen]` is `bones` or `studio`;
+`setScreen()` in `js/app.js` switches, stops whatever the other screen plays,
+and remembers the choice in `ws.prefs.screen`. The studio's document click
+handler ignores clicks inside `#bones`, and `onKey` hands keys to
+`Odd.bones.onKey` while that screen shows.
+
+`Odd.audition` is pure (Node-testable). An idea is built bottom up and each
+layer is made only from the layers below it; there is no style until the
+**sound** layer picks one. Fixed assumptions: 4/4, 2 bars, a 16th grid
+(`STEPS` 32, 120 ticks a step), key of C, 100 BPM until a sound is picked.
+
+```
+idea   = { melody, layers: { chords, bass, perc, beat, pads, sound }, order: [dir] }
+melody = { r: { id, hits: [[step, length, weight 0-2]], n, off }, scale, shape }
+shape  = { kind, amp, start }   null after round 1 (the plain walk)
+round  = { dir, batch, steer: { p, s, x } }
+```
+
+- **seed1** (rhythm and scale): `rhythmPool()` makes 80 seeded rhythms from
+  density × push (per-beat cells: quarter, 8ths, off-beat, 16ths, dotted,
+  syncopated, anticipation, rest, hold; bar 2 echoes bar 1), deduplicated.
+  Scales run dark to bright: phrygian, minor, harmonic, dorian, penta,
+  mixolydian, major, lydian. The melody is `WALK` up and down from home.
+- **seed2** (shape): 13 shape kinds × 3 amplitudes, in scale steps; by default
+  only leaps ≤ 2 at amp ≤ 1. The landing is the root when the shape falls,
+  the 5th when it rises, else the 3rd; `start` is solved so the last note
+  lands there.
+- **chords**: one triad per half bar, scored against `slotWeights` (how long,
+  where and how strongly each pitch class sounds in the slot); every 4-chord
+  path is enumerated, with colour chords borrowed from outside the scale.
+  The top 24 that differ in 2+ slots form the pool (`fit`, `bright`,
+  `changes`).
+- **bass, pads, perc, beat**: small style banks built against the melody's
+  notes and the chords (`chordsFor`: the picked ones, else the best fit),
+  each with the feature its round spreads on (`lock`, `voices`, `n`, `off`).
+- **sound**: genres ranked by how well they suit the rhythm (density, push,
+  note length), each a tempo, swing and patch set.
+
+`spread(cands, steer, batch)` gives three options along `a`, the layer's
+telling difference: the low end, the high end and the nearest the middle.
+`steer.p` / `steer.s` halve the pool toward one end of `a` / `b` first;
+`batch` (Three more) takes the next nearest, up to six batches before
+repeating. `REQS` maps each request to a steer (`x` is a filter such as
+`colour`, `home`, `follow`).
+
+`flow` steps the screen state without side effects: `enter`, `pick`,
+`keepWalk`, `more`, `request`, `back`, `skip`, `finish`, `keepBuilding`,
+`repair`. State is `{ phase: start | round | next | gold, idea, round, hist,
+hid, sel, seq, anim, ... }`; `hist` (newest first, capped at 80) keeps each
+round's options with the idea and round they were offered in, so `back()`
+restores exactly that round. Picking a new shape clears the layers above it.
+
+`seq(idea, aud)` builds a looping transport sequence on tracks `b2g-*`; while
+one option is auditioned (`aud = { dir, spec }`) the other layers play at .6
+and the melody at .75. Swing above .5 delays the "and" 16ths.
+`climbSeq(idea)` is one non-looping sequence: the bones, the melody, then
+each layer, each pass time-stretched to keep its own tempo at the final BPM.
+`toParts(idea)` makes studio parts (scale `penta` stored as major, chords as
+a `prog` via `theory.resolveChord`) for `Odd.idea.fromParts`; the saved idea
+keeps the recipe as `idea.bones`.
+
+`Odd.bones` draws the screen into `#bones`, rebuilding the DOM only when the
+round changes (`phase|seq|hid|anim|...`) and patching lift, play and wait
+classes in place so cards animate. `hear(key)` plays at once from silence;
+from sound it stops, lowers the card, waits `PAUSE_MS` (2 s) with a Bobby
+line, then lifts and plays. Its state autosaves to `localStorage`
+(`oddition.bones.v1`), apart from the workspace.
 
 ## Song shape (`Odd.shape`)
 

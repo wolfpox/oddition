@@ -1,0 +1,234 @@
+'use strict';
+// Bones to Gold: an idea built from the bottom up, three clearly different options per round.
+const test = require('node:test');
+const assert = require('node:assert');
+const path = require('node:path');
+
+for (const f of [
+  'core/rng', 'core/theory', 'gen/styles', 'gen/names', 'gen/drums', 'gen/perc', 'gen/bass', 'gen/chords', 'gen/pad',
+  'gen/lead', 'gen/arp', 'gen/band', 'gen/index', 'core/shape', 'core/render', 'core/edit', 'core/model', 'core/idea',
+  'core/audition',
+]) require(path.join(__dirname, '..', 'js', f + '.js'));
+
+const Odd = globalThis.Odd;
+const T = Odd.theory;
+const A = Odd.audition;
+const F = A.flow;
+
+/** a melody picked through both seed rounds */
+function melodyState(i1, i2) {
+  let S = F.enter(F.fresh(), 'seed1');
+  S = F.pick(S, i1 == null ? 1 : i1);
+  return F.pick(S, i2 == null ? 1 : i2);
+}
+
+/** add each layer, picking option i */
+function build(S, dirs, i) {
+  for (const d of dirs) S = F.pick(F.enter(S, d), i == null ? 1 : i);
+  return S;
+}
+
+test('round 1 offers three rhythm-and-scale options spread from sparse to busy', () => {
+  const S = F.enter(F.fresh(), 'seed1');
+  const opts = F.options(S);
+  assert.strictEqual(opts.length, 3);
+  const ns = opts.map((o) => o.mel.r.n);
+  assert.ok(ns[0] < ns[1] && ns[1] < ns[2], 'densities rise: ' + ns.join(', '));
+  assert.ok(ns[2] - ns[0] >= 8, 'sparse and busy are far apart: ' + ns.join(', '));
+  assert.strictEqual(new Set(opts.map((o) => o.mel.scale)).size, 3, 'three different scales');
+  for (const o of opts) {
+    assert.strictEqual(o.mel.shape, null, 'no shape yet');
+    assert.ok(!('style' in o.mel) && !('genre' in o.mel), 'nothing about a style is chosen yet');
+  }
+});
+
+test('three more gives a new batch; busier and darker requests steer it', () => {
+  const S = F.enter(F.fresh(), 'seed1');
+  // several presses of "three more" keep bringing rhythms not heard yet, still spread sparse to busy
+  const seen = new Set();
+  let st = S;
+  for (let b = 0; b < 5; b++) {
+    const opts = F.options(st);
+    for (const o of opts) { assert.ok(!seen.has(o.mel.r.id), 'batch ' + b + ' repeats ' + o.mel.r.id); seen.add(o.mel.r.id); }
+    assert.ok(opts[2].mel.r.n - opts[0].mel.r.n >= 8, 'batch ' + b + ' still spread');
+    st = F.more(st);
+  }
+  const more = F.more(S);
+  assert.strictEqual(more.hist[0].note, 'Passed over');
+
+  const mean = (st) => F.options(st).reduce((a, o) => a + o.mel.r.n, 0) / 3;
+  const busier = F.request(S, A.REQS.seed1.find((r) => r.label === 'Busier'));
+  assert.ok(mean(busier) > mean(S), 'busier means more notes');
+  assert.strictEqual(busier.sel, 1, 'the middle one is up next');
+  const darker = F.request(S, A.REQS.seed1.find((r) => r.label === 'Darker scale'));
+  const dark = A.SCALE_ORDER.slice(0, 4);
+  assert.ok(F.options(darker).every((o) => dark.includes(o.mel.scale)), 'darker keeps to the darker scales');
+});
+
+test('round 2 shapes keep the rhythm and scale, move smoothly, and land where they say', () => {
+  let S = F.enter(F.fresh(), 'seed1');
+  const pick = F.options(S)[1];
+  S = F.pick(S, 1);
+  assert.strictEqual(S.round.dir, 'seed2');
+  const check = (st, maxLeap) => {
+    const opts = F.options(st);
+    assert.ok(opts.length >= 3);
+    for (const o of opts) {
+      assert.strictEqual(o.mel.r, pick.mel.r);
+      assert.strictEqual(o.mel.scale, pick.mel.scale);
+      const ns = A.melodyNotes(o.mel);
+      assert.strictEqual(T.mod(ns[ns.length - 1].m, 12), o.land, A.tagOf('seed2', o) + ' lands on ' + A.IV[o.land]);
+      if (maxLeap != null) for (let i = 1; i < ns.length; i++) assert.ok(Math.abs(ns[i].deg - ns[i - 1].deg) <= maxLeap);
+    }
+    return opts;
+  };
+  const opts = check(S, 2);
+  assert.ok(opts[0].end <= opts[2].end, 'from an answer (falls) to a question (rises)');
+  const home = F.request(S, A.REQS.seed2.find((r) => r.label === 'Land on home'));
+  assert.ok(check(home).every((o) => o.land === 0), 'land on home');
+  const jumpy = F.request(S, A.REQS.seed2.find((r) => r.label === 'More jumps'));
+  assert.ok(F.options(jumpy).every((o) => o.leap >= 3), 'more jumps');
+});
+
+test('keep the plain walk keeps round 1 exactly', () => {
+  let S = F.enter(F.fresh(), 'seed1');
+  const walked = A.melodyNotes(F.options(S)[0].mel, true);
+  S = F.keepWalk(F.pick(S, 0));
+  assert.strictEqual(S.phase, 'next');
+  assert.deepStrictEqual(A.melodyNotes(S.idea.melody).map((n) => n.m), walked.map((n) => n.m));
+  assert.strictEqual(S.hist[0].note, 'Kept the plain walk');
+});
+
+test('each layer is made from the melody and spreads along its telling difference', () => {
+  const S = melodyState();
+  const axes = { chords: (o) => o.bright, bass: (o) => o.lock, perc: (o) => o.n, pads: (o) => o.voices, sound: (o) => o.bpm };
+  for (const d of Object.keys(axes)) {
+    const opts = F.options(F.enter(S, d));
+    assert.strictEqual(opts.length, 3, d);
+    const v = opts.map(axes[d]);
+    assert.ok(v[0] <= v[1] && v[1] <= v[2] && v[0] < v[2], d + ' spreads: ' + v.join(', '));
+  }
+  // chords fit: the melody's notes mostly sit on them
+  for (const o of F.options(F.enter(S, 'chords'))) assert.ok(o.fit >= 45, 'chord fit ' + o.fit);
+  // the same melody always gives the same options; another melody gives others
+  assert.deepStrictEqual(F.options(F.enter(S, 'bass')).map((o) => o.id), F.options(F.enter(S, 'bass')).map((o) => o.id));
+});
+
+test('grow the beat opens only after percussion; the pick is a direction still open', () => {
+  let S = melodyState();
+  assert.ok(!A.directions(S.idea).includes('beat'));
+  S = build(S, ['perc']);
+  assert.ok(A.directions(S.idea).includes('beat'));
+  assert.strictEqual(A.suggestion(S.idea), 'beat');
+  const all = build(S, ['beat', 'chords', 'bass', 'pads', 'sound']);
+  assert.strictEqual(A.suggestion(all.idea), '');
+});
+
+test('going back restores that round and keeps everything after it in the history', () => {
+  let S = build(melodyState(), ['chords', 'bass']);
+  const row = S.hist.find((r) => r.dir === 'chords');
+  const n = S.hist.length;
+  const back = F.back(S, row);
+  assert.strictEqual(back.phase, 'round');
+  assert.strictEqual(back.round.dir, 'chords');
+  assert.deepStrictEqual(back.idea.order, [], 'the idea as it was before the chords');
+  assert.strictEqual(back.hist.length, n + 1);
+  assert.ok(back.hist[0].marker);
+  // building again from there
+  const again = F.pick(back, 0);
+  assert.deepStrictEqual(again.idea.order, ['chords']);
+});
+
+test('a new shape starts the layers over', () => {
+  let S = build(melodyState(), ['chords']);
+  const seed2 = S.hist.find((r) => r.dir === 'seed2');
+  S = F.pick(F.back(S, seed2), 2);
+  assert.deepStrictEqual(S.idea.order, []);
+});
+
+test('the sequence: melody alone in the seed rounds, everything once layered, swing on the off-beats', () => {
+  let S = F.enter(F.fresh(), 'seed1');
+  const o = F.options(S)[0];
+  const s1 = A.seq(S.idea, { dir: 'seed1', spec: o });
+  assert.deepStrictEqual(Object.keys(s1.tracks), [A.TRACK.mel]);
+  assert.strictEqual(s1.length, 2 * T.BAR);
+  assert.strictEqual(s1.bpm, 100);
+  assert.ok(s1.loop);
+  S = build(melodyState(), ['chords', 'bass', 'perc', 'beat', 'pads']);
+  const all = A.seq(S.idea, null);
+  assert.strictEqual(Object.keys(all.tracks).length, 6);
+  for (const e of all.events) {
+    assert.ok(e.t >= 0 && e.t < all.length && e.d > 0 && e.p >= 0 && e.p <= 127 && e.v >= 1 && e.v <= 127);
+    assert.ok(all.tracks[e.track]);
+  }
+  for (let i = 1; i < all.events.length; i++) assert.ok(all.events[i].t >= all.events[i - 1].t, 'sorted');
+  // auditioning a layer sets the others back
+  const aud = A.seq(S.idea, { dir: 'bass', spec: S.idea.layers.bass });
+  assert.ok(aud.tracks[A.TRACK.chd].volume < all.tracks[A.TRACK.chd].volume, 'chords sit back');
+  assert.strictEqual(aud.tracks[A.TRACK.bas].volume, all.tracks[A.TRACK.bas].volume, 'the bass is heard in full');
+  assert.ok(aud.tracks[A.TRACK.mel].volume < all.tracks[A.TRACK.mel].volume, 'the melody steps back a little');
+  // a swung sound pushes the "and"s late
+  const lofi = { id: 'lofi', tag: 'Lo-fi', name: 'Lo-fi', bpm: 80, swing: 0.62, up: 0, why: '' };
+  const swung = A.seq(S.idea, { dir: 'sound', spec: lofi });
+  assert.strictEqual(swung.bpm, 80);
+  const hat = swung.events.filter((e) => e.track === A.TRACK.bt && e.p === 42).map((e) => e.t % T.BEAT);
+  assert.ok(hat.some((t) => t > T.BEAT / 2), 'swung off-beats');
+});
+
+test('the climb plays bones, then the melody, then each layer', () => {
+  const S = build(melodyState(), ['chords', 'bass']);
+  const c = A.climb(S.idea);
+  assert.strictEqual(c.length, 4);
+  assert.deepStrictEqual(Object.keys(c[0].tracks), [A.TRACK.mel]);
+  assert.strictEqual(Object.keys(c[3].tracks).length, 3);
+  assert.deepStrictEqual(A.lineage(S.idea).map((l) => l.stage), ['Rhythm and scale', 'Melody', 'Chords', 'Bass']);
+  // as one sequence: passes back to back, each keeping its own tempo
+  const fast = build(S, ['sound'], 2);
+  const one = A.climbSeq(fast.idea);
+  assert.strictEqual(one.passes.length, 5);
+  assert.ok(!one.loop);
+  assert.strictEqual(one.bpm, fast.idea.layers.sound.bpm);
+  assert.strictEqual(one.passes[0].length, Math.round(A.LENGTH * one.bpm / 100), 'the bones keep 100 BPM');
+  assert.strictEqual(one.passes[4].length, A.LENGTH);
+  assert.strictEqual(one.length, one.passes.reduce((a, p) => a + p.length, 0));
+  for (const e of one.events) assert.ok(one.tracks[e.track] && e.t < one.length);
+});
+
+test('the finished idea becomes parts and an idea for the shelf, in the right key', () => {
+  const S = build(melodyState(), ['chords', 'bass', 'perc', 'beat', 'pads']);
+  const sources = A.toParts(S.idea);
+  assert.deepStrictEqual(sources.map((s) => s.part.role), ['lead', 'chords', 'bass', 'perc', 'drums', 'pad']);
+  const mel = sources[0].part;
+  const want = A.melodyNotes(S.idea.melody).map((n) => n.m);
+  const got = Odd.render.partEvents(mel, { refit: false }).map((e) => e.p);
+  assert.deepStrictEqual(got, want, 'melody pitches survive');
+  const idea = Odd.idea.fromParts(sources, { name: A.ideaName(S.idea), from: 'bones' });
+  assert.strictEqual(idea.voices.length, 6);
+  assert.strictEqual(idea.bars, 2);
+  assert.ok(Odd.idea.repair(JSON.parse(JSON.stringify(idea))));
+});
+
+test('Bobby contrasts the option heard with the other two', () => {
+  const S = F.enter(F.fresh(), 'seed1');
+  const opts = F.options(S);
+  assert.match(A.comment('seed1', opts, 2), /Busiest/);
+  assert.match(A.comment('seed1', opts, 0), /air/);
+  assert.ok(A.whyText('seed1', opts[1]).length > 20);
+  for (const d of ['seed1', 'seed2', 'chords', 'bass', 'perc', 'beat', 'pads', 'sound']) {
+    assert.ok(A.LINES.entry[d] && A.LINES.entry[d].length, d + ' has an entry line');
+    assert.ok(A.REQS[d].some((r) => r.why), d + ' can be asked why');
+  }
+  assert.ok(A.LINES.pause.length >= 5);
+});
+
+test('a saved screen state loads back, and junk loads as a fresh start', () => {
+  const S = build(melodyState(), ['chords']);
+  const back = F.repair(JSON.parse(JSON.stringify(S)));
+  assert.strictEqual(back.phase, 'next');
+  assert.deepStrictEqual(back.idea.order, ['chords']);
+  const round = F.repair(JSON.parse(JSON.stringify(F.enter(S, 'bass'))));
+  assert.strictEqual(F.options(round).length, 3);
+  assert.strictEqual(F.repair(null).phase, 'start');
+  assert.strictEqual(F.repair({ phase: 'round', round: { dir: 'nope' } }).phase, 'start');
+  assert.strictEqual(F.repair({ phase: 'gold', idea: {} }).phase, 'start');
+});
