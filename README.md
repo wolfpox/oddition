@@ -20,10 +20,18 @@ dependencies. It runs offline.
 - **From source:** open `index.html` directly, or serve the folder
   (`python3 -m http.server`) and visit `http://localhost:8000`.
 
-The page opens on **Bones to Gold**, where you audition a starting idea
-with Bobby Beatdown (below). **Studio** switches to the song sheet, with the
-booth and the shelf below it; **Bones to Gold** in its top bar switches back.
-The app remembers which one you were on. In the Studio, the top bar holds tempo, key, mode, style and volume; **More settings**
+The page opens on the home screen: the logo, and Bobby Beatdown calling you
+over. Tap Bobby for his menu:
+
+- **Idea Builder** opens **Bones to Gold**, where you audition a starting
+  idea with Bobby (below).
+- **Song Builder** grows ideas into a song, section by section. It is coming
+  next and not built yet.
+- **Session Takeover** opens the Studio: the song sheet, with the booth and
+  the shelf below it.
+
+The logo at the top left of every screen goes back home. **Studio** and
+**Bones to Gold** in the top bars switch between those two directly. In the Studio, the top bar holds tempo, key, mode, style and volume; **More settings**
 opens harmony, swing, feel, song shape and sound quality. The **i VI**
 button on the song panel switches chords between roman numerals and chord
 names (Am F C G); you still type numerals to edit them.
@@ -436,7 +444,7 @@ WAV export always renders at full quality.
 
 ## Keyboard
 
-In Bones to Gold: `1` `2` `3` hear options A, B, C; `Space` plays or stops;
+On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: `1` `2` `3` hear options A, B, C; `Space` plays or stops;
 `Esc` stops. In the Studio:
 
 | Key | Action |

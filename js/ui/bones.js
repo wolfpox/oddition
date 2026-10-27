@@ -5,7 +5,7 @@
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
- * Odd.bones.mount(el, host) once; host = { toStudio, stopStudio, saveIdea, toast }.
+ * Odd.bones.mount(el, host) once; host = { toStudio, toHome, stopStudio, saveIdea, toast }.
  * Odd.bones.show(on) when the screen changes; Odd.bones.open(bones, ideaId)
  * reopens a saved idea at its gold stage.
  */
@@ -254,6 +254,7 @@
     restart: () => restart(),
     back: (el) => back(Number(el.dataset.row)),
     studio: () => { halt(); if (host.toStudio) host.toStudio(); },
+    home: () => { halt(); if (host.toHome) host.toHome(); },
   };
 
   function onClick(e) {
@@ -367,19 +368,7 @@
 
   // ---------------------------------------------------------------- the screen
 
-  const BOBBY_SVG =
-    '<svg class="b-face" width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">' +
-      '<path class="b-cloth" d="M30 92 C30 76, 66 76, 66 92 Z"/>' +
-      '<circle cx="48" cy="54" r="19" fill="#c79f7c"/>' +
-      '<path d="M30 56 C31 82, 65 82, 66 56 C61 66, 35 66, 30 56 Z" fill="#3b2b22"/>' +
-      '<rect x="34" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
-      '<rect x="50" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
-      '<path d="M46 48 L50 48" stroke="#0e1014" stroke-width="2"/>' +
-      '<path d="M42 65 Q48 69 54 65" stroke="#ecebe6" stroke-width="2" fill="none" stroke-linecap="round"/>' +
-      '<path class="b-cloth" d="M30 36 C30 14, 66 14, 66 36 Z"/>' +
-      '<rect x="31" y="29" width="34" height="5" fill="#f1cd58"/>' +
-      '<ellipse class="b-cloth" cx="48" cy="37" rx="36" ry="6"/>' +
-    '</svg>';
+  const BOBBY_SVG = Odd.brand.BOBBY;
 
   function bobby(opts) {
     if (S.phase === 'start') return L.start;
@@ -508,7 +497,7 @@
     root.innerHTML =
       '<div class="b2g' + (animate ? ' b-animate' : '') + '">' +
         '<header class="b-top">' +
-          '<div class="b-brand"><span class="wordmark">Oddition</span><span>Bones to Gold</span></div>' +
+          '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
             '<span class="b-meta">' + esc(G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + '</span>' +

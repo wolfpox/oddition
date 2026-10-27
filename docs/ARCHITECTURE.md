@@ -47,6 +47,7 @@ js/audio/transport.js lookahead scheduler               Odd.transport
 js/ui/*.js            dom helpers, icons, piano roll,   Odd.dom, Odd.icon,
                       view builders                     Odd.roll, Odd.views
 js/ui/bones.js        the Bones to Gold screen          Odd.bones
+js/ui/home.js         the home screen, Bobby's menu     Odd.home
 js/app.js             state, actions, playback, boot    Odd.app
 ```
 
@@ -347,11 +348,15 @@ it. `migrate` keeps a lead only while its slot exists; `setScale` rescales
 
 ## Bones to Gold (`Odd.audition`, `Odd.bones`)
 
-The opening screen. `body[data-screen]` is `bones` or `studio`;
-`setScreen()` in `js/app.js` switches, stops whatever the other screen plays,
-and remembers the choice in `ws.prefs.screen`. The studio's document click
-handler ignores clicks inside `#bones`, and `onKey` hands keys to
-`Odd.bones.onKey` while that screen shows.
+`body[data-screen]` is `home`, `bones` or `studio`; the app always opens on
+`home` (`Odd.home`: the logo, Bobby, his menu of Idea Builder, Song Builder
+and Session Takeover). `setScreen()` in `js/app.js` switches, stops whatever
+the other screen plays, and remembers the last working screen in
+`ws.prefs.screen`. The studio's document click handler ignores clicks inside
+`#bones` and `#home`, and `onKey` hands keys to `Odd.home.onKey` or
+`Odd.bones.onKey` while those screens show. The logo and Bobby's drawing live
+in `Odd.brand` (`js/ui/icons.js`); every top bar's logo is a
+`data-act="home"` button.
 
 `Odd.audition` is pure (Node-testable). An idea is built bottom up and each
 layer is made only from the layers below it; there is no style until the

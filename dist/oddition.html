@@ -1200,7 +1200,7 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 }
 
 @media (max-width: 480px) {
-  .brand { display: none; }
+  .brand .logo-word { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -1426,8 +1426,12 @@ body.is-dragging .cell { transition: box-shadow 0.1s; }
 
 body[data-screen="bones"] #topbar,
 body[data-screen="bones"] #desk,
-body[data-screen="bones"] #tabs { display: none !important; }
+body[data-screen="bones"] #tabs,
+body[data-screen="home"] #topbar,
+body[data-screen="home"] #desk,
+body[data-screen="home"] #tabs { display: none !important; }
 body:not([data-screen="bones"]) #bones { display: none; }
+body:not([data-screen="home"]) #home { display: none; }
 
 .b2g { min-height: 100vh; display: flex; flex-direction: column; overflow-x: clip; }
 .b2g button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -1591,10 +1595,75 @@ body:not([data-screen="bones"]) #bones { display: none; }
   .b-card { padding-left: 10px; padding-right: 10px; width: 292px; }
 }
 
+/* ======================= the logo, and the home screen =======================
+ * The mark: seven faders in the stem colours, the lead one standing up out of line.
+ * The wordmark: "odd" heavy, "ition" light. Home: the logo, Bobby, his menu. */
+.logo-word { font-family: var(--font-display); font-weight: 500; font-variation-settings: 'wdth' 118; letter-spacing: -0.01em; color: var(--muted); line-height: 0.9; }
+.logo-word b { font-weight: 900; font-variation-settings: 'wdth' 128; color: var(--ink); }
+.logo-btn { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 4px 6px; margin-left: -6px; min-height: 44px; color: var(--ink); border-radius: 8px; cursor: pointer; }
+.logo-btn .logo-word { font-size: 1.35rem; }
+.logo-btn:hover { background: var(--raised); }
+.logo-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.logo-btn .mark { flex: none; }
+.b-brand { align-items: center; }
+
+.home { min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 36px; overflow-x: clip;
+  padding: max(56px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); }
+.home button:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.h-logo { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.h-lockup { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; }
+.h-word { margin: 0; font-size: clamp(56px, 9vw, 104px); }
+.h-tag { margin: 0; font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); text-align: center; }
+.mark .odd { animation: h-odd 3.2s ease-in-out infinite; }
+@keyframes h-odd { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.logo-btn .mark .odd { animation: none; }
+
+.h-bobby { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.h-bubble { position: relative; background: var(--raised); border: 1px solid var(--line); border-radius: 18px; padding: 14px 20px 16px; max-width: 540px; font-size: 18px; line-height: 1.45; text-align: center; margin-bottom: 12px; }
+.h-bubble::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 14px; height: 14px; margin-left: -7px; background: var(--raised); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.h-bob { appearance: none; background: none; border: 0; padding: 6px; border-radius: 50%; cursor: pointer; color: inherit; }
+.h-bob .b-face { width: 150px; height: 150px; display: block; animation: h-bob 2.4s ease-in-out infinite; }
+.h-bob:hover .b-face { animation-duration: 0.8s; }
+.is-open .h-bob .b-face { animation: none; width: 110px; height: 110px; }
+@keyframes h-bob { 0%, 100% { transform: translateY(0) rotate(0); } 30% { transform: translateY(-5px) rotate(-3deg); } 60% { transform: translateY(0) rotate(2deg); } }
+.h-hint { margin: 0; font-size: 13px; color: var(--faint); }
+
+.h-menu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; width: 100%; max-width: 1040px; }
+.h-card { appearance: none; font: inherit; color: inherit; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 0; cursor: pointer;
+  display: flex; flex-direction: column; overflow: hidden; transition: border-color 0.15s, background 0.15s;
+  animation: h-rise 0.45s cubic-bezier(.2,.9,.3,1.2) backwards; }
+@keyframes h-rise { from { opacity: 0; transform: translateY(14px); } }
+.h-card:hover { border-color: var(--faint); background: var(--raised); }
+.h-card.on { border-color: var(--b-gold); }
+.h-card.soon .h-pic { opacity: 0.6; }
+.h-pic { height: 132px; background: var(--screen); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+.h-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
+.h-kick { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); display: flex; gap: 8px; align-items: center; }
+.h-kick em { font-style: normal; color: var(--b-on-gold); background: var(--b-gold); border-radius: 999px; padding: 2px 8px; letter-spacing: 0.06em; }
+.h-name { font-family: var(--font-display); font-weight: 800; font-variation-settings: 'wdth' 112; font-size: 26px; line-height: 1.05; }
+.h-desc { font-size: 15px; line-height: 1.45; color: var(--muted); }
+.h-go { margin-top: auto; padding-top: 10px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.h-card.on .h-go { color: var(--b-gold); }
+.h-card.soon .h-go { color: var(--faint); font-weight: 500; }
+.h-recent { margin: -16px 0 0; font-size: 14px; color: var(--faint); text-align: center; }
+
+@media (max-width: 820px) {
+  .home { gap: 28px; padding-top: max(36px, env(safe-area-inset-top, 0px)); }
+  .h-menu { grid-template-columns: minmax(0, 1fr); }
+  .h-pic { height: 96px; }
+  .h-bubble { font-size: 16px; }
+  .h-bob .b-face { width: 120px; height: 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark .odd, .h-bob .b-face { animation: none; }
+  .h-card { animation: none; }
+}
+
 </style>
 </head>
 <body>
 <!-- Oddition single-file build 2026-10-27 (generated by tools/build.js; edit the sources, not this file) -->
+<div id="home" aria-label="Oddition home"></div>
 <div id="bones" aria-label="Bones to Gold"></div>
 <header class="topbar" id="topbar"></header>
 <main class="desk" id="desk">
@@ -12625,6 +12694,33 @@ body:not([data-screen="bones"]) #bones { display: none; }
   }
 
   Odd.icon = icon;
+
+  // ---------------------------------------------------------------- brand
+  // The mark: seven faders in the stem colours; the lead one stands up out of line.
+  const FADERS = ['drums', 'perc', 'bass', 'lead', 'chords', 'pad', 'arp'];
+  function mark(px, cls) {
+    const bars = FADERS.map((r, i) => '<rect' + (r === 'lead' ? ' class="odd"' : '') + ' x="' + (4 + i * 12) + '" y="' + (r === 'lead' ? 4 : 28) + '" width="8" height="56" rx="4" fill="var(--r-' + r + ')"/>').join('');
+    return '<svg class="mark' + (cls ? ' ' + cls : '') + '" width="' + px + '" height="' + px + '" viewBox="0 0 88 88" aria-hidden="true" focusable="false">' + bars + '</svg>';
+  }
+  function wordmark() { return '<span class="logo-word"><b>odd</b>ition</span>'; }
+  /** the top-bar logo: a button home */
+  function homeButton(sub) {
+    return '<button type="button" class="logo-btn" data-act="home" aria-label="Oddition home">' + mark(22) + wordmark() + (sub ? '<span class="logo-sub">' + sub + '</span>' : '') + '</button>';
+  }
+  const BOBBY =
+    '<svg class="b-face" width="96" height="96" viewBox="0 0 96 96" aria-hidden="true" focusable="false">' +
+      '<path class="b-cloth" d="M30 92 C30 76, 66 76, 66 92 Z"/>' +
+      '<circle cx="48" cy="54" r="19" fill="#c79f7c"/>' +
+      '<path d="M30 56 C31 82, 65 82, 66 56 C61 66, 35 66, 30 56 Z" fill="#3b2b22"/>' +
+      '<rect x="34" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<rect x="50" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<path d="M46 48 L50 48" stroke="#0e1014" stroke-width="2"/>' +
+      '<path d="M42 65 Q48 69 54 65" stroke="#ecebe6" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<path class="b-cloth" d="M30 36 C30 14, 66 14, 66 36 Z"/>' +
+      '<rect x="31" y="29" width="34" height="5" fill="#f1cd58"/>' +
+      '<ellipse class="b-cloth" cx="48" cy="37" rx="36" ry="6"/>' +
+    '</svg>';
+  Odd.brand = { mark, wordmark, homeButton, BOBBY };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/ui/roll.js */
@@ -13153,7 +13249,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
     const midiOn = Odd.webmidi && Odd.webmidi.mode !== 'internal' && Odd.webmidi.selectedId;
     const html =
       '<div class="top-row">' +
-        '<div class="brand"><span class="wordmark">Oddition</span></div>' +
+        '<div class="brand">' + Odd.brand.homeButton() + '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm bones-btn" data-act="screen-bones" title="Audition a starting idea with Bobby">Bones to Gold</button>' +
         '<button type="button" class="session-btn" data-act="session-menu" aria-haspopup="menu" aria-expanded="false" title="Sessions">' +
           '<span class="eyebrow">Session</span><span class="session-name">' + esc(s.name) + '</span>' + icon('chevron', 'ico-sm') +
@@ -14036,7 +14132,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
- * Odd.bones.mount(el, host) once; host = { toStudio, stopStudio, saveIdea, toast }.
+ * Odd.bones.mount(el, host) once; host = { toStudio, toHome, stopStudio, saveIdea, toast }.
  * Odd.bones.show(on) when the screen changes; Odd.bones.open(bones, ideaId)
  * reopens a saved idea at its gold stage.
  */
@@ -14285,6 +14381,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
     restart: () => restart(),
     back: (el) => back(Number(el.dataset.row)),
     studio: () => { halt(); if (host.toStudio) host.toStudio(); },
+    home: () => { halt(); if (host.toHome) host.toHome(); },
   };
 
   function onClick(e) {
@@ -14398,19 +14495,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
 
   // ---------------------------------------------------------------- the screen
 
-  const BOBBY_SVG =
-    '<svg class="b-face" width="96" height="96" viewBox="0 0 96 96" aria-hidden="true">' +
-      '<path class="b-cloth" d="M30 92 C30 76, 66 76, 66 92 Z"/>' +
-      '<circle cx="48" cy="54" r="19" fill="#c79f7c"/>' +
-      '<path d="M30 56 C31 82, 65 82, 66 56 C61 66, 35 66, 30 56 Z" fill="#3b2b22"/>' +
-      '<rect x="34" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
-      '<rect x="50" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
-      '<path d="M46 48 L50 48" stroke="#0e1014" stroke-width="2"/>' +
-      '<path d="M42 65 Q48 69 54 65" stroke="#ecebe6" stroke-width="2" fill="none" stroke-linecap="round"/>' +
-      '<path class="b-cloth" d="M30 36 C30 14, 66 14, 66 36 Z"/>' +
-      '<rect x="31" y="29" width="34" height="5" fill="#f1cd58"/>' +
-      '<ellipse class="b-cloth" cx="48" cy="37" rx="36" ry="6"/>' +
-    '</svg>';
+  const BOBBY_SVG = Odd.brand.BOBBY;
 
   function bobby(opts) {
     if (S.phase === 'start') return L.start;
@@ -14539,7 +14624,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
     root.innerHTML =
       '<div class="b2g' + (animate ? ' b-animate' : '') + '">' +
         '<header class="b-top">' +
-          '<div class="b-brand"><span class="wordmark">Oddition</span><span>Bones to Gold</span></div>' +
+          '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
             '<span class="b-meta">' + esc(G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + '</span>' +
@@ -14642,6 +14727,194 @@ body:not([data-screen="bones"]) #bones { display: none; }
   };
 })(globalThis.Odd = globalThis.Odd || {});
 
+/* js/ui/home.js */
+/* Oddition — the home screen: the logo, and Bobby Beatdown waving you over.
+ *
+ * Tap Bobby and he opens his menu: Idea Builder (Bones to Gold), Song Builder,
+ * Session Takeover (the studio). Picking one plays a short riff and goes there.
+ *
+ * Odd.home.mount(el, host) once; host = { go(screen), stats(), stopAll() }.
+ *   stats() -> { ideas, session } for the line under the menu.
+ * Odd.home.show(on) when the screen changes.
+ */
+(function (Odd) {
+  'use strict';
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const GO_MS = 650; // Bobby's line and the riff, then the screen changes
+  const LINES = {
+    hello: ['Hey, boss, come here, I’ve got great stuff to show you!', 'Psst. Boss. Over here. You’re gonna love this.'],
+    menu: 'Here’s what I’ve got. Where do you want to start?',
+    menuFirst: 'Here’s what I’ve got. New here? Start with an idea.',
+    bones: 'Idea Builder. Let’s dig up some bones and turn them gold.',
+    song: 'The Song Builder’s still in the shop, boss. It’s next.',
+    studio: 'Session Takeover. The band’s warmed up. The desk is yours.',
+  };
+  const ARROW = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  // little pictures of each place
+  const PIC = {
+    bones: '<svg width="220" height="96" viewBox="0 0 220 96" aria-hidden="true" focusable="false">' +
+      [[10, 70, 16, 0], [52, 58, 28, 8], [94, 44, 42, 18], [136, 28, 58, 34], [178, 10, 76, 76]].map(([x, y, h, g]) =>
+        '<rect x="' + x + '" y="' + y + '" width="30" height="' + h + '" rx="3" fill="var(--b-bone)"/>' +
+        (g ? '<rect x="' + x + '" y="' + y + '" width="30" height="' + g + '" rx="3" fill="var(--b-gold)"/>' : '')).join('') +
+      '<path d="M14 62 L60 50 L102 36 L144 20 L186 4" stroke="var(--faint)" stroke-width="1.5" stroke-dasharray="3 4" fill="none"/></svg>',
+    song: '<svg width="220" height="96" viewBox="0 0 220 96" aria-hidden="true" focusable="false">' +
+      '<rect x="8" y="34" width="44" height="40" rx="5" fill="var(--raised)" stroke="var(--line)"/>' +
+      '<rect x="8" y="34" width="8" height="40" rx="3" fill="var(--r-pad)" opacity=".55"/>' +
+      '<rect x="60" y="22" width="48" height="52" rx="5" fill="var(--raised)" stroke="var(--b-gold)"/>' +
+      '<rect x="100" y="22" width="8" height="52" rx="3" fill="var(--r-arp)" opacity=".55"/>' +
+      '<rect x="116" y="42" width="38" height="32" rx="5" fill="var(--raised)" stroke="var(--line)"/>' +
+      '<rect x="162" y="16" width="50" height="58" rx="5" fill="var(--raised)" stroke="var(--line)"/>' +
+      '<rect x="162" y="16" width="10" height="58" rx="3" fill="var(--r-pad)" opacity=".55"/>' +
+      [['lead', 32, 26], ['chords', 42, 22], ['bass', 52, 28], ['drums', 62, 18]].map(([r, y, w]) => '<rect x="68" y="' + y + '" width="' + w + '" height="5" rx="2" fill="var(--r-' + r + ')"/>').join('') +
+      '</svg>',
+    studio: '<svg width="220" height="96" viewBox="0 0 220 96" aria-hidden="true" focusable="false">' +
+      [['drums', 10, [[8, 40], [56, 40], [104, 40], [152, 60]]], ['perc', 23, [[8, 88], [152, 60]]], ['bass', 36, [[8, 64], [80, 64], [152, 60]]],
+        ['chords', 49, [[56, 156]]], ['pad', 62, [[8, 136]]], ['lead', 75, [[104, 108]]]].map(([r, y, bs]) =>
+        bs.map(([x, w]) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="9" rx="2" fill="var(--r-' + r + ')"/>').join('')).join('') +
+      '<rect x="122" y="4" width="2" height="88" fill="var(--tally)"/></svg>',
+  };
+  const PLACES = [
+    { id: 'bones', kick: 'Bones to Gold', name: 'Idea Builder', desc: 'Start from bare bones. I play you three takes at a time, you pick, and we climb until it’s gold.', go: 'Make an idea' },
+    { id: 'song', kick: 'Ideas into a song', name: 'Song Builder', desc: 'Bring an idea or two from your book. We grow it into verses, choruses and hooks, one section at a time.', go: 'Coming next', soon: true },
+    { id: 'studio', kick: 'The full band, live', name: 'Session Takeover', desc: 'The band’s already jamming. Step up to the desk, audition takes lane by lane, and keep what grooves.', go: 'Take over' },
+  ];
+
+  let root = null, host = {}, shown = false;
+  const S = { open: false, pick: '', n: 0, timer: 0 };
+
+  // ---------------------------------------------------------------- sound
+  const RIFFS = {
+    open: { patch: 'lead-soft', notes: [[62, 0], [65, 1], [69, 2], [72, 3.5], [74, 4]], kicks: [0, 4] },
+    bones: { patch: 'bell', notes: [[62, 0], [69, 1], [74, 2]], kicks: [0] },
+    song: { patch: 'keys', notes: [[65, 0], [64, 1]], kicks: [] },
+    studio: { patch: 'bass-pluck', notes: [[38, 0], [38, 1.5], [45, 2], [48, 3]], kicks: [0, 2] },
+  };
+  function riff(name) {
+    const r = RIFFS[name];
+    if (!r || !Odd.audio || !Odd.synth) return;
+    Odd.audio.ensure().then((ctx) => {
+      const t0 = ctx.currentTime + 0.04, s = 0.13;
+      r.notes.forEach(([p, i]) => Odd.synth.play(r.patch, p, 100, t0 + i * s, 0.28));
+      r.kicks.forEach((i) => Odd.synth.play('kit-lofi', 36, 110, t0 + i * s, 0.1));
+    }).catch(() => {});
+  }
+
+  // ---------------------------------------------------------------- drawing
+  function line() {
+    if (S.pick) return LINES[S.pick];
+    if (S.open) return firstRun() ? LINES.menuFirst : LINES.menu;
+    return LINES.hello[S.n % LINES.hello.length];
+  }
+  function firstRun() { const st = stats(); return !st.ideas; }
+  function stats() { try { return (host.stats && host.stats()) || {}; } catch (e) { return {}; } }
+
+  function card(p, i) {
+    const start = p.id === 'bones' && firstRun();
+    return '<button type="button" class="h-card' + (S.pick === p.id ? ' on' : '') + (p.soon ? ' soon' : '') + '" data-act="go" data-to="' + p.id + '" style="animation-delay:' + (i * 0.08) + 's">' +
+      '<span class="h-pic">' + PIC[p.id] + '</span>' +
+      '<span class="h-body">' +
+        '<span class="h-kick">' + esc(p.kick) + (start ? '<em>Start here</em>' : '') + '</span>' +
+        '<span class="h-name">' + esc(p.name) + '</span>' +
+        '<span class="h-desc">' + esc(p.desc) + '</span>' +
+        '<span class="h-go">' + esc(p.go) + (p.soon ? '' : ARROW) + '</span>' +
+      '</span>' +
+    '</button>';
+  }
+
+  function recent() {
+    const st = stats();
+    const ideas = st.ideas ? 'Your idea book: ' + st.ideas + (st.ideas === 1 ? ' idea' : ' ideas') : 'Your idea book is empty';
+    return ideas + (st.session ? ' · Last session: ' + esc(st.session) : '');
+  }
+
+  function render() {
+    if (!root || !shown) return;
+    root.innerHTML =
+      '<div class="home' + (S.open ? ' is-open' : '') + '">' +
+        '<header class="h-logo">' +
+          '<div class="h-lockup">' + Odd.brand.mark(96) + '<h1 class="h-word">' + Odd.brand.wordmark() + '</h1></div>' +
+          '<p class="h-tag">a band that auditions for you</p>' +
+        '</header>' +
+        '<section class="h-bobby">' +
+          '<div class="h-bubble"><span class="b-who">Bobby Beatdown</span><span class="h-say" aria-live="polite">' + esc(line()) + '</span></div>' +
+          '<button type="button" class="h-bob" data-act="bobby" aria-expanded="' + S.open + '" aria-label="' + (S.open ? 'Close Bobby’s menu' : 'Talk to Bobby Beatdown') + '">' + Odd.brand.BOBBY + '</button>' +
+          (S.open ? '' : '<p class="h-hint">Tap Bobby</p>') +
+        '</section>' +
+        (S.open ? '<nav class="h-menu" aria-label="Where to">' + PLACES.map(card).join('') + '</nav><p class="h-recent">' + recent() + '</p>' : '') +
+      '</div>';
+  }
+
+  /** Bobby's line and the picked card change without redrawing (keeps the cards' entrance) */
+  function patch() {
+    if (!root) return;
+    const say = root.querySelector('.h-say');
+    if (say) say.textContent = line();
+    root.querySelectorAll('.h-card').forEach((el) => el.classList.toggle('on', el.dataset.to === S.pick));
+  }
+
+  // ---------------------------------------------------------------- actions
+  function toggle() {
+    clearTimeout(S.timer);
+    if (!S.open) riff('open');
+    else S.n++;
+    S.open = !S.open;
+    S.pick = '';
+    render();
+    if (S.open) {
+      const first = root.querySelector('.h-card');
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+
+  function go(to) {
+    clearTimeout(S.timer);
+    S.pick = to;
+    riff(to);
+    patch();
+    const place = PLACES.find((p) => p.id === to);
+    if (!place || place.soon) return;
+    S.timer = setTimeout(() => {
+      S.pick = '';
+      if (host.go) host.go(to);
+    }, GO_MS);
+  }
+
+  function onClick(e) {
+    const el = e.target.closest('[data-act]');
+    if (!el || !root.contains(el)) return;
+    if (el.dataset.act === 'bobby') toggle();
+    else if (el.dataset.act === 'go') go(el.dataset.to);
+  }
+
+  /** Escape closes the menu. true when handled */
+  function onKey(e) {
+    if (e.key === 'Escape' && S.open) { toggle(); const b = root.querySelector('.h-bob'); if (b) b.focus(); return true; }
+    return false;
+  }
+
+  // ---------------------------------------------------------------- outside
+  function mount(el, h) {
+    root = el;
+    host = h || {};
+    root.addEventListener('click', onClick);
+  }
+
+  function show(on) {
+    shown = !!on;
+    clearTimeout(S.timer);
+    if (!shown) { if (root) root.innerHTML = ''; return; }
+    S.pick = '';
+    render();
+  }
+
+  Odd.home = {
+    mount, show, onKey, LINES, PLACES,
+    get state() { return { open: S.open, pick: S.pick }; },
+  };
+})(globalThis.Odd = globalThis.Odd || {});
+
 /* js/app.js */
 /* Oddition — app controller: state, actions, playback, keyboard, boot. */
 (function (Odd) {
@@ -14657,7 +14930,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
   const app = {
     ws: null,
     ui: {
-      screen: 'bones', // 'bones' (Bones to Gold) | 'studio'
+      screen: 'home', // 'home' (the splash) | 'bones' (Bones to Gold) | 'studio'
       tab: 'booth',
       sectionId: null,
       laneId: null,
@@ -16649,30 +16922,43 @@ body:not([data-screen="bones"]) #bones { display: none; }
   }
 
   // ======================= screens =======================
-  /** 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
+  /** 'home' (the splash, Bobby's menu), 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
+  const SCREENS = ['home', 'bones', 'studio'];
+  let studioHint = false; // first run: say what the starter session is, the first time the studio shows
   function setScreen(name, opts) {
     const o = opts || {};
-    const next = name === 'studio' ? 'studio' : 'bones';
+    let next = SCREENS.includes(name) ? name : 'home';
+    if (next === 'home' && !Odd.home) next = 'studio';
+    if (next === 'bones' && !Odd.bones) next = 'studio';
     const was = app.ui.screen;
     app.ui.screen = next;
     document.body.dataset.screen = next;
-    if (next === 'bones') {
-      stop();
-      if (Odd.bones) Odd.bones.show(true);
-    } else {
-      if (Odd.bones) Odd.bones.show(false);
+    if (next !== 'studio') stop();
+    if (Odd.home) Odd.home.show(next === 'home');
+    if (Odd.bones) Odd.bones.show(next === 'bones');
+    if (next === 'studio') {
       paint();
+      if (studioHint) {
+        studioHint = false;
+        D.toast('This starter session already has a few parts. Press play at the top to hear the song, or press Space to audition takes.', { duration: 9000 });
+      }
     }
     if (was !== next && !o.boot) {
-      app.ws.prefs.screen = next;
-      persist();
+      if (next !== 'home') { app.ws.prefs.screen = next; persist(); }
       try { window.scrollTo(0, 0); } catch (e) { /* no window */ }
     }
   }
 
+  /** what the home screen asks of the app */
+  const homeHost = {
+    go: (name) => setScreen(name),
+    stats: () => ({ ideas: (app.ws.ideas || []).length, session: app.session() ? app.session().name : '' }),
+  };
+
   /** what the Bones to Gold screen asks of the app */
   const bonesHost = {
     toStudio: () => setScreen('studio'),
+    toHome: () => setScreen('home'),
     stopStudio: () => { if (app.ui.playing) stop(); },
     toast: (msg, opts) => D.toast(msg, opts),
     /** a finished idea onto the shelf; returns its id */
@@ -16703,6 +16989,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
   const actions = {
     // top
     'screen-bones': () => setScreen('bones'),
+    home: () => setScreen('home'),
     'play-song': () => toggle('song'),
     'session-menu': (el) => sessionMenu(el),
     'export-menu': (el) => exportMenu(el),
@@ -17064,7 +17351,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
       if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
-      if (el.closest('#bones')) return; // Bones to Gold handles its own clicks
+      if (el.closest('#bones') || el.closest('#home')) return; // those screens handle their own clicks
       // clicks on controls inside a cell belong to the control, not the cell
       if (el.dataset.act === 'select-cell' && e.target.closest('select, input, label')) return;
       const fn = actions[el.dataset.act];
@@ -17177,6 +17464,10 @@ body:not([data-screen="bones"]) #bones { display: none; }
 
   function onKey(e) {
     if (overlayOpen()) return;
+    if (app.ui.screen === 'home') {
+      if (Odd.home) Odd.home.onKey(e);
+      return;
+    }
     if (app.ui.screen === 'bones') {
       if (!isTyping(e.target) && Odd.bones) Odd.bones.onKey(e);
       return;
@@ -17232,6 +17523,7 @@ body:not([data-screen="bones"]) #bones { display: none; }
     roots.song = $('#song');
     roots.tabs = $('#tabs');
     roots.bones = $('#bones');
+    roots.home = $('#home');
 
     let ws = Odd.store.load();
     const firstRun = !ws;
@@ -17264,17 +17556,14 @@ body:not([data-screen="bones"]) #bones { display: none; }
     genTake();
     wire();
     if (Odd.bones && roots.bones) Odd.bones.mount(roots.bones, bonesHost);
-    app.ui.screen = pr.screen === 'studio' || !Odd.bones ? 'studio' : 'bones';
-    document.body.dataset.screen = app.ui.screen;
+    if (Odd.home && roots.home) Odd.home.mount(roots.home, homeHost);
     paint();
-    if (app.ui.screen === 'bones') Odd.bones.show(true);
+    setScreen('home', { boot: true });
     if (firstRun) persist();
     requestAnimationFrame(frame);
     document.body.classList.add('is-ready');
 
-    if (firstRun && app.ui.screen === 'studio') {
-      D.toast('This starter session already has a few parts. Press play at the top to hear the song, or press Space to audition takes.', { duration: 9000 });
-    }
+    studioHint = firstRun;
 
     // hosted build: pick up work saved to the viewer's account
     if (Odd.platform && Odd.platform.sync) {

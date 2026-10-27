@@ -44,4 +44,31 @@
   }
 
   Odd.icon = icon;
+
+  // ---------------------------------------------------------------- brand
+  // The mark: seven faders in the stem colours; the lead one stands up out of line.
+  const FADERS = ['drums', 'perc', 'bass', 'lead', 'chords', 'pad', 'arp'];
+  function mark(px, cls) {
+    const bars = FADERS.map((r, i) => '<rect' + (r === 'lead' ? ' class="odd"' : '') + ' x="' + (4 + i * 12) + '" y="' + (r === 'lead' ? 4 : 28) + '" width="8" height="56" rx="4" fill="var(--r-' + r + ')"/>').join('');
+    return '<svg class="mark' + (cls ? ' ' + cls : '') + '" width="' + px + '" height="' + px + '" viewBox="0 0 88 88" aria-hidden="true" focusable="false">' + bars + '</svg>';
+  }
+  function wordmark() { return '<span class="logo-word"><b>odd</b>ition</span>'; }
+  /** the top-bar logo: a button home */
+  function homeButton(sub) {
+    return '<button type="button" class="logo-btn" data-act="home" aria-label="Oddition home">' + mark(22) + wordmark() + (sub ? '<span class="logo-sub">' + sub + '</span>' : '') + '</button>';
+  }
+  const BOBBY =
+    '<svg class="b-face" width="96" height="96" viewBox="0 0 96 96" aria-hidden="true" focusable="false">' +
+      '<path class="b-cloth" d="M30 92 C30 76, 66 76, 66 92 Z"/>' +
+      '<circle cx="48" cy="54" r="19" fill="#c79f7c"/>' +
+      '<path d="M30 56 C31 82, 65 82, 66 56 C61 66, 35 66, 30 56 Z" fill="#3b2b22"/>' +
+      '<rect x="34" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<rect x="50" y="45" width="12" height="9" rx="3" fill="#0e1014"/>' +
+      '<path d="M46 48 L50 48" stroke="#0e1014" stroke-width="2"/>' +
+      '<path d="M42 65 Q48 69 54 65" stroke="#ecebe6" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<path class="b-cloth" d="M30 36 C30 14, 66 14, 66 36 Z"/>' +
+      '<rect x="31" y="29" width="34" height="5" fill="#f1cd58"/>' +
+      '<ellipse class="b-cloth" cx="48" cy="37" rx="36" ry="6"/>' +
+    '</svg>';
+  Odd.brand = { mark, wordmark, homeButton, BOBBY };
 })(globalThis.Odd = globalThis.Odd || {});

@@ -12,7 +12,7 @@
   const app = {
     ws: null,
     ui: {
-      screen: 'bones', // 'bones' (Bones to Gold) | 'studio'
+      screen: 'home', // 'home' (the splash) | 'bones' (Bones to Gold) | 'studio'
       tab: 'booth',
       sectionId: null,
       laneId: null,
@@ -2004,30 +2004,43 @@
   }
 
   // ======================= screens =======================
-  /** 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
+  /** 'home' (the splash, Bobby's menu), 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
+  const SCREENS = ['home', 'bones', 'studio'];
+  let studioHint = false; // first run: say what the starter session is, the first time the studio shows
   function setScreen(name, opts) {
     const o = opts || {};
-    const next = name === 'studio' ? 'studio' : 'bones';
+    let next = SCREENS.includes(name) ? name : 'home';
+    if (next === 'home' && !Odd.home) next = 'studio';
+    if (next === 'bones' && !Odd.bones) next = 'studio';
     const was = app.ui.screen;
     app.ui.screen = next;
     document.body.dataset.screen = next;
-    if (next === 'bones') {
-      stop();
-      if (Odd.bones) Odd.bones.show(true);
-    } else {
-      if (Odd.bones) Odd.bones.show(false);
+    if (next !== 'studio') stop();
+    if (Odd.home) Odd.home.show(next === 'home');
+    if (Odd.bones) Odd.bones.show(next === 'bones');
+    if (next === 'studio') {
       paint();
+      if (studioHint) {
+        studioHint = false;
+        D.toast('This starter session already has a few parts. Press play at the top to hear the song, or press Space to audition takes.', { duration: 9000 });
+      }
     }
     if (was !== next && !o.boot) {
-      app.ws.prefs.screen = next;
-      persist();
+      if (next !== 'home') { app.ws.prefs.screen = next; persist(); }
       try { window.scrollTo(0, 0); } catch (e) { /* no window */ }
     }
   }
 
+  /** what the home screen asks of the app */
+  const homeHost = {
+    go: (name) => setScreen(name),
+    stats: () => ({ ideas: (app.ws.ideas || []).length, session: app.session() ? app.session().name : '' }),
+  };
+
   /** what the Bones to Gold screen asks of the app */
   const bonesHost = {
     toStudio: () => setScreen('studio'),
+    toHome: () => setScreen('home'),
     stopStudio: () => { if (app.ui.playing) stop(); },
     toast: (msg, opts) => D.toast(msg, opts),
     /** a finished idea onto the shelf; returns its id */
@@ -2058,6 +2071,7 @@
   const actions = {
     // top
     'screen-bones': () => setScreen('bones'),
+    home: () => setScreen('home'),
     'play-song': () => toggle('song'),
     'session-menu': (el) => sessionMenu(el),
     'export-menu': (el) => exportMenu(el),
@@ -2419,7 +2433,7 @@
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
       if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
-      if (el.closest('#bones')) return; // Bones to Gold handles its own clicks
+      if (el.closest('#bones') || el.closest('#home')) return; // those screens handle their own clicks
       // clicks on controls inside a cell belong to the control, not the cell
       if (el.dataset.act === 'select-cell' && e.target.closest('select, input, label')) return;
       const fn = actions[el.dataset.act];
@@ -2532,6 +2546,10 @@
 
   function onKey(e) {
     if (overlayOpen()) return;
+    if (app.ui.screen === 'home') {
+      if (Odd.home) Odd.home.onKey(e);
+      return;
+    }
     if (app.ui.screen === 'bones') {
       if (!isTyping(e.target) && Odd.bones) Odd.bones.onKey(e);
       return;
@@ -2587,6 +2605,7 @@
     roots.song = $('#song');
     roots.tabs = $('#tabs');
     roots.bones = $('#bones');
+    roots.home = $('#home');
 
     let ws = Odd.store.load();
     const firstRun = !ws;
@@ -2619,17 +2638,14 @@
     genTake();
     wire();
     if (Odd.bones && roots.bones) Odd.bones.mount(roots.bones, bonesHost);
-    app.ui.screen = pr.screen === 'studio' || !Odd.bones ? 'studio' : 'bones';
-    document.body.dataset.screen = app.ui.screen;
+    if (Odd.home && roots.home) Odd.home.mount(roots.home, homeHost);
     paint();
-    if (app.ui.screen === 'bones') Odd.bones.show(true);
+    setScreen('home', { boot: true });
     if (firstRun) persist();
     requestAnimationFrame(frame);
     document.body.classList.add('is-ready');
 
-    if (firstRun && app.ui.screen === 'studio') {
-      D.toast('This starter session already has a few parts. Press play at the top to hear the song, or press Space to audition takes.', { duration: 9000 });
-    }
+    studioHint = firstRun;
 
     // hosted build: pick up work saved to the viewer's account
     if (Odd.platform && Odd.platform.sync) {

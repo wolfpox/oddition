@@ -28,9 +28,29 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   const shelfCount = () => page.evaluate(() => Odd.app.ws.library.length);
   const n0 = await shelfCount();
 
-  // ---- Bones to Gold: the opening screen
+  // ---- home: the logo and Bobby, then his menu
+  ok(await page.evaluate(() => document.body.dataset.screen === 'home' && !!document.querySelector('.h-bob') && getComputedStyle(document.querySelector('#desk')).display === 'none' && getComputedStyle(document.querySelector('#bones')).display === 'none'), 'opens on the home screen');
+  ok(await page.evaluate(() => /great stuff to show you/.test(document.querySelector('.h-say').textContent)), 'Bobby calls you over');
+  await page.screenshot({ path: path.join(out, 'home.png') });
+  await page.click('.h-bob');
+  await page.waitForTimeout(400);
+  ok((await page.$$('.h-menu .h-card')).length === 3 && (await page.evaluate(() => document.querySelector('.h-bob').getAttribute('aria-expanded'))) === 'true', 'tapping Bobby opens three places');
+  await page.screenshot({ path: path.join(out, 'home-menu.png') });
+  await page.click('.h-card[data-to="song"]');
+  await page.waitForTimeout(800);
+  ok(await page.evaluate(() => document.body.dataset.screen === 'home' && /still in the shop/.test(document.querySelector('.h-say').textContent)), 'Song Builder is marked as coming next');
+  await page.click('.h-card[data-to="studio"]');
+  await page.waitForTimeout(900);
+  ok(await page.evaluate(() => document.body.dataset.screen === 'studio' && getComputedStyle(document.querySelector('#home')).display === 'none'), 'Session Takeover opens the studio');
+  await page.click('#topbar [data-act="home"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => document.body.dataset.screen === 'home' && !!document.querySelector('.h-menu')), 'the logo goes home, menu still open');
+  await page.click('.h-card[data-to="bones"]');
+  await page.waitForTimeout(900);
+
+  // ---- Bones to Gold
   const bones = () => page.evaluate(() => ({ phase: Odd.bones.state.phase, sel: Odd.bones.state.sel, dir: Odd.bones.state.round && Odd.bones.state.round.dir, playing: Odd.bones.playing && Odd.transport.playing, order: Odd.bones.state.idea.order.slice() }));
-  ok(await page.evaluate(() => document.body.dataset.screen === 'bones' && !!document.querySelector('[data-act="begin"]') && getComputedStyle(document.querySelector('#desk')).display === 'none'), 'opens on Bones to Gold');
+  ok(await page.evaluate(() => document.body.dataset.screen === 'bones' && !!document.querySelector('[data-act="begin"]') && getComputedStyle(document.querySelector('#desk')).display === 'none'), 'Idea Builder opens Bones to Gold');
   await page.click('[data-act="begin"]');
   await page.waitForTimeout(500);
   ok((await page.$$('.b-cards .b-card')).length === 3, 'three rhythm-and-scale options');
@@ -348,6 +368,17 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.waitForTimeout(600);
   ok((await shelfCount()) === libBefore, 'shelf survives reload');
   ok((await page.evaluate(() => Odd.app.ws.ideas.length)) === ideasBefore, 'ideas survive reload');
+  ok(await page.evaluate(() => document.body.dataset.screen === 'home'), 'reload opens on the home screen');
+  await page.click('.h-bob');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => /idea book: \d+ idea/.test(document.querySelector('.h-recent').textContent)), 'menu shows the idea book count');
+
+  // phone width
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= 390), 'home fits a phone with no sideways scroll');
+  await page.screenshot({ path: path.join(out, 'home-phone.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   await page.screenshot({ path: path.join(out, 'flow-end.png') });
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');

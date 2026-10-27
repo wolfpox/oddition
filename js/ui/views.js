@@ -74,7 +74,7 @@
     const midiOn = Odd.webmidi && Odd.webmidi.mode !== 'internal' && Odd.webmidi.selectedId;
     const html =
       '<div class="top-row">' +
-        '<div class="brand"><span class="wordmark">Oddition</span></div>' +
+        '<div class="brand">' + Odd.brand.homeButton() + '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm bones-btn" data-act="screen-bones" title="Audition a starting idea with Bobby">Bones to Gold</button>' +
         '<button type="button" class="session-btn" data-act="session-menu" aria-haspopup="menu" aria-expanded="false" title="Sessions">' +
           '<span class="eyebrow">Session</span><span class="session-name">' + esc(s.name) + '</span>' + icon('chevron', 'ico-sm') +
