@@ -12,7 +12,7 @@
   const app = {
     ws: null,
     ui: {
-      screen: 'home', // 'home' (the splash) | 'bones' (Bones to Gold) | 'studio'
+      screen: 'home', // 'home' (the splash) | 'bones' (Bones to Gold) | 'song' (Song Builder) | 'studio'
       tab: 'booth',
       sectionId: null,
       laneId: null,
@@ -2004,20 +2004,22 @@
   }
 
   // ======================= screens =======================
-  /** 'home' (the splash, Bobby's menu), 'bones' (Bones to Gold, the idea audition) or 'studio' (sheet, booth, shelf) */
-  const SCREENS = ['home', 'bones', 'studio'];
+  /** 'home' (the splash, Bobby's menu), 'bones' (Bones to Gold, the idea audition), 'song' (Song Builder) or 'studio' (sheet, booth, shelf) */
+  const SCREENS = ['home', 'bones', 'song', 'studio'];
   let studioHint = false; // first run: say what the starter session is, the first time the studio shows
   function setScreen(name, opts) {
     const o = opts || {};
     let next = SCREENS.includes(name) ? name : 'home';
     if (next === 'home' && !Odd.home) next = 'studio';
     if (next === 'bones' && !Odd.bones) next = 'studio';
+    if (next === 'song' && !Odd.song) next = 'studio';
     const was = app.ui.screen;
     app.ui.screen = next;
     document.body.dataset.screen = next;
     if (next !== 'studio') stop();
     if (Odd.home) Odd.home.show(next === 'home');
     if (Odd.bones) Odd.bones.show(next === 'bones');
+    if (Odd.song) Odd.song.show(next === 'song');
     if (next === 'studio') {
       paint();
       if (studioHint) {
@@ -2034,7 +2036,32 @@
   /** what the home screen asks of the app */
   const homeHost = {
     go: (name) => setScreen(name),
-    stats: () => ({ ideas: (app.ws.ideas || []).length, session: app.session() ? app.session().name : '' }),
+    stats: () => ({ ideas: (app.ws.ideas || []).length, songs: (app.ws.songs || []).length, session: app.session() ? app.session().name : '' }),
+  };
+
+  /** what the Song Builder asks of the app */
+  const songHost = {
+    ideas: () => app.ws.ideas || [],
+    songs: () => app.ws.songs || [],
+    current: () => (app.ws.songs || []).find((x) => x.id === app.ws.prefs.songId) || null,
+    saveSong(song) {
+      if (!song) { app.ws.prefs.songId = null; persist(); return; }
+      const list = app.ws.songs || (app.ws.songs = []);
+      const i = list.findIndex((x) => x.id === song.id);
+      if (i >= 0) list[i] = song; else list.unshift(song);
+      app.ws.prefs.songId = song.id;
+      persist();
+    },
+    env: () => {
+      const s = app.session();
+      return { bpm: s.bpm, swing: s.swing, patchFor: (role) => { const lane = M.laneForRole(s, role); return lane ? lane.patch : null; } };
+    },
+    stopStudio: () => { if (app.ui.playing) stop(); },
+    toHome: () => setScreen('home'),
+    toStudio: () => setScreen('studio'),
+    toBones: () => setScreen('bones'),
+    toast: (msg, opts) => D.toast(msg, opts),
+    download: (name, bytes, mime) => D.download(name, bytes, mime),
   };
 
   /** what the Bones to Gold screen asks of the app */
@@ -2433,7 +2460,11 @@
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
       if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
-      if (el.closest('#bones') || el.closest('#home')) return; // those screens handle their own clicks
+      // Those screens handle their own clicks. Check the path the click took, not
+      // el.closest: they redraw on click, so by now el may be gone from the page.
+      const own = (n) => n && (n.id === 'bones' || n.id === 'home' || n.id === 'songb');
+      if ((e.composedPath ? e.composedPath() : []).some(own) || el.closest('#bones, #home, #songb')) return;
+      if (!el.isConnected) return; // removed by a redraw before this ran
       // clicks on controls inside a cell belong to the control, not the cell
       if (el.dataset.act === 'select-cell' && e.target.closest('select, input, label')) return;
       const fn = actions[el.dataset.act];
@@ -2554,6 +2585,10 @@
       if (!isTyping(e.target) && Odd.bones) Odd.bones.onKey(e);
       return;
     }
+    if (app.ui.screen === 'song') {
+      if (!isTyping(e.target) && Odd.song) Odd.song.onKey(e);
+      return;
+    }
     if (isTyping(e.target)) {
       if (e.key === 'Escape') e.target.blur();
       return;
@@ -2606,6 +2641,7 @@
     roots.tabs = $('#tabs');
     roots.bones = $('#bones');
     roots.home = $('#home');
+    roots.songb = $('#songb');
 
     let ws = Odd.store.load();
     const firstRun = !ws;
@@ -2639,6 +2675,7 @@
     wire();
     if (Odd.bones && roots.bones) Odd.bones.mount(roots.bones, bonesHost);
     if (Odd.home && roots.home) Odd.home.mount(roots.home, homeHost);
+    if (Odd.song && roots.songb) Odd.song.mount(roots.songb, songHost);
     paint();
     setScreen('home', { boot: true });
     if (firstRun) persist();

@@ -25,13 +25,14 @@ over. Tap Bobby for his menu:
 
 - **Idea Builder** opens **Bones to Gold**, where you audition a starting
   idea with Bobby (below).
-- **Song Builder** grows ideas into a song, section by section. It is coming
-  next and not built yet.
+- **Song Builder** grows an idea from your book into a song, section by
+  section (below).
 - **Session Takeover** opens the Studio: the song sheet, with the booth and
   the shelf below it.
 
 The logo at the top left of every screen goes back home. **Studio** and
-**Bones to Gold** in the top bars switch between those two directly. In the Studio, the top bar holds tempo, key, mode, style and volume; **More settings**
+**Bones to Gold** in the top bars switch between those two directly; the
+Song Builder has **Studio** too. In the Studio, the top bar holds tempo, key, mode, style and volume; **More settings**
 opens harmony, swing, feel, song shape and sound quality. The **i VI**
 button on the song panel switches chords between roman numerals and chord
 names (Am F C G); you still type numerals to edit them.
@@ -73,6 +74,65 @@ card lowers, and Bobby gives your ears two seconds before the next one plays.
 here: **Play the climb** plays the bones, then the melody, then each layer as
 it was added. **Save to Ideas** puts it on the Studio's shelf as an idea with
 a part per layer; its menu there has **Keep building in Bones to Gold**.
+
+## Song Builder: grow an idea into a song
+
+Pick an idea from your book (tap it to hear it) with **Use as main**; a
+second one can come along with **Add as guest**, moved into your key. Then
+say what the main idea is in the song: the **verse**, the **chorus** or the
+**hook**. You get three sections: your idea in the middle, an open empty one
+each side.
+
+- **Up top, three options each** for the selected section: **Build up** (its
+  way in), **Substance** (what the section is) and **Finish / hand off**
+  (its way out, before the next section). Bobby marks his pick. Tap a card
+  to hear it; the card playing sits raised. Switching cards takes two
+  seconds: the one that was playing sinks while the next one rises, and it
+  plays once it's up. **Use this** puts it
+  in. **Three more** deals another three; **See all** lists every option in
+  that column by name, best fit first, with the one the section has now
+  marked **In now**.
+- **Compare:** while an option plays, **This** and **Now** under it flip
+  between the option and the section as it is, straight away and from the
+  same place (`C` flips too).
+- **The sections** run left to right (top to bottom on a tall screen), the
+  selected one large with its layers: each layer can go **On**/off, and
+  **Vary** opens every way to vary it. `−` `+` stretch each part; **Undo**
+  steps back.
+- **Set it yourself:** the dials under the parts set the section's
+  **Tempo** (type a number, or `−` `+`), **Key** (a semitone at a time),
+  **Energy**, energy **Shape** (even, rises, swells, falls, dips) and
+  **Swing**. A playing section or song changes as you turn them, and a run
+  of presses on one dial is one Undo step.
+- **Arrange:** tap a section's name (or the song's, up top) to rename it; a
+  name you give stays when you swap what's in the section. **← Move** and
+  **Move →** swap it with its neighbour. **Remove** takes out any open
+  section; **Undo** on the note that pops up (or Bobby's **Put it back**)
+  returns it to its place.
+- **Vibe** and **Idea** below give three options each: tempo, key and
+  energy; the main or guest idea, an answer, a motif. **Vary a layer** lists
+  every named variation of one layer (outline, tease, fragment, stretch,
+  squash, chop, a scale step or an octave up or down, as written); tap one
+  to hear it in the section, **Use this** keeps it. **Edit notes by hand**
+  opens a grid for the melody.
+- **Add a layer** (or **+ Add a layer** under the stack): pick chords, bass,
+  pads, percussion or a beat and Bobby makes three that fit your idea (an
+  idea from the Idea Builder gets that screen's own layer rounds; any other
+  gets the studio's generators). The one you use plays in every open
+  section; closed sections stay as they were. A layer added here can be
+  removed from the song under Vary a layer, and put back.
+- **Open and closed:** Bobby only works on open sections. **Close section**
+  when you love it; the song is done when every section is closed.
+- **Bobby's services** (tap him): the next open section, **Keywords** (what
+  you like, in order; his options follow it), **Bar Builder** (pick bars,
+  get a twist, or take one off again) and **Analysis** (length, keys, and where he sees room).
+- **The transport** (under the top bar; docked at the bottom on a phone):
+  **Play** plays the song from the playhead, every way in and out, and
+  **Stop** leaves the playhead where it stopped. `⏮` goes back to the
+  start, **Loop** plays it round. The timeline shows every section (ways in
+  and out shaded); click it to jump there. Changes you make while it plays
+  are heard straight away. **Export MIDI** saves the song as a .mid. Songs
+  save with your work.
 
 ## How it works (the Studio)
 
@@ -445,7 +505,10 @@ WAV export always renders at full quality.
 ## Keyboard
 
 On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: `1` `2` `3` hear options A, B, C; `Space` plays or stops;
-`Esc` stops. In the Studio:
+`Esc` stops. In the Song Builder: `Space` plays the song from the playhead
+or stops it; `C` flips between the option you're hearing and the section as
+it is; on the timeline `←` `→` move the playhead a bar and `Home`
+goes to the start; `Esc` closes Bobby's menu or stops. In the Studio:
 
 | Key | Action |
 | --- | --- |

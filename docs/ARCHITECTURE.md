@@ -38,6 +38,7 @@ js/core/idea.js       the core of parts: ideas          Odd.idea
 js/core/harmonise.js  melody first: chords from a tune  Odd.harmonise
 js/core/relate.js     who leads: roles and links        Odd.relate
 js/core/audition.js   Bones to Gold engine and flow      Odd.audition
+js/core/songmaker.js  Song Builder: songs from ideas    Odd.songmaker
 js/core/recipes.js    section types (intro builds...)   Odd.recipes
 js/core/export.js     .mid / .zip / project builders    Odd.exporter
 js/core/store.js      localStorage autosave, undo       Odd.store, Odd.history
@@ -48,6 +49,7 @@ js/ui/*.js            dom helpers, icons, piano roll,   Odd.dom, Odd.icon,
                       view builders                     Odd.roll, Odd.views
 js/ui/bones.js        the Bones to Gold screen          Odd.bones
 js/ui/home.js         the home screen, Bobby's menu     Odd.home
+js/ui/song.js         the Song Builder screen           Odd.song
 js/app.js             state, actions, playback, boot    Odd.app
 ```
 
@@ -348,13 +350,13 @@ it. `migrate` keeps a lead only while its slot exists; `setScale` rescales
 
 ## Bones to Gold (`Odd.audition`, `Odd.bones`)
 
-`body[data-screen]` is `home`, `bones` or `studio`; the app always opens on
+`body[data-screen]` is `home`, `bones`, `song` or `studio`; the app always opens on
 `home` (`Odd.home`: the logo, Bobby, his menu of Idea Builder, Song Builder
 and Session Takeover). `setScreen()` in `js/app.js` switches, stops whatever
 the other screen plays, and remembers the last working screen in
 `ws.prefs.screen`. The studio's document click handler ignores clicks inside
-`#bones` and `#home`, and `onKey` hands keys to `Odd.home.onKey` or
-`Odd.bones.onKey` while those screens show. The logo and Bobby's drawing live
+`#bones`, `#home` and `#songb`, and `onKey` hands keys to `Odd.home.onKey`,
+`Odd.bones.onKey` or `Odd.song.onKey` while those screens show. The logo and Bobby's drawing live
 in `Odd.brand` (`js/ui/icons.js`); every top bar's logo is a
 `data-act="home"` button.
 
@@ -419,6 +421,71 @@ classes in place so cards animate. `hear(key)` plays at once from silence;
 from sound it stops, lowers the card, waits `PAUSE_MS` (2 s) with a Bobby
 line, then lifts and plays. Its state autosaves to `localStorage`
 (`oddition.bones.v1`), apart from the workspace.
+
+## Song Builder (`Odd.songmaker`, `Odd.song`)
+
+`Odd.songmaker` is pure (Node-testable) and renders through the real engine
+(`Odd.render.partEvents`, `Odd.shape`, `applySwing`, `humanize`). A song is
+stored in `ws.songs` (and `ws.prefs.songId`); `repair()` cleans it on load.
+
+```
+song = { id, name, main: idea copy, guest, role, kw, secs, nid, lv, created, updated }
+         main.voices[i].added / .removed: layers added in the Song Builder (removed
+         ones stay in place so every 'v<i>' key keeps its meaning); lv counts them
+sec  = { id, name, named, kind, open, body: cfg | null, intro: { k, bars } | null, outro, hist, tag }
+cfg  = { src, bars, arr, lay: { v<i>: { on, form } }, tw: { key: { x, ds, oct } },
+         half, shift, bpm, swing, energy, curve, twists, edit }
+```
+
+`context(song, env)` builds `C`: the idea's layers in its own key (`tonic` 0,
+its scale and progression), the guest moved into that key, track patches from
+the idea's sound. `renderSection(C, sec, next)` (cached) gives the intro,
+body and outro events; an outro that hands off borrows the next section's
+rhythm. `sequence()` stretches every piece to the song tempo, so each section
+can keep its own BPM. Options come from `allActOptions` (build up, substance,
+finish; ranked by the keywords and a few contextual bonuses, `bobbyPick`
+first) and `toolOptions` (Vibe, Idea, and Tweak: every form and tweak of one
+layer, all at once); every option has `make(sec)` returning a patch, and its
+preview is the section rendered with it. `layerOptions(C, song, role)` makes
+three takes on a new layer: `Odd.audition.options` against the idea's
+`bones` when it came from the Idea Builder, `Odd.gen.generate` (hearing the
+idea through `Odd.band`) otherwise. `addLayer` appends the voice and turns
+it on in open sections; new chords move the melody's `ctx` onto them so it
+stays as written while older layers refit. `timeline()` gives each
+section's place in the song sequence, for the transport.
+`analyse()` gives stats, the chart and suggestions with a `go` target.
+`midi(C, song)` writes one track per layer.
+
+User control sits beside Bobby's options. `DIALS` (tempo, key shift,
+energy, curve, swing) are stepped with `stepDial` or set with `setDial`;
+both go through `patchSec(song, id, ch, tag)`, and repeats of the same tag
+share one undo snapshot. `renameSec` sets `named`, so a substance option's
+`make(sec)` keeps the user's name. `moveSec` swaps neighbours; `removeSec`
+returns `removed: { sec, at }` for `insertSec` to put back. `actOptions(...,
+'all')` ranks the whole pool (the first three match the normal batch);
+`isCurrent` says which option the section has now (a way in or out by kind,
+a substance by canonical equality of the body). `nowSeq(C, song, sec, o)`
+is the same stretch `previewSeq` plays for `o`, with the section as it is;
+the screen flips between the two (`P.ab`), keeping the position (a way in
+is aligned on where the section lands). `clearTwists` removes twists from
+the Bar Builder's bars.
+
+`Odd.song` draws `#songb` as HTML strings and redraws on each change, keeping
+focus and the strip's scroll. It plays through `Odd.transport` with the same
+2 s pause rule as Bones to Gold, and saves through `host.saveSong`. The pause
+is drawn as a handover: `settle(down, up, ms)` records a sink (from wherever
+that card is) and a rise in `P.sinks` / `P.rise`, and `lift(key, up)` gives a
+card its class plus a negative `animation-delay`, so a redraw mid-pause picks
+the motion up where it was. The CSS animates a registered `--up` (0 to 1) that
+drives the card's lift, scale, glow and border. The
+transport keeps a playhead (`P.head`, ticks): Play starts there, Stop keeps
+it, the timeline moves it; a playing song or section is updated in place
+(`Odd.transport.update`) on every change.
+
+The app's document click handler skips clicks that started in `#songb`,
+`#bones` or `#home` by the event's `composedPath()`: those screens redraw on
+click, so the clicked element may already be gone from the page, and their
+action names (`play-song`, `vary`, `undo`, `export`) also exist in the Studio.
 
 ## Song shape (`Odd.shape`)
 

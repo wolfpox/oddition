@@ -1,6 +1,7 @@
 /* Oddition — workspace data model.
  *
- * workspace = { version, library: [part], ideas: [idea], sessions: [session], currentId, prefs }
+ * workspace = { version, library: [part], ideas: [idea], songs: [song], sessions: [session], currentId, prefs }
+ *             songs: the Song Builder's songs (see Odd.songmaker); prefs.songId the open one
  *             ideas: the idea library (see Odd.idea)
  * session   = { id, name, style, tonic, scale, bpm, swing, lanes, sections, arrangement }
  * lane      = { id, role, name, patch, volume, mute, solo, channel }
@@ -493,6 +494,7 @@
     ws.library = Array.isArray(ws.library) ? ws.library.filter((p) => p && p.role && Array.isArray(p.notes)) : [];
     ws.ideas = Array.isArray(ws.ideas) && Odd.idea ? ws.ideas.map(Odd.idea.repair).filter(Boolean) : Array.isArray(ws.ideas) ? ws.ideas : [];
     ws.prefs = ws.prefs || {};
+    ws.songs = Array.isArray(ws.songs) && Odd.songmaker ? ws.songs.map((x) => Odd.songmaker.repair(x)).filter(Boolean) : Array.isArray(ws.songs) ? ws.songs : [];
     ws.sessions = ws.sessions.filter((s) => s && Array.isArray(s.sections) && s.sections.length);
     if (!ws.sessions.length) return null;
     // ids are compared with === against DOM data attributes and object keys,

@@ -2,6 +2,7 @@
  *
  * Tap Bobby and he opens his menu: Idea Builder (Bones to Gold), Song Builder,
  * Session Takeover (the studio). Picking one plays a short riff and goes there.
+ * With an empty idea book, the Song Builder points you to the Idea Builder.
  *
  * Odd.home.mount(el, host) once; host = { go(screen), stats(), stopAll() }.
  *   stats() -> { ideas, session } for the line under the menu.
@@ -17,7 +18,7 @@
     menu: 'Here’s what I’ve got. Where do you want to start?',
     menuFirst: 'Here’s what I’ve got. New here? Start with an idea.',
     bones: 'Idea Builder. Let’s dig up some bones and turn them gold.',
-    song: 'The Song Builder’s still in the shop, boss. It’s next.',
+    song: 'Song Builder. Grab an idea from your book and we’ll make it a song.',
     studio: 'Session Takeover. The band’s warmed up. The desk is yours.',
   };
   const ARROW = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -47,7 +48,7 @@
   };
   const PLACES = [
     { id: 'bones', kick: 'Bones to Gold', name: 'Idea Builder', desc: 'Start from bare bones. I play you three takes at a time, you pick, and we climb until it’s gold.', go: 'Make an idea' },
-    { id: 'song', kick: 'Ideas into a song', name: 'Song Builder', desc: 'Bring an idea or two from your book. We grow it into verses, choruses and hooks, one section at a time.', go: 'Coming next', soon: true },
+    { id: 'song', kick: 'Ideas into a song', name: 'Song Builder', desc: 'Bring an idea or two from your book. We grow it into verses, choruses and hooks, one section at a time.', go: 'Build a song' },
     { id: 'studio', kick: 'The full band, live', name: 'Session Takeover', desc: 'The band’s already jamming. Step up to the desk, audition takes lane by lane, and keep what grooves.', go: 'Take over' },
   ];
 
@@ -58,7 +59,7 @@
   const RIFFS = {
     open: { patch: 'lead-soft', notes: [[62, 0], [65, 1], [69, 2], [72, 3.5], [74, 4]], kicks: [0, 4] },
     bones: { patch: 'bell', notes: [[62, 0], [69, 1], [74, 2]], kicks: [0] },
-    song: { patch: 'keys', notes: [[65, 0], [64, 1]], kicks: [] },
+    song: { patch: 'keys', notes: [[65, 0], [69, 1], [72, 2], [77, 3]], kicks: [0, 2] },
     studio: { patch: 'bass-pluck', notes: [[38, 0], [38, 1.5], [45, 2], [48, 3]], kicks: [0, 2] },
   };
   function riff(name) {
@@ -96,7 +97,8 @@
   function recent() {
     const st = stats();
     const ideas = st.ideas ? 'Your idea book: ' + st.ideas + (st.ideas === 1 ? ' idea' : ' ideas') : 'Your idea book is empty';
-    return ideas + (st.session ? ' · Last session: ' + esc(st.session) : '');
+    const songs = st.songs ? ' · ' + st.songs + (st.songs === 1 ? ' song' : ' songs') : '';
+    return ideas + songs + (st.session ? ' · Last session: ' + esc(st.session) : '');
   }
 
   function render() {
