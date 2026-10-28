@@ -101,6 +101,9 @@ test('round 2 mixes a small, a medium and a big shape; Subtler and Bigger move a
     opts.forEach((o) => { kinds.add(o.mel.shape.kind); assert.ok(range(o) <= 7, 'no more than an octave'); });
     const subtle = F.request(S, A.REQS.seed2.find((q) => q.label === 'Subtler'));
     assert.ok(F.options(subtle).every((o) => range(o) <= 2), 'subtler: two scale steps or less');
+    const flatter = F.request(F.request(subtle, A.REQS.seed2[0]), A.REQS.seed2[0]);
+    assert.ok(F.options(flatter).every((o) => range(o) <= 1), 'subtler three times: one scale step at most');
+    assert.strictEqual(F.request(flatter, A.REQS.seed2[0]).round.steer.s, -3, 'a fourth press stays put');
     const bigger = F.request(S, A.REQS.seed2.find((q) => q.label === 'Bigger'));
     assert.ok(F.options(bigger).every((o) => range(o) >= 3), 'bigger: no small ones');
     const sum = (os) => os.reduce((t, o) => t + range(o), 0);

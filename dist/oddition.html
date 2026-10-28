@@ -9330,7 +9330,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
    * Round 2: one shape that falls (an answer), one that stays near home, one
    * that rises (a question). How far each moves is picked apart from where it
    * goes, so a round mixes a small, a medium and a big shape (steer.s: -1
-   * small, -2 smallest, +1 bigger, +2 biggest). Which shape fills each place
+   * small, -2 smoothest, -3 barely moving, +1 bigger, +2 biggest). Which shape fills each place
    * is shuffled per rhythm, and "three more" walks on through them.
    */
   function shapeOptions(mel, st, b) {
@@ -9343,6 +9343,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (st.x === 'jumpy') pool = all.filter((c) => c.leap >= 3);
     if (pool.length < 3) pool = all.filter((c) => c.leap <= 2);
     if (pool.length < 3) pool = all;
+    // a third Subtler: shapes that barely move (one scale step), where the rhythm has them
+    if (s <= -3) { const flat = pool.filter((c) => c.range <= 1); if (flat.length >= 3) pool = flat; }
     const dirs = [-1, 0, 1];
     const sizes = s <= -1 ? [0, 0, 0] : s === 1 ? [1, 2, 2] : s >= 2 ? [2, 2, 2] : [0, 1, 2];
     const cell = (d, z) => pool.filter((c) => Math.sign(c.end) === d && c.size === z);
@@ -9726,9 +9728,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel]) : S.line });
       const steer = Object.assign({}, S.round.steer);
       if (rq.p) steer.p = Math.max(-2, Math.min(2, (steer.p || 0) + rq.p));
-      if (rq.s) steer.s = Math.max(-2, Math.min(2, (steer.s || 0) + rq.s));
+      // shapes can get flatter one step further than the other rounds' -2
+      const sLo = S.round.dir === 'seed2' ? -3 : -2;
+      if (rq.s) steer.s = Math.max(sLo, Math.min(2, (steer.s || 0) + rq.s));
+      const stuck = rq.s && steer.s === (S.round.steer.s || 0);
       if (rq.x) steer.x = steer.x === rq.x ? null : rq.x;
-      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: rq.reply });
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : rq.reply });
     },
     /** go back to an earlier round as it was; everything after it stays in the history */
     back(S, row) {

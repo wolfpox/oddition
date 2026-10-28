@@ -56,8 +56,9 @@ again from there.
    it lands on: one falls like an answer, one rises like a question, one
    stays near home. Each three mixes sizes: one small (a step or two, with
    repeated notes, so the rhythm carries it), one medium and one big sweep.
-   **Subtler** and **Bigger** move all three that way. Shapes move smoothly
-   by default. **Keep the plain walk** keeps round 1's walk as the melody.
+   **Subtler** and **Bigger** move all three that way; press Subtler again
+   for smoother shapes, and a third time for ones that barely move. Shapes
+   move smoothly by default. **Keep the plain walk** keeps round 1's walk as the melody.
 3. **Where next.** The melody now leads, and you choose what backs it up, in
    any order: **Chords** (dark to bright), **Bass** (fills the gaps to locks
    on), **Percussion** (claps and taps, sparse to driving; then **Grow the
