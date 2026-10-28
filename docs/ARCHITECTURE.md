@@ -377,10 +377,16 @@ round  = { dir, batch, steer: { p, s, x } }
   syncopated, anticipation, rest, hold; bar 2 echoes bar 1), deduplicated.
   Scales run dark to bright: phrygian, minor, harmonic, dorian, penta,
   mixolydian, major, lydian. The melody is `WALK` up and down from home.
-- **seed2** (shape): 13 shape kinds × 3 amplitudes, in scale steps; by default
-  only leaps ≤ 2 at amp ≤ 1. The landing is the root when the shape falls,
-  the 5th when it rises, else the 3rd; `start` is solved so the last note
-  lands there.
+- **seed2** (shape): 18 shape kinds × 4 amplitudes, in scale steps, no more
+  than an octave. The small kinds (lean, sigh, chant, step up/down) use the
+  rhythm's weights to move on strong notes. `shapeOptions` picks one that
+  falls, one that ends level and one that rises, and gives them a size each
+  (`sizeOf(range)`: small ≤ 2, medium 3–4, big ≥ 5): one of each by default,
+  all small for `steer.s < 0`, medium to big for `steer.s > 0`. The size
+  order and the shape in each place are shuffled from the rhythm id and the
+  batch. By default only leaps ≤ 2. The landing is the root when the shape
+  falls, the 5th when it rises, else the 3rd; `start` is solved so the last
+  note lands there.
 - **chords**: one triad per half bar, scored against `slotWeights` (how long,
   where and how strongly each pitch class sounds in the slot); every 4-chord
   path is enumerated, with colour chords borrowed from outside the scale.

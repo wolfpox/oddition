@@ -90,6 +90,25 @@ test('round 2 shapes keep the rhythm and scale, move smoothly, and land where th
   assert.ok(F.options(jumpy).every((o) => o.leap >= 3), 'more jumps');
 });
 
+test('round 2 mixes a small, a medium and a big shape; Subtler and Bigger move all three', () => {
+  const range = (o) => { const ds = A.melodyNotes(o.mel).map((n) => n.deg); return Math.max.apply(null, ds) - Math.min.apply(null, ds); };
+  const kinds = new Set();
+  for (const r of A.rhythmPool().slice(0, 30)) {
+    const S = { phase: 'round', idea: { melody: { r, scale: 'dorian', shape: null }, layers: {}, order: [] }, round: { dir: 'seed2', batch: 0, steer: { p: 0, s: 0, x: null } } };
+    const opts = F.options(S);
+    assert.deepStrictEqual(opts.map((o) => o.size).sort(), [0, 1, 2], 'one of each size');
+    assert.strictEqual(new Set(opts.map((o) => o.mel.shape.kind)).size, 3, 'three different shapes');
+    opts.forEach((o) => { kinds.add(o.mel.shape.kind); assert.ok(range(o) <= 7, 'no more than an octave'); });
+    const subtle = F.request(S, A.REQS.seed2.find((q) => q.label === 'Subtler'));
+    assert.ok(F.options(subtle).every((o) => range(o) <= 2), 'subtler: two scale steps or less');
+    const bigger = F.request(S, A.REQS.seed2.find((q) => q.label === 'Bigger'));
+    assert.ok(F.options(bigger).every((o) => range(o) >= 3), 'bigger: no small ones');
+    const sum = (os) => os.reduce((t, o) => t + range(o), 0);
+    assert.ok(sum(F.options(bigger)) > sum(opts), 'bigger moves further than the default three');
+  }
+  assert.ok(kinds.size >= 12, 'different rhythms get different shapes, not the same three');
+});
+
 test('keep the plain walk keeps round 1 exactly', () => {
   let S = F.enter(F.fresh(), 'seed1');
   const walked = A.melodyNotes(F.options(S)[0].mel, true);

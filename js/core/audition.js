@@ -86,7 +86,7 @@
   const LAYER_ORDER = ['chords', 'bass', 'pads', 'perc', 'beat'];
   const REQS = {
     seed1: [{ label: 'Busier', p: 1, reply: 'Busier. Okay, let’s hear it.' }, { label: 'Sparser', p: -1, reply: 'More space. Here.' }, { label: 'Darker scale', s: -1, reply: 'Darker scales. Give me a second.' }, { label: 'Brighter scale', s: 1, reply: 'Brighter. Here we go.' }, WHY],
-    seed2: [{ label: 'Smoother', x: 'smooth', reply: 'Smoother, fewer jumps. Listen.' }, { label: 'More jumps', x: 'jumpy', reply: 'Jumpier. Here.' }, { label: 'Land on home', x: 'home', reply: 'All three land on home now. Hear how finished that sounds?' }, WHY],
+    seed2: [{ label: 'Subtler', s: -1, reply: 'Smaller moves. Listen to how the rhythm comes forward.' }, { label: 'Bigger', s: 1, reply: 'Bigger shapes. These travel.' }, { label: 'More jumps', x: 'jumpy', reply: 'Jumpier. Here.' }, { label: 'Land on home', x: 'home', reply: 'All three land on home now. Hear how finished that sounds?' }, WHY],
     chords: [{ label: 'Darker', p: -1, reply: 'Darker. Same melody, more shadow.' }, { label: 'Brighter', p: 1, reply: 'Brighter. Here.' }, { label: 'Surprise me', x: 'colour', reply: 'Okay, a chord or two from outside the scale. Still fits.' }, WHY],
     bass: [{ label: 'Busier', s: 1, reply: 'Busier bass. Here.' }, { label: 'Simpler', s: -1, reply: 'Simpler. Less is more, sometimes.' }, { label: 'Lock tighter', p: 1, reply: 'Tighter to the melody. Listen.' }, WHY],
     perc: [{ label: 'More drive', p: 1, reply: 'More drive. Here.' }, { label: 'Calmer', p: -1, reply: 'Calmer. Just a touch.' }, { label: 'Follow the melody', x: 'follow', reply: 'These ones follow the melody’s rhythm.' }, WHY],
@@ -101,7 +101,7 @@
     pause: ['Just a moment.', 'Okay, let’s hear that one.', 'Hang on. Fresh ears.', 'Right. This one.', 'Let that settle. Okay.', 'Clear your ears. Now this.', 'Breathe. Next one.', 'Give it a second.'],
     entry: {
       seed1: ['Three starting points. Each is a rhythm and a scale, walking up and down so you hear its mood. One sparse, one busy, one in between.'],
-      seed2: ['Same rhythm, same scale. Now it gets a shape: where it goes and where it lands. One falls like an answer, one rises like a question, one stays near home.'],
+      seed2: ['Same rhythm, same scale. Now it gets a shape: where it goes and where it lands. One falls like an answer, one rises like a question, one stays near home. And one barely moves, one travels.'],
       chords: ['Chords worked out from your melody. One darker, one brighter, one in between.', 'Three sets of chords, all made to fit your melody. Dark, bright, and one in the middle.'],
       bass: ['Three basses under your melody. One fills its gaps, one locks right onto it, one in between.', 'Bass time. One answers in the gaps, one hits with the melody, one sits between.'],
       perc: ['Claps and taps, nothing heavy. One sparse, one driving, one in between.', 'Some hands on the table. One barely there, one driving, one in between.'],
@@ -195,15 +195,24 @@
 
   // ---------------------------------------------------------------- shape
 
-  const SHAPES = ['walkup', 'walkdown', 'turn', 'twice', 'arch', 'climb', 'hover', 'fall', 'wave', 'leap', 'valley', 'echo', 'early'];
-  const SHAPE_TAG = { walk: 'Plain walk', walkup: 'Walk, then home', walkdown: 'Walk down', turn: 'Turns', twice: 'Says it twice', arch: 'Arch', climb: 'Climb', hover: 'Hover', fall: 'Fall', wave: 'Wave', leap: 'Leaps', valley: 'Dip', echo: 'Echo', early: 'Early peak' };
+  const SHAPES = ['walkup', 'walkdown', 'turn', 'twice', 'arch', 'climb', 'hover', 'fall', 'wave', 'leap', 'valley', 'echo', 'early', 'lean', 'sigh', 'chant', 'stepup', 'stepdown'];
+  const SHAPE_TAG = {
+    walk: 'Plain walk', walkup: 'Walk, then home', walkdown: 'Walk down', turn: 'Turns', twice: 'Says it twice', arch: 'Arch', climb: 'Climb', hover: 'Hover', fall: 'Fall', wave: 'Wave', leap: 'Leaps', valley: 'Dip', echo: 'Echo', early: 'Early peak',
+    lean: 'Leans', sigh: 'Sighs', chant: 'Chant', stepup: 'Steps up', stepdown: 'Steps down',
+  };
+  // shapes that are sweeps at full size; when scaled down they are called gentle
+  const SWEEPS = ['walkup', 'walkdown', 'arch', 'climb', 'fall', 'wave', 'valley', 'echo', 'early'];
+  const AMPS = [0.4, 0.6, 1, 1.5];
   const WALK = [0, 1, 2, 3, 4, 3, 2, 1];
 
-  /** heights in scale steps for n notes */
-  function shapeOf(kind, n) {
+  /** heights in scale steps for n notes; hits (optional) let the small shapes move on the strong notes */
+  function shapeOf(kind, n, hits) {
     const out = [];
     const L = Math.max(1, n - 1);
     const half = Math.ceil(n / 2);
+    const ws = hits && hits.length === n ? hits.map((x) => x[2]) : null;
+    const weak = ws ? ws.filter((w) => w === 0).length : 0;
+    let wk = 0;
     for (let i = 0; i < n; i++) {
       const p = i / L;
       const last = i === n - 1;
@@ -223,18 +232,24 @@
       else if (kind === 'valley') h = -4 * Math.sin(Math.PI * p);
       else if (kind === 'echo') { const j = i < half ? i : i - half; h = 3 * Math.sin(Math.PI * 0.8 * (j / Math.max(1, half - 1))) + (i < half ? 0 : 1); }
       else if (kind === 'early') h = 5 * Math.exp(-((p - 0.15) * (p - 0.15)) / 0.03);
+      // small shapes: repeated notes and one-step moves, so the rhythm carries the tune
+      else if (kind === 'lean') h = last ? 0 : ws && weak >= 2 ? (ws[i] ? 0 : wk++ % 2 ? -1 : 1) : [0, 0, 1, 0, 0, 0, -1, 0][i % 8];
+      else if (kind === 'sigh') h = last ? 0 : (i < half ? 1 : 0) + (ws ? (ws[i] ? 1 : 0) : i % 2 ? 0 : 1);
+      else if (kind === 'chant') h = last ? 2 : i < half ? 0 : 1;
+      else if (kind === 'stepup') h = [0, 1, 0][i % 3] + Math.floor(p * 2.99);
+      else if (kind === 'stepdown') h = [1, 0, 0][i % 3] + 2 - Math.floor(p * 2.99);
       out.push(h);
     }
     return out;
   }
-  function shapeSteps(kind, n, amp) { return shapeOf(kind, n).map((h) => Math.round(h * amp)); }
+  function shapeSteps(kind, n, amp, hits) { return shapeOf(kind, n, hits).map((h) => Math.round(h * amp)); }
 
   /** the melody's notes: { s, d, w, deg, m }. walk = round 1 (rhythm and scale only) */
   function melodyNotes(mel, walk) {
     const hs = mel.r.hits, n = hs.length;
     let steps, start = 0;
     if (walk || !mel.shape) steps = hs.map((_, i) => (i === n - 1 ? 0 : WALK[i % 8]));
-    else { steps = shapeSteps(mel.shape.kind, n, mel.shape.amp); start = mel.shape.start; }
+    else { steps = shapeSteps(mel.shape.kind, n, mel.shape.amp, hs); start = mel.shape.start; }
     return hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
   }
 
@@ -440,17 +455,88 @@
   }
 
   function shapeCands(mel) {
-    const n = mel.r.hits.length;
+    const hs = mel.r.hits, n = hs.length;
     const seen = {}, cands = [];
-    SHAPES.forEach((kind) => [0.6, 1, 1.5].forEach((amp) => {
-      const s = shapeSteps(kind, n, amp), key = s.join();
+    SHAPES.forEach((kind) => AMPS.forEach((amp) => {
+      const s = shapeSteps(kind, n, amp, hs), key = s.join();
       if (seen[key]) return;
       seen[key] = 1;
       let leap = 0;
       for (let i = 1; i < n; i++) leap = Math.max(leap, Math.abs(s[i] - s[i - 1]));
-      cands.push({ kind, amp, s, end: s[n - 1] - s[0], range: maxOf(s) - minOf(s), leap });
+      const range = maxOf(s) - minOf(s);
+      if (range < 1) return; // a single repeated note is not a shape
+      cands.push({ kind, amp, s, end: s[n - 1] - s[0], range, leap, size: sizeOf(range) });
     }));
     return cands;
+  }
+  /** how far a shape moves: 0 small (2 scale steps or less), 1 medium, 2 big (5 or more) */
+  function sizeOf(range) { return range <= 2 ? 0 : range <= 4 ? 1 : 2; }
+  function seedOf(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+    return h >>> 0;
+  }
+  function shuffled(arr, R) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+
+  /**
+   * Round 2: one shape that falls (an answer), one that stays near home, one
+   * that rises (a question). How far each moves is picked apart from where it
+   * goes, so a round mixes a small, a medium and a big shape (steer.s: -1
+   * small, -2 smallest, +1 bigger, +2 biggest). Which shape fills each place
+   * is shuffled per rhythm, and "three more" walks on through them.
+   */
+  function shapeOptions(mel, st, b) {
+    const cands = shapeCands(mel), s = st.s || 0;
+    // at most an octave across the two bars (a little more when asked twice for bigger)
+    const all = cands.filter((c) => c.range <= (s >= 2 ? 9 : 7));
+    let pool = all.filter((c) => c.leap <= 2);
+    if (s >= 2) pool = all.filter((c) => c.leap <= 3);
+    if (st.x === 'smooth' || s <= -2) pool = all.filter((c) => c.leap <= 1);
+    if (st.x === 'jumpy') pool = all.filter((c) => c.leap >= 3);
+    if (pool.length < 3) pool = all.filter((c) => c.leap <= 2);
+    if (pool.length < 3) pool = all;
+    const dirs = [-1, 0, 1];
+    const sizes = s <= -1 ? [0, 0, 0] : s === 1 ? [1, 2, 2] : s >= 2 ? [2, 2, 2] : [0, 1, 2];
+    const cell = (d, z) => pool.filter((c) => Math.sign(c.end) === d && c.size === z);
+    // which direction gets which size changes with the rhythm and each "three more"
+    const R = rng(seedOf(mel.r.id + ':' + mel.scale + ':' + b));
+    let best = null, bestHits = -1;
+    for (const perm of shuffled(PERMS, R)) {
+      const hits = perm.filter((k, i) => cell(dirs[i], sizes[k]).length).length;
+      if (hits > bestHits) { best = perm; bestHits = hits; }
+      if (hits === 3) break;
+    }
+    const used = [];
+    const out = dirs.map((d, i) => {
+      const want = sizes[best[i]];
+      // the wanted size, else the nearest size that way (never smaller when asked for bigger,
+      // never bigger when asked for subtler), else that size in any direction
+      const near = s > 0 ? [want, want + 1, want - 1].filter((z) => z >= 1) : s < 0 ? [0] : [want, want - 1, want + 1, want - 2, want + 2];
+      let cs = [];
+      for (const z of near) { cs = cell(d, z); if (cs.length) break; }
+      if (!cs.length) cs = pool.filter((c) => near.indexOf(c.size) >= 0);
+      if (!cs.length) cs = pool;
+      let order = shuffled(cs, rng(seedOf(mel.r.id + ':' + d + ':' + want + ':' + s + ':' + (st.x || ''))));
+      // standing in for another size: the nearest to the size wanted first
+      if (cs[0].size !== want) { const aim = [1.5, 3.5, 6][want]; order = order.sort((x, y) => Math.abs(x.range - aim) - Math.abs(y.range - aim)); }
+      const fresh = order.filter((c) => used.indexOf(c) < 0 && !used.some((u) => u.kind === c.kind));
+      const from = fresh.length ? fresh : order.filter((c) => used.indexOf(c) < 0);
+      const list = from.length ? from : order;
+      const c = list[b % list.length];
+      used.push(c);
+      return c;
+    });
+    const sc = SCALES[mel.scale];
+    return out.sort((x, y) => x.end - y.end || x.range - y.range).map((c) => {
+      const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
+      const start = startFor(mel.scale, c.s, land);
+      return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
+    });
   }
 
   /** the scale step a shape starts on so that it lands on `target` semitones above home */
@@ -476,21 +562,7 @@
         const perm = [[1, 0, 2], [2, 1, 0], [0, 2, 1]][b % 3];
         return rs.map((c, i) => ({ a: c.a, mel: { r: c.r, scale: ps[perm[i]], shape: null } }));
       }
-      if (dir === 'seed2') {
-        const mel = idea.melody, sc = SCALES[mel.scale];
-        const cands = shapeCands(mel);
-        // by default only smooth shapes that move like round 1 did; jumps only when asked for
-        let pool = cands.filter((c) => c.leap <= 2 && c.amp <= 1);
-        if (st.x === 'smooth') pool = cands.filter((c) => c.leap <= 1);
-        if (st.x === 'jumpy') pool = cands.filter((c) => c.leap >= 3);
-        if (pool.length < 3) pool = cands.filter((c) => c.leap <= 2);
-        if (pool.length < 3) pool = cands;
-        return spread(pool.map((c) => Object.assign({}, c, { a: c.end + c.range * 0.01, b: c.range })), { p: st.p, s: st.s }, b).map((c) => {
-          const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
-          const start = startFor(mel.scale, c.s, land);
-          return { a: c.a, land, leap: c.leap, range: c.range, end: c.end, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
-        });
-      }
+      if (dir === 'seed2') return shapeOptions(idea.melody, st, b);
       if (dir === 'chords') return spread(chordPool(idea.melody, st.x === 'colour').slice(0, 18).map((c) => Object.assign({ a: c.bright, b: c.changes }, c)), st, b);
       if (dir === 'bass') return spread(bassStyles(idea).map((c) => Object.assign(c, { a: c.lock, b: c.n })), st, b);
       if (dir === 'pads') return spread(padStyles(idea).map((c) => Object.assign(c, { a: c.voices, b: c.reg })), st, b);
@@ -506,14 +578,17 @@
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
   function walkOption(mel) {
-    return { a: 0, land: 0, leap: 1, range: 4, end: 0, walk: true, mel: { r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } } };
+    return { a: 0, land: 0, leap: 1, range: 4, end: 0, size: 1, walk: true, mel: { r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } } };
   }
 
   // ---------------------------------------------------------------- words
 
+  function shapeTag(kind, range) {
+    return SWEEPS.indexOf(kind) >= 0 && range != null && range <= 2 ? 'Gentle ' + SHAPE_TAG[kind].toLowerCase() : SHAPE_TAG[kind];
+  }
   function tagOf(dir, o) {
     if (dir === 'seed1') return rhythmTag(o.mel.r);
-    if (dir === 'seed2') return SHAPE_TAG[o.mel.shape.kind];
+    if (dir === 'seed2') return shapeTag(o.mel.shape.kind, o.range);
     if (dir === 'chords') return (o.bright <= -2 ? 'Dark' : o.bright >= 2 ? 'Bright' : 'In between') + (o.colour ? ' + colour' : '');
     return o.tag;
   }
@@ -543,6 +618,8 @@
     }
     if (dir === 'seed2') {
       let t = o.end < 0 ? 'Falls and lands on the ' + IV[o.land] + '. Sounds like an answer.' : o.end > 0 ? 'Ends higher than it starts, on the ' + IV[o.land] + ': a question. Leaves you wanting the next bar.' : 'Stays near home and lands on the ' + IV[o.land] + ': settled, but not closed.';
+      if (o.size === 0) t += ' Small moves, so the rhythm does the talking.';
+      else if (o.size === 2) t += ' A big sweep; it’s the event.';
       if (o.leap >= 3) t += ' Some jumps in there; they grab the ear.';
       return t;
     }
@@ -562,7 +639,7 @@
   }
   function whyText(dir, o) {
     if (dir === 'seed1') return MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
-    if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.');
+    if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.') + (o.size === 0 ? ' It only moves a step or two, so repeated notes and rhythm make the hook.' : o.size === 2 ? ' It travels a long way, so the tune itself is the hook. Too many of those and a song gets tiring.' : '');
     if (dir === 'chords') { const col = o.chords.find((c) => c.colour); return 'Each chord was picked so the melody’s long, strong notes are notes of the chord: ' + o.fit + '% of the melody sits on them. ' + (col ? chordName(col) + ' is borrowed from outside the scale; it works because the melody note above it belongs to it.' : 'Minor chords under the same notes sound darker, major ones brighter.'); }
     if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
     if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight the melody. ' + (o.voices <= 1.2 ? 'One quiet voice adds depth without crowding.' : 'More voices fill the space around the melody, so it floats on top.');
@@ -846,7 +923,7 @@
   Odd.audition = {
     STEPS, STEP_TICKS, LENGTH, ABC, NAMES, IV, DIRS, NEXT_ORDER, LAYER_ORDER, REQS, LINES, line,
     SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, KITS, GENRES, TRACK,
-    makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, melodyNotes, startFor,
+    makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
     spread, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,
     emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,

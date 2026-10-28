@@ -307,8 +307,10 @@
       const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
       for (let pc = 0; pc < 12; pc++) h += '<i class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
     } else if (dir === 'seed2') {
-      const ns = A.melodyNotes(o.mel), ds = ns.map((n) => n.deg), lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds), span = Math.max(1, hi - lo);
-      const yOf = (d) => 12 + (hi - d) / span * (VH - 36);
+      // one scale for every card (at least an octave tall), so a small shape looks small
+      const ns = A.melodyNotes(o.mel), ds = ns.map((n) => n.deg), lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds), span = Math.max(7, hi - lo);
+      const top = (hi + lo) / 2 + span / 2;
+      const yOf = (d) => 12 + (top - d) / span * (VH - 36);
       ns.forEach((n) => { h += blk(xOf(n.s), VH - 9, Math.max(3, sw(n.d) - 2), 4, '', 'soft'); });
       const pts = ns.map((n) => ({ x: xOf(n.s) + 3, y: yOf(n.deg) }));
       pts.forEach((p, i) => {
