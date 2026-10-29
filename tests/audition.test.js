@@ -315,3 +315,26 @@ test('a saved screen state loads back, and junk loads as a fresh start', () => {
   assert.strictEqual(F.repair({ phase: 'round', round: { dir: 'nope' } }).phase, 'start');
   assert.strictEqual(F.repair({ phase: 'gold', idea: {} }).phase, 'start');
 });
+
+test('every meter has its own grooves, and 3/4 gets as many chord paths as the rest', () => {
+  for (const id of A.METER_ORDER) {
+    const m = T.meter(id), kits = A.kitsFor(m);
+    assert.ok(kits.length >= 60, id + ': ' + kits.length + ' beats');
+    const fams = new Set(kits.map((k) => k.fam));
+    assert.ok(fams.size >= 9, id + ': ' + fams.size + ' kick patterns');
+    // each kick pattern is its own: no two families play the same kick
+    const byKick = {};
+    kits.forEach((k) => { const key = k.k.join(','); (byKick[key] = byKick[key] || new Set()).add(k.fam); });
+    assert.ok(Object.values(byKick).every((f) => f.size === 1), id + ': two kick names, one pattern');
+    for (const k of kits) {
+      assert.ok(k.k.concat(k.s, k.h).every((s) => Number.isInteger(s) && s >= 0 && s < 2 * m.steps), id + ' ' + k.id + ': inside two bars');
+      assert.ok(k.k.includes(0), id + ' ' + k.id + ': a kick on the one');
+      if (m.compound) assert.strictEqual(k.swing, 0, id + ': no swing on top of threes');
+    }
+  }
+  let S = F.enter(F.fresh(), 'seed1');
+  const REQ = A.REQS.seed1.find((r) => r.m);
+  while (A.meterOf(F.options(S)[0].mel).id !== '3/4') S = F.request(S, REQ);
+  S = F.enter(F.pick(F.pick(S, 0), 0), 'chords');
+  assert.ok(F.info(S).total >= 20, '3/4 chords: ' + F.info(S).total);
+});

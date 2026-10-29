@@ -342,7 +342,7 @@
     });
     return out;
   }
-  /** chord paths (one chord per slot: half bars in 4/4), best fit first, each differing from the others in 2+ slots */
+  /** chord paths (one chord per slot: half bars in 4/4), best fit first, each differing from the others in 2+ slots (1 when there are only 2) */
   function chordPool(mel, colour) {
     return cached('cp' + JSON.stringify(mel) + colour, () => {
       const W = slotWeights(melodyNotes(mel), meterOf(mel));
@@ -372,8 +372,10 @@
       }
       all.sort((x, y) => y.s - x.s);
       const diff = (x, y) => x.filter((v, i) => v !== y[i]).length;
+      // with only two chords (3/4: one a bar) one new chord is already a new path
+      const apart = K > 2 ? 2 : 1;
       const picked = [];
-      for (const c of all) { if (picked.length >= 24) break; if (picked.every((q) => diff(q.p, c.p) >= 2)) picked.push(c); }
+      for (const c of all) { if (picked.length >= 24) break; if (picked.every((q) => diff(q.p, c.p) >= apart)) picked.push(c); }
       return picked.map((x) => {
         const chords = x.p.map((i) => C[i]);
         let on = 0, tot = 0;
@@ -616,52 +618,69 @@
       .map((x) => Object.assign(x, { n: x.hits.length, follow: x.hits.filter((h) => onsets[h.s]).length / x.hits.length }));
   }
 
-  // beats: a kick pattern, where the snare goes, and the hats. 4/4 has its own kick vocabulary;
-  // other meters build theirs from where their groups start
-  const KICKS44 = [['four', 'Four on the floor', [0, 4, 8, 12]], ['rock', 'Straight rock', [0, 8]], ['rockpush', 'Rock, pushed', [0, 8, 10]],
-    ['back', 'Backbeat', [0, 10]], ['boombap', 'Boom bap', [0, 7, 10]], ['broken', 'Broken', [0, 6, 10], [3, 6]], ['half', 'Half-time kick', [0, 11, 14], [6]],
-    ['bounce', 'Bouncing kick', [0, 3, 8, 11]], ['tresillo', 'Tresillo kick', [0, 6, 12]], ['pushing', 'Pushing kick', [0, 8, 14]], ['one', 'Kick on the one', [0]]];
+  // beats: a kick pattern, where the snare goes, and the hats. Every meter has its own kicks and
+  // snares, in 16ths: [id, name, bar one, bar two (when it differs), what else suits it]
+  // (r: ride and beat hats, l: a late snare, s: swing; 6/8 and 7/8 already move in threes, so never swing)
+  const KICKS = {
+    '4/4': [['four', 'Four on the floor', [0, 4, 8, 12]], ['rock', 'Straight rock', [0, 8], null, 'rs'], ['rockpush', 'Rock, pushed', [0, 8, 10], null, 'r'],
+      ['back', 'Backbeat', [0, 10], null, 'rs'], ['boombap', 'Boom bap', [0, 7, 10], null, 'ls'], ['broken', 'Broken', [0, 6, 10], [3, 6], 'ls'], ['half', 'Half-time kick', [0, 11, 14], [6]],
+      ['bounce', 'Bouncing kick', [0, 3, 8, 11], null, 'l'], ['tresillo', 'Tresillo kick', [0, 6, 12]], ['pushing', 'Pushing kick', [0, 8, 14], null, 'l'], ['one', 'Kick on the one', [0], null, 'rs']],
+    // ONE two three
+    '3/4': [['one', 'Kick on the one', [0], null, 'rs'], ['onethree', 'One and three', [0, 8], null, 'rs'], ['drive', 'Driving', [0, 4, 8], null, 'r'],
+      ['lilt', 'Lilting kick', [0, 6], null, 'ls'], ['push', 'Pushing kick', [0, 10], null, 'l'], ['skip', 'Skipping kick', [0, 3, 8], null, 'ls'],
+      ['float', 'Floating kick', [0], [0, 6], 'rs'], ['answer', 'Kick and answer', [0], [0, 6, 10], 'l'], ['long', 'Two-bar kick', [0, 8], [0]],
+      ['hemiola', 'Hemiola: three across two', [0, 8], [4], 'r']],
+    // ONE-and-a TWO-and-a
+    '6/8': [['one', 'Kick on the one', [0], null, 'r'], ['both', 'Both big beats', [0, 6], null, 'r'], ['lean', 'Leaning kick', [0, 4], null, 'l'],
+      ['push', 'Pushing kick', [0, 10], null, 'l'], ['gallop', 'Galloping', [0, 4, 6]], ['roll', 'Rolling kick', [0, 2, 6, 8]],
+      ['dotted', 'Dotted kick', [0, 3, 6, 9]], ['shuffle', 'Long-short kick', [0, 4, 6, 10], null, 'l'], ['answer', 'Kick and answer', [0], [0, 4, 10], 'r'],
+      ['tumble', 'Tumbling', [0, 10], [4, 6], 'l']],
+    // ONE two three FOUR five
+    '5/4': [['one', 'Kick on the one', [0], null, 'rs'], ['groups', 'Three then two', [0, 12], null, 'rs'], ['twothree', 'Two then three', [0, 8], null, 'rs'],
+      ['drive', 'Driving', [0, 4, 8, 12, 16], null, 'r'], ['push', 'Pushing kick', [0, 12, 18], null, 'l'], ['lean', 'Leaning kick', [0, 10], null, 'ls'],
+      ['boombap', 'Boom bap five', [0, 7, 12], null, 'ls'], ['dotted', 'Dotted kick', [0, 6, 12]], ['answer', 'Kick and answer', [0, 12], [0, 8, 14], 'l'],
+      ['broken', 'Broken', [0, 6, 12], [2, 10], 'l']],
+    // short, short, long
+    '7/8': [['one', 'Kick on the one', [0], null, 'r'], ['groups', 'Every group', [0, 4, 8], null, 'r'], ['ends', 'Short, short, long', [0, 8], null, 'r'],
+      ['lean', 'Leaning kick', [0, 6], null, 'l'], ['push', 'Pushing kick', [0, 12], null, 'l'], ['double', 'Double kick', [0, 2, 8]],
+      ['rolling', 'Rolling into the long', [0, 8, 12], null, 'l'], ['threetwo', 'Three, two, two', [0, 6, 10], null, 'r'],
+      ['answer', 'Kick and answer', [0, 8], [0, 4, 10], 'l']],
+  };
+  // snares: the plain one ('back') and a second ('half') go with every kick; the rest come with 8th hats
+  const SNARES = {
+    '4/4': { back: ['backbeat', [4, 12]], half: ['half-time', [8]] },
+    '3/4': { back: ['snare on 2 and 3', [4, 8]], half: ['snare on 3', [8]], two: ['snare on 2', [4]], wide: ['half-time', [], [0]] },
+    '6/8': { back: ['backbeat', [6]], half: ['half-time', [], [6]], jig: ['snare on 3 and 6', [4, 10]], pickup: ['snare and pickup', [6, 10]] },
+    '5/4': { back: ['snare on 3 and 5', [8, 16]], half: ['snare on 4', [12]], twofive: ['snare on 2 and 5', [4, 16]] },
+    '7/8': { back: ['snare on 3 and 6', [4, 10]], half: ['snare on 5', [8]], two: ['snare on 3', [4]] },
+  };
   const HATS = [['e8', '8ths'], ['s16', '16ths'], ['off', 'open off-beats'], ['ride', 'ride'], ['q', 'quarter hats']];
   const HAT_P = { e8: 42, s16: 42, off: 46, ride: 51, q: 42 };
 
   function kitsFor(m) {
+    const bars = (a, b) => a.concat((b || a).map((x) => x + m.steps));
     const B = (xs) => bothBars(m, xs);
-    const pulses = m.pulses.map((p) => p.s), groups = m.groupStarts, backs = backsOf(m);
+    const pulses = m.pulses.map((p) => p.s);
     const eighths = evensOf(m.steps), offs = eighths.filter((s) => !onPulse(m, s));
-    const mid = m.harm[1] != null ? m.harm[1] : pulses[pulses.length - 1];
-    let kicks;
-    if (m.id === '4/4') kicks = KICKS44.map(([id, tag, a, b]) => ({ id, tag, k: a.concat((b || a).map((x) => x + m.steps)) }));
-    else {
-      const lean = groups.slice(1).map((g) => g - 2);
-      const dots = dottedOf(m).filter((x) => x < m.steps);
-      kicks = [
-        { id: 'one', tag: 'Kick on the one', k: B([0]) },
-        { id: 'groups', tag: groups.length > 1 ? 'Kick on each group' : 'Kick and answer', k: B(groups.length > 1 ? groups.slice(0, -1) : [0, pulses[pulses.length - 1]]) },
-        { id: 'drive', tag: 'Driving', k: B(pulses) },
-        { id: 'lean', tag: 'Leaning', k: B([0].concat(lean.length ? lean : [m.steps - 2])) },
-        { id: 'dotted', tag: 'Dotted kick', k: B(dots) },
-        { id: 'pushing', tag: 'Pushing kick', k: B([0, m.steps - 2]) },
-      ];
-    }
-    const SN = {
-      back: { words: 'backbeat', s: B(backs) },
-      half: { words: 'half-time', s: B([mid]) },
-      // the last snare of the second bar comes a 16th late
-      late: { words: 'late snare', s: B(backs).map((x, i) => (i === 2 * backs.length - 1 ? x + 1 : x)) },
-    };
+    const kicks = (KICKS[m.id] || KICKS['4/4']).map(([id, tag, a, b, fit]) => ({ id, tag, k: bars(a, b), fit: fit || '' }));
+    const SN = {};
+    Object.keys(SNARES[m.id] || SNARES['4/4']).forEach((id) => { const [words, a, b] = SNARES[m.id][id]; SN[id] = { words, s: bars(a, b) }; });
+    // the last snare of the second bar comes a 16th late
+    const bk = SN.back.s;
+    SN.late = { words: 'late snare', s: bk.map((x, i) => (i === bk.length - 1 ? x + 1 : x)) };
+    const hatWord = (hat) => (hat === 'q' && m.id !== '4/4' ? 'hats on the beat' : HATS.find((x) => x[0] === hat)[1]);
     const H = { e8: B(eighths), s16: Array.from({ length: 2 * m.steps }, (_, i) => i), off: B(offs.length ? offs : eighths), ride: B(eighths), q: B(pulses) };
     const out = [];
     const add = (kk, sn, hat, swing) => {
-      // the kick stays under the snare where they meet: four on the floor keeps all four
-      const sx = SN[sn].s, k = kk.k;
-      out.push({ id: kk.id + '-' + sn + '-' + hat + (swing ? '-swung' : ''), fam: kk.id, twist: (hat === 'e8' ? 0 : 1) + (swing ? 1 : 0), tag: kk.tag, detail: (sn === 'back' ? '' : SN[sn].words + ' · ') + HATS.find((x) => x[0] === hat)[1], k, s: sx, h: H[hat], hp: HAT_P[hat], swing: swing ? 0.6 : 0 });
+      out.push({ id: kk.id + '-' + sn + '-' + hat + (swing ? '-swung' : ''), fam: kk.id, twist: (hat === 'e8' ? 0 : 1) + (swing ? 1 : 0), tag: kk.tag, detail: (sn === 'back' ? '' : SN[sn].words + ' · ') + hatWord(hat), k: kk.k, s: SN[sn].s, h: H[hat], hp: HAT_P[hat], swing: swing ? 0.6 : 0 });
     };
+    const extra = Object.keys(SN).filter((id) => !/^(back|half|late)$/.test(id));
     kicks.forEach((kk) => {
       ['e8', 's16', 'off'].forEach((hat) => { add(kk, 'back', hat); add(kk, 'half', hat); });
-      if (/rock|one|back$|groups/.test(kk.id)) { add(kk, 'back', 'ride'); add(kk, 'back', 'q'); }
-      if (/broken|boombap|bounce|pushing|lean|dotted/.test(kk.id)) add(kk, 'late', 'e8');
-      // swing: only where the beat moves in twos (not 6/8 or 7/8)
-      if (!m.compound && /boombap|broken|one|rock$|back$|groups|lean/.test(kk.id)) add(kk, 'back', 'e8', 1);
+      extra.forEach((sn) => add(kk, sn, 'e8'));
+      if (kk.fit.includes('r')) { add(kk, 'back', 'ride'); add(kk, 'back', 'q'); }
+      if (kk.fit.includes('l')) add(kk, 'late', 'e8');
+      if (!m.compound && kk.fit.includes('s')) add(kk, 'back', 'e8', 1);
     });
     return unique(out, (x) => JSON.stringify([x.k, x.s, x.h, x.hp, x.swing])).map((x) => {
       const ks = x.k.concat(x.s);

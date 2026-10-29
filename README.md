@@ -84,7 +84,9 @@ again from there.
    a pad is a rhythm with a voicing and an instrument; percussion is one of
    twelve hand instruments (congas, bongos, claves, cowbell, agogô, guiro,
    ...) with a pattern that suits it; a beat is a kick pattern with a snare
-   placement and hats; a sound is a genre mix as it is, or slower, faster,
+   placement and hats, and every meter has its own (a waltz, a hemiola
+   across two bars in 3/4; galloping and tumbling in 6/8; three-then-two or
+   two-then-three in 5/4; short, short, long in 7/8); a sound is a genre mix as it is, or slower, faster,
    swung, straight or with another lead. Each batch mixes families (three
    different bass jobs, three instruments), plain versions first.
 
