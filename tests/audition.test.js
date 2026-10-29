@@ -53,8 +53,18 @@ test('three more gives a new batch; busier and darker requests steer it', () => 
     assert.ok(opts[2].mel.r.n - opts[0].mel.r.n >= 8, 'batch ' + b + ' still spread');
     st = F.more(st);
   }
-  const more = F.more(S);
-  assert.strictEqual(more.hist[0].note, 'Passed over');
+  // the deck: back and forth without anything changing, every card once, then a shuffle
+  const two = F.next(F.next(S));
+  assert.deepStrictEqual(F.options(F.prev(two)).map((o) => o.mel.r.id), F.options(F.next(S)).map((o) => o.mel.r.id), 'previous brings the same three back');
+  assert.strictEqual(F.prev(S), S, 'nothing before the first three');
+  assert.strictEqual(two.hist.length, S.hist.length, 'moving through the deck leaves no history');
+  const inf = F.info(S), all = new Set();
+  let d = S;
+  for (let b = 0; b < inf.batches; b++) { F.options(d).forEach((o) => all.add(o.mel.r.id)); d = F.next(d); }
+  assert.strictEqual(all.size, inf.total, 'every rhythm in the pool comes up once');
+  assert.strictEqual(inf.total, A.rhythmPool().length);
+  assert.ok(d.round.deal === 1 && d.round.batch === 0 && d.msg === 'shuffled', 'then the deck is shuffled');
+  assert.notDeepStrictEqual(F.options(d).map((o) => o.mel.r.id), F.options(S).map((o) => o.mel.r.id), 'and dealt in new threes');
 
   const mean = (st) => F.options(st).reduce((a, o) => a + o.mel.r.n, 0) / 3;
   const busier = F.request(S, A.REQS.seed1.find((r) => r.label === 'Busier'));
@@ -110,6 +120,34 @@ test('round 2 mixes a small, a medium and a big shape; Subtler and Bigger move a
     assert.ok(sum(F.options(bigger)) > sum(opts), 'bigger moves further than the default three');
   }
   assert.ok(kinds.size >= 12, 'different rhythms get different shapes, not the same three');
+});
+
+test('every round deals its whole pool, three at a time, each card once; the unusual ones come later', () => {
+  const keyOf = (d, o) => d === 'seed1' ? o.mel.r.id : d === 'seed2' ? o.mel.shape.kind + o.mel.shape.amp : d === 'chords' ? JSON.stringify(o.chords) : o.id || o.tag;
+  let S = F.enter(F.fresh(), 'seed1');
+  const rounds = [S];
+  S = F.pick(S, 1);
+  rounds.push(S);
+  S = F.pick(S, 1);
+  for (const d of ['chords', 'bass', 'pads', 'perc', 'beat', 'sound']) rounds.push(F.enter(S, d));
+  for (const R of rounds) {
+    const d = R.round.dir, inf = F.info(R), seen = new Set();
+    let st = R;
+    for (let b = 0; b < inf.batches; b++) {
+      const opts = F.options(st);
+      assert.ok(opts.length >= 1 && opts.length <= 3, d);
+      for (const o of opts) { const k = keyOf(d, o); assert.ok(!seen.has(k), d + ' deals ' + k + ' twice'); seen.add(k); }
+      st = F.next(st);
+    }
+    assert.strictEqual(seen.size, inf.total, d + ': every card in the pool comes up');
+    assert.ok(inf.batches >= Math.ceil(inf.total / 3), d);
+  }
+  // shapes past an octave or with big jumps, and chord paths that fit less, wait until the usual ones are dealt
+  const shapes = rounds[1], sInf = F.info(shapes);
+  let st = shapes, firstRare = -1;
+  for (let b = 0; b < sInf.batches; b++) { F.options(st).forEach((o) => { if (o.rare && firstRare < 0) firstRare = b; }); st = F.next(st); }
+  assert.ok(firstRare > 0, 'no unusual shape in the first three');
+  assert.ok(A.rhythmPool().length === 80 && F.info(rounds[0]).total === 80);
 });
 
 test('keep the plain walk keeps round 1 exactly', () => {

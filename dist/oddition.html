@@ -1484,6 +1484,33 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-req.on { border-color: var(--b-gold); color: var(--b-gold); }
 .b-reqs-in { display: none; }
 
+/* the deck: three cards between two arrows; the three slide off one side and the next come in from the other */
+.b-deal { display: grid; grid-template-columns: 52px auto 52px; column-gap: 14px; align-items: center; flex: none; }
+.b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 2; }
+.b-deal > .b-callouts { grid-row: 1; }
+.b-deal > .b-cards { grid-row: 2; }
+.b-arrow { grid-row: 2; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: var(--raised); border: 1px solid var(--line); color: var(--ink); transition: border-color 0.2s, color 0.2s, opacity 0.2s; }
+.b-arrow.prev { grid-column: 1; }
+.b-arrow.next { grid-column: 3; }
+.b-arrow:hover:not(:disabled) { border-color: var(--b-gold); color: var(--b-gold); }
+.b-arrow:disabled { opacity: 0.3; cursor: default; }
+.b-arrow.shuf { border-color: color-mix(in srgb, var(--b-gold) 55%, var(--line)); }
+.b-deal.out-l .b-card, .b-deal.out-r .b-card { transition: transform 0.2s ease-in, opacity 0.2s ease-in; opacity: 0; }
+.b-deal.out-l .b-card { transform: translateX(-90px); }
+.b-deal.out-r .b-card { transform: translateX(90px); }
+.b-deal.out-l .b-callouts, .b-deal.out-r .b-callouts { opacity: 0; transition: opacity 0.12s; }
+@keyframes b-in-r { from { opacity: 0; transform: translateX(110px); } to { opacity: 1; transform: none; } }
+@keyframes b-in-l { from { opacity: 0; transform: translateX(-110px); } to { opacity: 1; transform: none; } }
+/* the pool: a tick per card, grouped as dealt; the three on screen in gold, the ones dealt so far filled */
+.b-pool { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 26px; max-width: 100%; }
+.b-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 640px; }
+.b-seg { display: flex; gap: 2px; padding: 4px 1px; background: none; border: 0; border-radius: 3px; }
+.b-seg i { display: block; width: 4px; height: 12px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 14%, transparent); transition: background 0.3s; }
+.b-seg.seen i { background: color-mix(in srgb, var(--b-bone2) 75%, transparent); }
+.b-seg.now i { background: var(--b-gold); height: 16px; margin-top: -2px; }
+.b-seg:hover i { background: color-mix(in srgb, var(--b-gold) 55%, transparent); }
+.b-count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
 .b-cards { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding-top: 4px; }
 .b-card {
   position: relative; box-sizing: border-box; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px;
@@ -1575,6 +1602,13 @@ body:not([data-screen="song"]) #songb { display: none; }
 @keyframes b-drop { from { opacity: 0; transform: translateY(-60px); } to { opacity: 1; transform: none; } }
 @keyframes b-fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+@media (max-width: 1140px) {
+  .b-deal { grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; width: 100%; }
+  .b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 1 / -1; }
+  .b-arrow { grid-row: 3; }
+  .b-arrow.prev { grid-column: 1; justify-self: end; }
+  .b-arrow.next { grid-column: 2; justify-self: start; }
+}
 @media (max-width: 1000px) {
   .b-callouts { display: none; }
   .b-reqs-in { display: block; position: relative; z-index: 2; }
@@ -8976,14 +9010,17 @@ span.sg-rname { cursor: default; color: var(--muted); }
  * follows it: chords change on its strong beats, drums are built from its
  * groups.
  *
- * Every round offers three options spread along that layer's most telling
- * difference (sparse..busy, answer..question, dark..bright, ...). Requests
- * steer the spread ("Busier", "Darker", "Surprise me").
+ * Every round deals its whole pool as a deck, three cards at a time, the
+ * three spread along that layer's most telling difference (sparse..busy,
+ * answer..question, dark..bright, ...). Previous and Next move through it;
+ * every card comes up before the deck is shuffled. Requests narrow the
+ * pool and deal again ("Busier", "Darker", "Surprise me").
  *
  *   idea  = { melody, layers: { [dir]: option }, order: [dir] }
  *   melody = { r: rhythm, scale, shape }   shape null until round 2
  *   rhythm = { id, hits: [[step, length, weight]], n, off }
- *   round = { dir, batch, steer: { p, s, x } }
+ *   round = { dir, batch, deal, seen, steer: { p, s, x, m } }
+ *           batch: which three of the deck; deal: how often it was shuffled; seen: the furthest batch dealt
  *
  * flow.* are pure state steps for the screen (Odd.bones); seq() turns an idea
  * into a transport sequence; toParts() into parts for the idea shelf.
@@ -9073,7 +9110,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
       pads: ['Something to fill the space around the melody. One thin, one full, one in between.', 'Support for the melody. One just a shadow, one wide and full, one in between.'],
       sound: ['Same idea, three ways to dress it. One calm, one with energy, one in between.', 'Now the clothes: instrument, tempo, swing. Calm, energetic, and one between.'],
     },
-    more: ['Three more. The others dropped down below; nothing gets thrown away.', 'Fresh three. The last ones are down in the history if you miss them.', 'Here’s three more. Nothing’s lost: scroll down for the others.'],
+    more: ['Three more from the deck. The last three are still there: go back any time.', 'Next three. Nothing’s thrown away; they’re just to the left.', 'Fresh three. Every one in the pool gets its turn before anything repeats.'],
+    prev: ['The three before. Still here.', 'Back a step. Same three as before.'],
+    shuffled: ['That’s every one in the pool. Shuffled: same cards, new company.', 'You’ve heard the whole deck. Shuffled, dealing again: new threes this time.'],
     next: ['The melody leads; everything we add backs it up. Where to?', 'Where next? Nothing’s wrong from here, only different.', 'Your melody is the boss. What should back it up?'],
     melody: ['That’s your melody. Here it is on its own. From now on, it leads.'],
     added: ['Here it is with the {x} in.', 'There it is, with the {x}. Hear how the melody sits now.', 'With the {x}. Still the melody up front.'],
@@ -9487,31 +9526,149 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return (any ? ids : ids.slice(0, 5)).map((id) => ({ id, tag: GENRES[id].name, name: GENRES[id].name, bpm: GENRES[id].bpm, swing: GENRES[id].swing, inst: GENRES[id].inst, up: GENRES[id].up || 0, why: GENRES[id].why }));
   }
 
-  // ---------------------------------------------------------------- three options, spread along what matters
+  // ---------------------------------------------------------------- the deck: every option, three at a time
+  //
+  // A round's pool is a deck, dealt three cards at a time. The pool is sorted
+  // along the layer's telling difference (sparse..busy, dark..bright, ...) and
+  // cut into three bands; each batch takes one card from each band, so the
+  // three on screen always differ, and cards that sound alike (the same band)
+  // never sit side by side. Every card comes up once before any repeats:
+  // past the last batch the deck is shuffled and dealt again (round.deal).
+  // The first batch is each band's clearest card (its end, or the middle);
+  // cards a round once left out (shapes past an octave or with big jumps,
+  // chord paths past the best 18, sounds that fit least) come last, not never.
 
-  /**
-   * Three candidates that differ most along `a` (the layer's telling
-   * difference): the low end, the high end and the one nearest the middle.
-   * Steering halves the pool toward one end first (p on a, s on b). Each
-   * "three more" batch takes the next nearest to each target, up to six
-   * batches before they repeat.
-   */
-  function spread(cands, steer, batch) {
+  /** the candidates a steer leaves: each step halves the pool toward one end (p on a, s on b), sorted along a */
+  function steerPool(cands, steer) {
     let pool = cands.slice();
     const half = (arr, f, dir) => { const s = arr.slice().sort((a, b) => f(a) - f(b)); const k = Math.max(3, Math.ceil(s.length / 2)); return dir < 0 ? s.slice(0, k) : s.slice(s.length - k); };
     for (let i = 0; i < Math.abs(steer.s || 0); i++) pool = half(pool, (c) => c.b, steer.s);
     for (let i = 0; i < Math.abs(steer.p || 0); i++) pool = half(pool, (c) => c.a, steer.p);
-    pool.sort((x, y) => x.a - y.a || x.b - y.b);
-    if (pool.length <= 3) return pool.slice(0, 3);
-    const lo = pool[0].a, hi = pool[pool.length - 1].a, used = [];
-    // how many fresh batches before they come round again: more for a bigger pool, never so many the ends blur
-    const fresh = Math.max(2, Math.min(6, Math.floor(pool.length / 3)));
-    return [lo, (lo + hi) / 2, hi].map((target) => {
-      const near = pool.filter((c) => used.indexOf(c) < 0).sort((x, y) => Math.abs(x.a - target) - Math.abs(y.a - target));
-      const c = near[Math.min(near.length - 1, batch % Math.min(fresh, near.length))];
-      used.push(c);
-      return c;
-    }).sort((x, y) => x.a - y.a);
+    return pool.sort((x, y) => x.a - y.a || x.b - y.b);
+  }
+
+  /**
+   * Batches of three from three bands. pick(band, i, plan, used) takes the
+   * band's next card (default: the first), with plan(bands, k) worked out
+   * once per batch; a band that runs out early is covered by the one with
+   * most left. Each batch reads low to high along a.
+   */
+  function dealBands(bands, pick, plan) {
+    const qs = bands.map((b) => b.slice()), out = [];
+    let P = null;
+    const take = (i, used) => { const q = qs[i]; const j = pick ? pick(q, i, P, used) : 0; return q.splice(j, 1)[0]; };
+    for (let k = 0; qs.some((q) => q.length); k++) {
+      const batch = [];
+      P = plan ? plan(qs, k) : null;
+      qs.forEach((q, i) => { if (q.length) batch.push(take(i, batch)); });
+      while (batch.length < 3 && qs.some((q) => q.length)) {
+        let i = 0;
+        qs.forEach((q, j) => { if (q.length > qs[i].length) i = j; });
+        batch.push(take(i, batch));
+      }
+      out.push(batch.sort((x, y) => x.a - y.a || x.b - y.b));
+    }
+    return out;
+  }
+
+  /** a sorted pool cut in thirds, each third ordered clearest first, cards once left out last; shuffled on later deals */
+  function bandsOf(pool, deal, seed) {
+    const n = pool.length;
+    if (n <= 3) return [pool.slice(0, 1), pool.slice(1, 2), pool.slice(2)];
+    const t1 = Math.round(n / 3), t2 = Math.round(2 * n / 3);
+    const mid = (pool[0].a + pool[n - 1].a) / 2;
+    const bands = [pool.slice(0, t1), pool.slice(t1, t2).sort((x, y) => Math.abs(x.a - mid) - Math.abs(y.a - mid)), pool.slice(t2).reverse()];
+    return bands.map((b, i) => {
+      if (deal) return shuffled(b, rng(seedOf(seed + ':' + deal + ':' + i)));
+      return b.filter((c) => !c.rare).concat(b.filter((c) => c.rare));
+    });
+  }
+
+  /** the batches for a round: [[option x3]], plus the pool's size */
+  function deckOf(dir, round, idea) {
+    const st = round.steer || {}, deal = round.deal || 0;
+    return cached('d' + dir + deal + JSON.stringify(st) + JSON.stringify(idea), () => {
+      if (dir === 'seed1') {
+        const pool = steerPool(rhythmPool(st.m).map((r) => ({ r, a: r.n + 0.3 * r.off, b: 0 })), { p: st.p });
+        let sl = SCALE_ORDER.slice();
+        if (st.s < 0) sl = sl.slice(0, 4);
+        if (st.s > 0) sl = sl.slice(4);
+        // each batch spreads its scales dark, middle, bright, turning each time
+        const batches = dealBands(bandsOf(pool, deal, 'seed1')).map((cs, k) => {
+          const b = k + deal * 5;
+          const ps = [0, Math.floor(sl.length / 2), sl.length - 1].map((i) => sl[(i + b) % sl.length]);
+          const perm = [[1, 0, 2], [2, 1, 0], [0, 2, 1]][b % 3];
+          return cs.map((c, i) => ({ a: c.a, mel: { r: c.r, scale: ps[perm[i % 3]], shape: null } }));
+        });
+        return { batches, total: pool.length };
+      }
+      if (dir === 'seed2') return shapeDeck(idea.melody, st, deal);
+      let cands;
+      if (dir === 'chords') cands = chordPool(idea.melody, st.x === 'colour').map((c, i) => Object.assign({ a: c.bright, b: c.changes, rare: i >= 18 }, c));
+      else if (dir === 'bass') cands = bassStyles(idea).map((c) => Object.assign(c, { a: c.lock, b: c.n }));
+      else if (dir === 'pads') cands = padStyles(idea).map((c) => Object.assign(c, { a: c.voices, b: c.reg }));
+      else if (dir === 'perc') {
+        cands = percStyles(idea);
+        if (st.x === 'follow') { const f = cands.filter((c) => c.follow >= 0.5); if (f.length >= 3) cands = f; }
+        cands = cands.map((c) => Object.assign(c, { a: c.n, b: c.follow }));
+      } else if (dir === 'beat') cands = kitsFor(meterOf(idea.melody)).map((c) => Object.assign({}, c, { a: c.off, b: c.n }));
+      // the sounds that fit the rhythm least come last; "Surprise me" deals them in from the start
+      else cands = soundStyles(idea, true).map((c, i) => Object.assign(c, { a: c.bpm, b: 0, rare: i >= 5 }));
+      const pool = steerPool(cands, st);
+      const shake = st.x === 'any' ? deal + 1 : deal;
+      return { batches: dealBands(bandsOf(pool, shake, dir)), total: pool.length };
+    });
+  }
+
+  /**
+   * Round 2's deck. The bands are directions: falls (an answer), stays near
+   * home, rises (a question). Each batch also mixes a small, a medium and a
+   * big shape, and never the same shape twice. Requests narrow the pool
+   * (Subtler: small, then smoother, then barely moving; Bigger: no small,
+   * then only big; More jumps; Land on home).
+   */
+  function shapeDeck(mel, st, deal) {
+    const s = st.s || 0;
+    let pool = shapeCands(mel);
+    const keep = (f) => { const x = pool.filter(f); if (x.length >= 3) pool = x; };
+    if (s <= -1) keep((c) => c.size === 0);
+    if (s <= -2) keep((c) => c.leap <= 1);
+    if (s <= -3) keep((c) => c.range <= 1);
+    if (s === 1) keep((c) => c.size >= 1);
+    if (s >= 2) keep((c) => c.size === 2);
+    if (st.x === 'smooth') keep((c) => c.leap <= 1);
+    if (st.x === 'jumpy') keep((c) => c.leap >= 3);
+    // past an octave or with big jumps comes later (unless that's what was asked for)
+    const maxRange = s >= 2 ? 9 : 7, maxLeap = st.x === 'jumpy' ? 99 : s >= 2 ? 3 : 2;
+    const opts = pool.map((c) => Object.assign(shapeOpt(mel, st, c), { rare: c.range > maxRange || c.leap > maxLeap }));
+    const seed = mel.r.id + ':' + mel.scale + ':' + deal;
+    const bands = [-1, 0, 1].map((d) => shuffled(opts.filter((o) => Math.sign(o.end) === d), rng(seedOf(seed + ':' + d))));
+    // which band gets which size: the order (tried shuffled per batch) that finds the most of them
+    // (the sizes a batch wants: one of each, or what Subtler and Bigger ask for)
+    const SZ = s <= -1 ? [0, 0, 0] : s === 1 ? [1, 2, 2] : s >= 2 ? [2, 2, 2] : [0, 1, 2];
+    const plan = (qs, k) => {
+      const has = (i, z) => qs[i].some((o) => o.size === z && !o.rare);
+      let best = SZ, hits = -1;
+      for (const perm of shuffled(PERMS, rng(seedOf(seed + ':' + k)))) {
+        const sizes = perm.map((j) => SZ[j]), h = sizes.filter((z, i) => has(i, z)).length;
+        if (h > hits) { best = sizes; hits = h; }
+        if (h === 3) break;
+      }
+      return best;
+    };
+    const pick = (q, i, perm, used) => {
+      const want = perm[i], near = [want, want - 1, want + 1, want - 2, want + 2].filter((z) => z >= 0 && z <= 2);
+      const ok = (o) => !used.some((u) => u.mel.shape.kind === o.mel.shape.kind);
+      for (const rare of [false, true]) for (const z of near) {
+        let j = q.findIndex((o) => o.size === z && !!o.rare === rare && ok(o));
+        if (j >= 0) return j;
+        j = q.findIndex((o) => o.size === z && !!o.rare === rare);
+        if (j >= 0) return j;
+      }
+      return 0;
+    };
+    const batches = dealBands(bands, pick, plan).map((b) => b.sort((x, y) => x.end - y.end || x.range - y.range));
+    return { batches, total: pool.length };
   }
 
   function shapeCands(mel) {
@@ -9543,62 +9700,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
   const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
-  /**
-   * Round 2: one shape that falls (an answer), one that stays near home, one
-   * that rises (a question). How far each moves is picked apart from where it
-   * goes, so a round mixes a small, a medium and a big shape (steer.s: -1
-   * small, -2 smoothest, -3 barely moving, +1 bigger, +2 biggest). Which shape fills each place
-   * is shuffled per rhythm, and "three more" walks on through them.
-   */
-  function shapeOptions(mel, st, b) {
-    const cands = shapeCands(mel), s = st.s || 0;
-    // at most an octave across the two bars (a little more when asked twice for bigger)
-    const all = cands.filter((c) => c.range <= (s >= 2 ? 9 : 7));
-    let pool = all.filter((c) => c.leap <= 2);
-    if (s >= 2) pool = all.filter((c) => c.leap <= 3);
-    if (st.x === 'smooth' || s <= -2) pool = all.filter((c) => c.leap <= 1);
-    if (st.x === 'jumpy') pool = all.filter((c) => c.leap >= 3);
-    if (pool.length < 3) pool = all.filter((c) => c.leap <= 2);
-    if (pool.length < 3) pool = all;
-    // a third Subtler: shapes that barely move (one scale step), where the rhythm has them
-    if (s <= -3) { const flat = pool.filter((c) => c.range <= 1); if (flat.length >= 3) pool = flat; }
-    const dirs = [-1, 0, 1];
-    const sizes = s <= -1 ? [0, 0, 0] : s === 1 ? [1, 2, 2] : s >= 2 ? [2, 2, 2] : [0, 1, 2];
-    const cell = (d, z) => pool.filter((c) => Math.sign(c.end) === d && c.size === z);
-    // which direction gets which size changes with the rhythm and each "three more"
-    const R = rng(seedOf(mel.r.id + ':' + mel.scale + ':' + b));
-    let best = null, bestHits = -1;
-    for (const perm of shuffled(PERMS, R)) {
-      const hits = perm.filter((k, i) => cell(dirs[i], sizes[k]).length).length;
-      if (hits > bestHits) { best = perm; bestHits = hits; }
-      if (hits === 3) break;
-    }
-    const used = [];
-    const out = dirs.map((d, i) => {
-      const want = sizes[best[i]];
-      // the wanted size, else the nearest size that way (never smaller when asked for bigger,
-      // never bigger when asked for subtler), else that size in any direction
-      const near = s > 0 ? [want, want + 1, want - 1].filter((z) => z >= 1) : s < 0 ? [0] : [want, want - 1, want + 1, want - 2, want + 2];
-      let cs = [];
-      for (const z of near) { cs = cell(d, z); if (cs.length) break; }
-      if (!cs.length) cs = pool.filter((c) => near.indexOf(c.size) >= 0);
-      if (!cs.length) cs = pool;
-      let order = shuffled(cs, rng(seedOf(mel.r.id + ':' + d + ':' + want + ':' + s + ':' + (st.x || ''))));
-      // standing in for another size: the nearest to the size wanted first
-      if (cs[0].size !== want) { const aim = [1.5, 3.5, 6][want]; order = order.sort((x, y) => Math.abs(x.range - aim) - Math.abs(y.range - aim)); }
-      const fresh = order.filter((c) => used.indexOf(c) < 0 && !used.some((u) => u.kind === c.kind));
-      const from = fresh.length ? fresh : order.filter((c) => used.indexOf(c) < 0);
-      const list = from.length ? from : order;
-      const c = list[b % list.length];
-      used.push(c);
-      return c;
-    });
+  /** a shape candidate as an option: it starts where it lands on the note its direction wants */
+  function shapeOpt(mel, st, c) {
     const sc = SCALES[mel.scale];
-    return out.sort((x, y) => x.end - y.end || x.range - y.range).map((c) => {
-      const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
-      const start = startFor(mel.scale, c.s, land);
-      return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
-    });
+    const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
+    const start = startFor(mel.scale, c.s, land);
+    return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
   }
 
   /** the scale step a shape starts on so that it lands on `target` semitones above home */
@@ -9610,32 +9717,16 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return start;
   }
 
-  /** the three options of a round: { a, ...layer fields } */
+  /** the three options on screen: batch round.batch of the round's deck */
   function options(dir, round, idea) {
-    const st = round.steer || {};
-    return cached('o' + dir + round.batch + JSON.stringify(st) + JSON.stringify(idea), () => {
-      const b = round.batch || 0;
-      if (dir === 'seed1') {
-        const rs = spread(rhythmPool(st.m).map((r) => ({ r, a: r.n + 0.3 * r.off, b: 0 })), { p: st.p }, b);
-        let sl = SCALE_ORDER.slice();
-        if (st.s < 0) sl = sl.slice(0, 4);
-        if (st.s > 0) sl = sl.slice(4);
-        const ps = [0, Math.floor(sl.length / 2), sl.length - 1].map((i) => sl[(i + b) % sl.length]);
-        const perm = [[1, 0, 2], [2, 1, 0], [0, 2, 1]][b % 3];
-        return rs.map((c, i) => ({ a: c.a, mel: { r: c.r, scale: ps[perm[i]], shape: null } }));
-      }
-      if (dir === 'seed2') return shapeOptions(idea.melody, st, b);
-      if (dir === 'chords') return spread(chordPool(idea.melody, st.x === 'colour').slice(0, 18).map((c) => Object.assign({ a: c.bright, b: c.changes }, c)), st, b);
-      if (dir === 'bass') return spread(bassStyles(idea).map((c) => Object.assign(c, { a: c.lock, b: c.n })), st, b);
-      if (dir === 'pads') return spread(padStyles(idea).map((c) => Object.assign(c, { a: c.voices, b: c.reg })), st, b);
-      if (dir === 'perc') {
-        let pool = percStyles(idea);
-        if (st.x === 'follow') { const f = pool.filter((c) => c.follow >= 0.5); if (f.length >= 3) pool = f; }
-        return spread(pool.map((c) => Object.assign(c, { a: c.n, b: c.follow })), st, b);
-      }
-      if (dir === 'beat') return spread(kitsFor(meterOf(idea.melody)).map((c) => Object.assign({}, c, { a: c.off, b: c.n })), st, b);
-      return spread(soundStyles(idea, st.x === 'any').map((c) => Object.assign(c, { a: c.bpm, b: 0 })), st, b);
-    });
+    const bs = deckOf(dir, round, idea).batches;
+    return bs.length ? bs[Math.max(0, Math.min(bs.length - 1, round.batch || 0))] : [];
+  }
+  /** where the round is in its deck: batch, batches, cards from..to of total */
+  function deckInfo(dir, round, idea) {
+    const d = deckOf(dir, round, idea), b = Math.max(0, Math.min(d.batches.length - 1, round.batch || 0));
+    const from = d.batches.slice(0, b).reduce((n, x) => n + x.length, 0);
+    return { batch: b, batches: d.batches.length, sizes: d.batches.map((x) => x.length), from: from + 1, to: from + d.batches[b].length, total: d.total, deal: round.deal || 0 };
   }
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
@@ -9956,9 +10047,30 @@ span.sg-rname { cursor: default; color: var(--muted); }
       return Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added: r.dir });
     },
     keepWalk(S) { return flow.pick(S, -1, walkOption(S.idea.melody)); },
-    more(S) {
-      return Object.assign({}, S, flow.row(S, { note: 'Passed over' }), { round: Object.assign({}, S.round, { batch: S.round.batch + 1 }), seq: S.seq + 1, sel: -1, msg: 'more', line: null, anim: S.anim + 1, kind: 'pop' });
+    info(S) { return S.round ? deckInfo(S.round.dir, S.round, S.idea) : null; },
+    /** the next three of the deck; past the last, the deck is shuffled and dealt again from the top */
+    next(S) {
+      const r = S.round, inf = flow.info(S);
+      if (!inf) return S;
+      const last = inf.batch >= inf.batches - 1;
+      const round = last ? Object.assign({}, r, { batch: 0, deal: (r.deal || 0) + 1, seen: 0 }) : Object.assign({}, r, { batch: inf.batch + 1, seen: Math.max(r.seen || 0, inf.batch + 1) });
+      return Object.assign({}, S, { round, seq: S.seq + 1, sel: -1, msg: last ? 'shuffled' : 'more', line: null, anim: S.anim + 1, kind: 'next' });
     },
+    /** the three before; the first three stay put */
+    prev(S) {
+      const inf = flow.info(S);
+      if (!inf || inf.batch === 0) return S;
+      return Object.assign({}, S, { round: Object.assign({}, S.round, { batch: inf.batch - 1 }), seq: S.seq + 1, sel: -1, msg: 'prev', line: null, anim: S.anim + 1, kind: 'prev' });
+    },
+    /** jump to batch b of the deck (the pool strip), as far as has been dealt */
+    to(S, b) {
+      const inf = flow.info(S);
+      if (!inf) return S;
+      const t = Math.max(0, Math.min(inf.batches - 1, b));
+      if (t === inf.batch) return S;
+      return Object.assign({}, S, { round: Object.assign({}, S.round, { batch: t, seen: Math.max(S.round.seen || 0, t) }), seq: S.seq + 1, sel: -1, msg: t > inf.batch ? 'more' : 'prev', line: null, anim: S.anim + 1, kind: t > inf.batch ? 'next' : 'prev' });
+    },
+    more(S) { return flow.next(S); },
     /** a request re-rolls the three with a steer; "why" only explains. Returns the new state; play the middle one */
     request(S, rq) {
       if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel]) : S.line });
@@ -9976,7 +10088,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
         if (next === '4/4') delete steer.m; else steer.m = next;
         reply = meterLine(next);
       }
-      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0, deal: 0, seen: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
     },
     /** go back to an earlier round as it was; everything after it stays in the history */
     back(S, row) {
@@ -10017,7 +10129,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    spread, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,
+    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,
     emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
   };
 })(globalThis.Odd = globalThis.Odd || {});
@@ -16288,6 +16400,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
   const VAR = { seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp' };
   const col = (d) => 'var(' + VAR[d] + ')';
   const PROMOTE = { seed1: 'Promote: give it a shape', seed2: 'Promote: that’s the melody' };
+  // what a round's deck holds, for the counter under the cards
+  const NOUN = { seed1: 'rhythms', seed2: 'shapes', chords: 'chord progressions', bass: 'bass lines', pads: 'pads', perc: 'percussion parts', beat: 'beats', sound: 'sounds' };
+  const SLIDE_MS = 200;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16302,7 +16417,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH };
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
-  let raf = 0, saveTimer = 0;
+  let raf = 0, saveTimer = 0, sliding = false;
 
   // ---------------------------------------------------------------- state
 
@@ -16481,6 +16596,22 @@ span.sg-rname { cursor: default; color: var(--muted); }
     set(fn(S));
   }
 
+  /** move through the deck: the three on screen slide off to one side, the next three come in from the other */
+  function slide(fn) {
+    if (sliding || S.phase !== 'round') return;
+    const ns = fn(S);
+    if (ns === S) return;
+    const deal = root.querySelector('.b-deal');
+    let still = false;
+    try { still = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* no matchMedia: animate */ }
+    if (!deal || still) { step(() => ns); return; }
+    halt();
+    P.src = '';
+    sliding = true;
+    deal.classList.add(ns.kind === 'prev' ? 'out-r' : 'out-l');
+    setTimeout(() => { sliding = false; step(fn); }, SLIDE_MS);
+  }
+
   function back(rowId) {
     const row = S.hist.find((r) => r.id === rowId);
     if (!row) return;
@@ -16508,7 +16639,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
     promote: (el) => promote(Number(el.dataset.i)),
     walk: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
-    more: () => step(F.more),
+    next: () => slide(F.next),
+    prev: () => slide(F.prev),
+    jump: (el) => slide((s) => F.to(s, Number(el.dataset.b))),
     skip: () => step(F.skip),
     go: (el) => step((s) => F.enter(s, el.dataset.dir)),
     finish: () => step(F.finish),
@@ -16529,7 +16662,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (fn) fn(el);
   }
 
-  /** keys while the screen shows: Space play/stop, 1-3 hear A-C, Escape stop. true when handled */
+  /** keys while the screen shows: Space play/stop, 1-3 hear A-C, ←/→ the three before or after, Escape stop. true when handled */
   function onKey(e) {
     if (!shown || e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = e.key;
@@ -16546,6 +16679,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (/^[1-3]$/.test(k) && S.phase === 'round') {
       const i = Number(k) - 1;
       if (F.options(S)[i]) hear(curKey(i));
+      return true;
+    }
+    if ((k === 'ArrowRight' || k === 'ArrowLeft') && S.phase === 'round') {
+      if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return false;
+      e.preventDefault();
+      slide(k === 'ArrowRight' ? F.next : F.prev);
       return true;
     }
     return false;
@@ -16657,7 +16796,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     }
     if (S.phase === 'next') return A.line(L.next, S.seq);
     if (S.phase === 'gold') return A.line(L.gold, S.hid);
-    if (S.msg === 'more') return A.line(L.more, S.seq);
+    if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
     if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
     return A.line(L.entry[S.round.dir], S.seq);
   }
@@ -16679,22 +16818,41 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
 
   function roundHtml(animate) {
-    const dir = S.round.dir, opts = F.options(S);
+    const dir = S.round.dir, opts = F.options(S), inf = F.info(S);
     const kind = S.kind;
     const cards = opts.map((o, i) => {
       let anim = 'b-pop', delay = (i * 0.08).toFixed(2) + 's';
       if (kind === 'rise') { if (i === 1) { anim = 'b-rise'; delay = '0s'; } else delay = (0.18 + i * 0.05).toFixed(2) + 's'; }
+      // dealt from the deck: the row slides in from the side it came from, the leading card first
+      if (kind === 'next') { anim = 'b-in-r'; delay = (i * 0.05).toFixed(2) + 's'; }
+      if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
       return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: PROMOTE[dir] || 'Add it', style });
     }).join('');
     const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
-    return '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
-      '<div class="b-cards">' + cards + '</div>' +
+    const last = inf.batch >= inf.batches - 1;
+    const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
+    const LEFT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const RIGHT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4l6 6-6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const SHUF = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 4s2 4 4 4H17M3 14h3.5c1.2 0 2-.4 2.7-1.2M17 6h-2.5c-1.2 0-2 .4-2.7 1.2M14.5 3.5 17 6l-2.5 2.5M14.5 11.5 17 14l-2.5 2.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // the pool: one tick per card, grouped in the threes they're dealt in
+    const seen = Math.max(S.round.seen || 0, inf.batch);
+    const strip = inf.sizes.map((n, b) => '<button type="button" class="b-seg' + (b === inf.batch ? ' now' : b <= seen ? ' seen' : '') + '" data-act="jump" data-b="' + b + '" tabindex="-1" aria-label="Cards ' + (inf.sizes.slice(0, b).reduce((t, x) => t + x, 0) + 1) + ' to ' + (inf.sizes.slice(0, b + 1).reduce((t, x) => t + x, 0)) + '">' + '<i></i>'.repeat(n) + '</button>').join('');
+    const count = (inf.from === inf.to ? inf.from : inf.from + '–' + inf.to) + ' of ' + inf.total + ' ' + NOUN[dir] + (inf.deal ? ' · shuffled' : '');
+    return '<div class="b-deal">' +
+        '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
+        arrow('prev', 'prev', 'The three before', LEFT, inf.batch === 0) +
+        '<div class="b-cards">' + cards + '</div>' +
+        (last ? arrow('next shuf', 'next', 'That’s all of them: shuffle and deal again', SHUF, inf.batches < 2) : arrow('next', 'next', 'The next three', RIGHT, false)) +
+      '</div>' +
+      '<div class="b-pool" aria-label="The deck">' +
+        '<div class="b-strip">' + strip + '</div>' +
+        '<span class="b-count">' + esc(count) + '</span>' +
+      '</div>' +
       '<div class="b-actions">' +
-        '<button type="button" class="b-ghost" data-act="more">Three more</button>' +
         (dir === 'seed2' ? '<button type="button" class="b-ghost" data-act="walk">Keep the plain walk</button>' : '') +
         (/^seed/.test(dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">Not now</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Bobby gives your ears a moment between options.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 

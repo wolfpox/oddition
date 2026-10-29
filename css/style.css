@@ -1475,6 +1475,33 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-req.on { border-color: var(--b-gold); color: var(--b-gold); }
 .b-reqs-in { display: none; }
 
+/* the deck: three cards between two arrows; the three slide off one side and the next come in from the other */
+.b-deal { display: grid; grid-template-columns: 52px auto 52px; column-gap: 14px; align-items: center; flex: none; }
+.b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 2; }
+.b-deal > .b-callouts { grid-row: 1; }
+.b-deal > .b-cards { grid-row: 2; }
+.b-arrow { grid-row: 2; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: var(--raised); border: 1px solid var(--line); color: var(--ink); transition: border-color 0.2s, color 0.2s, opacity 0.2s; }
+.b-arrow.prev { grid-column: 1; }
+.b-arrow.next { grid-column: 3; }
+.b-arrow:hover:not(:disabled) { border-color: var(--b-gold); color: var(--b-gold); }
+.b-arrow:disabled { opacity: 0.3; cursor: default; }
+.b-arrow.shuf { border-color: color-mix(in srgb, var(--b-gold) 55%, var(--line)); }
+.b-deal.out-l .b-card, .b-deal.out-r .b-card { transition: transform 0.2s ease-in, opacity 0.2s ease-in; opacity: 0; }
+.b-deal.out-l .b-card { transform: translateX(-90px); }
+.b-deal.out-r .b-card { transform: translateX(90px); }
+.b-deal.out-l .b-callouts, .b-deal.out-r .b-callouts { opacity: 0; transition: opacity 0.12s; }
+@keyframes b-in-r { from { opacity: 0; transform: translateX(110px); } to { opacity: 1; transform: none; } }
+@keyframes b-in-l { from { opacity: 0; transform: translateX(-110px); } to { opacity: 1; transform: none; } }
+/* the pool: a tick per card, grouped as dealt; the three on screen in gold, the ones dealt so far filled */
+.b-pool { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 26px; max-width: 100%; }
+.b-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 640px; }
+.b-seg { display: flex; gap: 2px; padding: 4px 1px; background: none; border: 0; border-radius: 3px; }
+.b-seg i { display: block; width: 4px; height: 12px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 14%, transparent); transition: background 0.3s; }
+.b-seg.seen i { background: color-mix(in srgb, var(--b-bone2) 75%, transparent); }
+.b-seg.now i { background: var(--b-gold); height: 16px; margin-top: -2px; }
+.b-seg:hover i { background: color-mix(in srgb, var(--b-gold) 55%, transparent); }
+.b-count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
 .b-cards { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding-top: 4px; }
 .b-card {
   position: relative; box-sizing: border-box; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px;
@@ -1566,6 +1593,13 @@ body:not([data-screen="song"]) #songb { display: none; }
 @keyframes b-drop { from { opacity: 0; transform: translateY(-60px); } to { opacity: 1; transform: none; } }
 @keyframes b-fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+@media (max-width: 1140px) {
+  .b-deal { grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; width: 100%; }
+  .b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 1 / -1; }
+  .b-arrow { grid-row: 3; }
+  .b-arrow.prev { grid-column: 1; justify-self: end; }
+  .b-arrow.next { grid-column: 2; justify-self: start; }
+}
 @media (max-width: 1000px) {
   .b-callouts { display: none; }
   .b-reqs-in { display: block; position: relative; z-index: 2; }

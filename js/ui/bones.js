@@ -27,6 +27,9 @@
   const VAR = { seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp' };
   const col = (d) => 'var(' + VAR[d] + ')';
   const PROMOTE = { seed1: 'Promote: give it a shape', seed2: 'Promote: that’s the melody' };
+  // what a round's deck holds, for the counter under the cards
+  const NOUN = { seed1: 'rhythms', seed2: 'shapes', chords: 'chord progressions', bass: 'bass lines', pads: 'pads', perc: 'percussion parts', beat: 'beats', sound: 'sounds' };
+  const SLIDE_MS = 200;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,7 +44,7 @@
   const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH };
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
-  let raf = 0, saveTimer = 0;
+  let raf = 0, saveTimer = 0, sliding = false;
 
   // ---------------------------------------------------------------- state
 
@@ -220,6 +223,22 @@
     set(fn(S));
   }
 
+  /** move through the deck: the three on screen slide off to one side, the next three come in from the other */
+  function slide(fn) {
+    if (sliding || S.phase !== 'round') return;
+    const ns = fn(S);
+    if (ns === S) return;
+    const deal = root.querySelector('.b-deal');
+    let still = false;
+    try { still = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* no matchMedia: animate */ }
+    if (!deal || still) { step(() => ns); return; }
+    halt();
+    P.src = '';
+    sliding = true;
+    deal.classList.add(ns.kind === 'prev' ? 'out-r' : 'out-l');
+    setTimeout(() => { sliding = false; step(fn); }, SLIDE_MS);
+  }
+
   function back(rowId) {
     const row = S.hist.find((r) => r.id === rowId);
     if (!row) return;
@@ -247,7 +266,9 @@
     promote: (el) => promote(Number(el.dataset.i)),
     walk: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
-    more: () => step(F.more),
+    next: () => slide(F.next),
+    prev: () => slide(F.prev),
+    jump: (el) => slide((s) => F.to(s, Number(el.dataset.b))),
     skip: () => step(F.skip),
     go: (el) => step((s) => F.enter(s, el.dataset.dir)),
     finish: () => step(F.finish),
@@ -268,7 +289,7 @@
     if (fn) fn(el);
   }
 
-  /** keys while the screen shows: Space play/stop, 1-3 hear A-C, Escape stop. true when handled */
+  /** keys while the screen shows: Space play/stop, 1-3 hear A-C, ←/→ the three before or after, Escape stop. true when handled */
   function onKey(e) {
     if (!shown || e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = e.key;
@@ -285,6 +306,12 @@
     if (/^[1-3]$/.test(k) && S.phase === 'round') {
       const i = Number(k) - 1;
       if (F.options(S)[i]) hear(curKey(i));
+      return true;
+    }
+    if ((k === 'ArrowRight' || k === 'ArrowLeft') && S.phase === 'round') {
+      if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return false;
+      e.preventDefault();
+      slide(k === 'ArrowRight' ? F.next : F.prev);
       return true;
     }
     return false;
@@ -396,7 +423,7 @@
     }
     if (S.phase === 'next') return A.line(L.next, S.seq);
     if (S.phase === 'gold') return A.line(L.gold, S.hid);
-    if (S.msg === 'more') return A.line(L.more, S.seq);
+    if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
     if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
     return A.line(L.entry[S.round.dir], S.seq);
   }
@@ -418,22 +445,41 @@
   }
 
   function roundHtml(animate) {
-    const dir = S.round.dir, opts = F.options(S);
+    const dir = S.round.dir, opts = F.options(S), inf = F.info(S);
     const kind = S.kind;
     const cards = opts.map((o, i) => {
       let anim = 'b-pop', delay = (i * 0.08).toFixed(2) + 's';
       if (kind === 'rise') { if (i === 1) { anim = 'b-rise'; delay = '0s'; } else delay = (0.18 + i * 0.05).toFixed(2) + 's'; }
+      // dealt from the deck: the row slides in from the side it came from, the leading card first
+      if (kind === 'next') { anim = 'b-in-r'; delay = (i * 0.05).toFixed(2) + 's'; }
+      if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
       return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: PROMOTE[dir] || 'Add it', style });
     }).join('');
     const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
-    return '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
-      '<div class="b-cards">' + cards + '</div>' +
+    const last = inf.batch >= inf.batches - 1;
+    const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
+    const LEFT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const RIGHT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4l6 6-6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const SHUF = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 4s2 4 4 4H17M3 14h3.5c1.2 0 2-.4 2.7-1.2M17 6h-2.5c-1.2 0-2 .4-2.7 1.2M14.5 3.5 17 6l-2.5 2.5M14.5 11.5 17 14l-2.5 2.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // the pool: one tick per card, grouped in the threes they're dealt in
+    const seen = Math.max(S.round.seen || 0, inf.batch);
+    const strip = inf.sizes.map((n, b) => '<button type="button" class="b-seg' + (b === inf.batch ? ' now' : b <= seen ? ' seen' : '') + '" data-act="jump" data-b="' + b + '" tabindex="-1" aria-label="Cards ' + (inf.sizes.slice(0, b).reduce((t, x) => t + x, 0) + 1) + ' to ' + (inf.sizes.slice(0, b + 1).reduce((t, x) => t + x, 0)) + '">' + '<i></i>'.repeat(n) + '</button>').join('');
+    const count = (inf.from === inf.to ? inf.from : inf.from + '–' + inf.to) + ' of ' + inf.total + ' ' + NOUN[dir] + (inf.deal ? ' · shuffled' : '');
+    return '<div class="b-deal">' +
+        '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
+        arrow('prev', 'prev', 'The three before', LEFT, inf.batch === 0) +
+        '<div class="b-cards">' + cards + '</div>' +
+        (last ? arrow('next shuf', 'next', 'That’s all of them: shuffle and deal again', SHUF, inf.batches < 2) : arrow('next', 'next', 'The next three', RIGHT, false)) +
+      '</div>' +
+      '<div class="b-pool" aria-label="The deck">' +
+        '<div class="b-strip">' + strip + '</div>' +
+        '<span class="b-count">' + esc(count) + '</span>' +
+      '</div>' +
       '<div class="b-actions">' +
-        '<button type="button" class="b-ghost" data-act="more">Three more</button>' +
         (dir === 'seed2' ? '<button type="button" class="b-ghost" data-act="walk">Keep the plain walk</button>' : '') +
         (/^seed/.test(dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">Not now</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Bobby gives your ears a moment between options.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 

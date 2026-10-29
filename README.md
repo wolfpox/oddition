@@ -43,11 +43,19 @@ file** to keep a copy or move it to another machine.
 ## Bones to Gold: audition a starting idea
 
 Press **Audition a starting idea** and an idea grows from the bottom up, one
-layer at a time. Every round offers three options, spread along what matters
-most for that layer, so they sound clearly different. Click a card to hear it
-(or press `1` `2` `3`); promote the one you like. Nothing is thrown away:
-every round, with the options you passed over, stays in the history below,
-where you can hear any card again or go **Back to this round** and build
+layer at a time. Every round is a deck: its whole pool of options (80
+rhythms, around 70 shapes, 24 chord progressions, ...), dealt three at a
+time. The three are spread along what matters most for that layer, so they
+sound clearly different; options that sound alike are never dealt together.
+Click a card to hear it (or press `1` `2` `3`); promote the one you like.
+The arrows beside the cards (or `←` `→`) slide to the next three or back to
+the three before. Under the cards, a strip shows the deck, one tick per card,
+and how far you've dealt; click it to jump. Every card comes up once before
+anything repeats; after the last three the deck is shuffled and dealt again
+in new threes. The first three are each round's clearest; the unusual ones
+(shapes past an octave or with big jumps, chords that fit less well) come
+later, not never. Every round you promoted from stays in the history below,
+where you can hear its cards again or go **Back to this round** and build
 again from there.
 
 1. **Rhythm and scale.** A 2-bar rhythm walked up and down a scale, so you
@@ -73,8 +81,7 @@ again from there.
 
 Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
 **Land on home**, **Surprise me** and so on re-roll the three with that
-steer; **Why does that work?** has him explain. **Three more** deals a fresh
-three. When something is playing and you pick another card, it stops, its
+steer, from a narrower deck; **Why does that work?** has him explain. When something is playing and you pick another card, it stops, its
 card lowers, and Bobby gives your ears two seconds before the next one plays.
 
 **That's the idea** (available once there is a melody) shows how it got
