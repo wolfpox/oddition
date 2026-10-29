@@ -34,9 +34,12 @@
     half: 'Half speed: the first half of the part stretched over the whole.',
   };
 
-  function formNotes(notes, form, partLen, isDrum) {
+  function formNotes(notes, form, partLen, isDrum, meterId) {
     if (!form || form === 'full') return notes;
-    const BAR = T.BAR, BEAT = T.BEAT;
+    // bars and beats of the part's meter (4/4 unless it says otherwise)
+    const M = T.meter(meterId);
+    const BAR = M.ticks, BEAT = T.BEAT;
+    const onBeat = (t) => (M.id === '4/4' ? t % BEAT === 0 : M.pulses.some((p) => p.s * T.STEP === T.mod(t, BAR)));
     const tag = (n, t, d, v) => Object.assign({}, n, { t, d, st: n.st != null ? n.st : n.t }, v != null ? { v } : {});
     if (form === 'half') {
       return notes.filter((n) => n.t < partLen / 2).map((n) => tag(n, n.t * 2, Math.max(15, n.d * 2)));
@@ -61,12 +64,12 @@
       });
     }
     if (form === 'outline') {
-      const onBeat = notes.filter((n) => n.t % BEAT === 0);
-      if (isDrum) return onBeat.map((n) => tag(n, n.t, n.d));
+      const beats = notes.filter((n) => onBeat(n.t));
+      if (isDrum) return beats.map((n) => tag(n, n.t, n.d));
       // hold each onset group until the next one (at most a bar)
-      const starts = [...new Set(onBeat.map((n) => n.t))].sort((a, b) => a - b);
+      const starts = [...new Set(beats.map((n) => n.t))].sort((a, b) => a - b);
       const next = new Map(starts.map((t, i) => [t, i + 1 < starts.length ? starts[i + 1] : partLen]));
-      return onBeat.map((n) => tag(n, n.t, Math.max(n.d, Math.min(BAR, next.get(n.t) - n.t))));
+      return beats.map((n) => tag(n, n.t, Math.max(n.d, Math.min(BAR, next.get(n.t) - n.t))));
     }
     return notes;
   }
@@ -77,7 +80,7 @@
    */
   function partEvents(part, target) {
     const tg = target || {};
-    const partLen = Math.max(1, part.bars || 1) * T.BAR;
+    const partLen = T.partTicks(part);
     const length = tg.length != null ? tg.length : partLen;
     const isDrum = T.isDrumRole(part.role);
     const base = (part.base != null ? part.base : 60) + 12 * (tg.oct || 0);
@@ -86,7 +89,7 @@
     const tgtProg = tg.prog && tg.prog.length ? tg.prog : srcProg;
     const tonic = tg.tonic != null ? tg.tonic : (part.ctx ? part.ctx.tonic : 0);
     const scale = tg.scale || (part.ctx ? part.ctx.scale : 'major');
-    const notes = formNotes(part.notes || [], tg.form, partLen, isDrum);
+    const notes = formNotes(part.notes || [], tg.form, partLen, isDrum, part.meter);
     const out = [];
 
     for (let loopStart = 0; loopStart < length; loopStart += partLen) {

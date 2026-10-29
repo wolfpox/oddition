@@ -292,7 +292,7 @@
     const { w, h, dpr } = fit(canvas);
     const ctx = canvas.getContext('2d');
     const tk = tokens();
-    const length = Math.max(1, idea.bars) * T.BAR;
+    const length = Odd.idea.lengthOf(idea), barLen = length / Math.max(1, idea.bars);
     const mute = new Set(o.mute || []);
     const rows = Math.max(1, idea.voices.length);
     const rh = h / rows;
@@ -305,7 +305,7 @@
     ctx.strokeStyle = tk.grid;
     ctx.lineWidth = 1;
     for (let b = 1; b < idea.bars; b++) {
-      const x = Math.round(xOf(b * T.BAR)) + 0.5;
+      const x = Math.round(xOf(b * barLen)) + 0.5;
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
     }
 

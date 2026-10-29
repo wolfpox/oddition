@@ -11,13 +11,15 @@
  * whole riff section can each be one idea. Voices can be split off into ideas
  * of their own, and ideas can be joined.
  *
- *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags, bones }
+ *   idea  = { id, name, bars, voices: [voice], style, from, created, starred, tags, bones, meter? }
+ *           meter: its time signature ('3/4', '7/8', ...) when it isn't 4/4. Every
+ *           voice of an idea shares one meter (join refuses to mix them).
  *           from: where it was captured ('booth' | 'section' | 'shelf' | 'join' | 'split' | 'bones')
  *           bones: (optional) the Bones to Gold idea it was built from (Odd.audition), to keep building it there
  *   voice = { role, name, sourceId, part, oct, form, core }
  *           part: a copy of the part as found (null for a voice that is only a core)
  *           oct, form: how the part was played where it was found (slot octave and form)
- *   core  = { len, drum, hits: [{ t, d, w, h }], land, root }
+ *   core  = { len, drum, hits: [{ t, d, w, h }], land, root, meter? }
  *           t, d  onset and length in ticks
  *           w     weight: 0 ghost, 1 normal, 2 accent (from velocity, place in the bar, length)
  *           h     height. Pitched: scale steps from the first note (+2 is a third up).
@@ -49,8 +51,16 @@
     return 1;
   }
 
-  /** how strong a place in the bar is: 1 the downbeat, 0.75 beat 3, 0.5 other beats, 0.25 off-beat 8ths, 0 the rest */
-  function metric(t) {
+  /**
+   * How strong a place in the bar is: 1 the downbeat, 0.75 beat 3, 0.5 other
+   * beats, 0.25 off-beat 8ths, 0 the rest. In another meter (mid), beat 3 is
+   * any group start (Odd.theory.stepWeight).
+   */
+  function metric(t, mid) {
+    if (mid && mid !== '4/4') {
+      const m = T.meter(mid), x = T.mod(t, m.ticks);
+      return x % T.STEP === 0 ? T.stepWeight(m, x / T.STEP) : 0;
+    }
     const x = T.mod(t, T.BAR);
     if (x === 0) return 1;
     if (x === 2 * T.BEAT) return 0.75;
@@ -66,9 +76,9 @@
 
   /** the notes a part plays where it was found: its form applied, cut to its length */
   function heardNotes(part, form) {
-    const len = Math.max(1, part.bars || 1) * T.BAR;
+    const len = T.partTicks(part);
     const drum = T.isDrumRole(part.role);
-    const notes = form && form !== 'full' && Odd.render ? Odd.render.formNotes(part.notes || [], form, len, drum) : part.notes || [];
+    const notes = form && form !== 'full' && Odd.render ? Odd.render.formNotes(part.notes || [], form, len, drum, part.meter) : part.notes || [];
     return notes.filter((n) => n.t >= 0 && n.t < len);
   }
 
@@ -78,9 +88,11 @@
    */
   function extract(part, opts) {
     const o = opts || {};
-    const len = Math.max(1, Math.min(MAX_BARS, part.bars || 1)) * T.BAR;
+    const mid = T.meter(part.meter).id;
+    const len = Math.max(1, Math.min(MAX_BARS, part.bars || 1)) * T.barTicks(mid);
     const drum = T.isDrumRole(part.role);
     const notes = heardNotes(part, o.form);
+    const meta = mid === '4/4' ? {} : { meter: mid };
     let raw = [];
     if (drum) {
       // one hit per onset and height: kick and floor tom together are one low hit
@@ -107,7 +119,7 @@
       raw = [...at.values()].map(({ n, v }) => ({ t: n.t, d: n.d, v, deg: n.deg }));
     }
     raw.sort((a, b) => a.t - b.t || (a.h || 0) - (b.h || 0));
-    if (!raw.length) return { len, drum, hits: [], land: -1, root: drum ? null : 0 };
+    if (!raw.length) return Object.assign({ len, drum, hits: [], land: -1, root: drum ? null : 0 }, meta);
 
     let vmin = 127, vmax = 1;
     for (const r of raw) { vmin = Math.min(vmin, r.v); vmax = Math.max(vmax, r.v); }
@@ -115,27 +127,27 @@
     const root = drum ? null : raw[0].deg;
     const hits = raw.map((r) => {
       const vel = spread >= 10 ? (r.v - vmin) / spread : 0.5;
-      const m = metric(r.t);
+      const m = metric(r.t, mid);
       const score = drum ? 0.65 * vel + 0.35 * m : 0.55 * vel + 0.3 * m + 0.15 * Math.min(1, r.d / T.BEAT);
       const w = score >= 0.6 ? 2 : score < 0.28 ? 0 : 1;
       const d = Math.max(1, Math.min(r.d, len - r.t));
       return { t: r.t, d, w, h: drum ? r.h : r.deg - root };
     });
-    return { len, drum, hits, land: landing(hits, len, drum), root };
+    return Object.assign({ len, drum, hits, land: landing(hits, len, drum, mid), root }, meta);
   }
 
   /**
    * The hit an idea heads for. Pitched: a long note on a strong beat, late in
    * the idea. Drums: a strong hit late in the cycle, low or mid before high.
    */
-  function landing(hits, len, drum) {
+  function landing(hits, len, drum, mid) {
     let best = -1, bestScore = -1;
     hits.forEach((x, i) => {
       if (x.w === 0) return;
       const pos = x.t / len;
       const score = drum
-        ? 0.4 * (x.w / 2) + 0.3 * metric(x.t) + 0.2 * pos + (x.h < 2 ? 0.1 : 0)
-        : 0.45 * Math.min(1, x.d / (2 * T.BEAT)) + 0.3 * metric(x.t) + 0.25 * pos;
+        ? 0.4 * (x.w / 2) + 0.3 * metric(x.t, mid) + 0.2 * pos + (x.h < 2 ? 0.1 : 0)
+        : 0.45 * Math.min(1, x.d / (2 * T.BEAT)) + 0.3 * metric(x.t, mid) + 0.25 * pos;
       if (score >= bestScore) { best = i; bestScore = score; }
     });
     return best >= 0 ? best : hits.length - 1;
@@ -164,9 +176,20 @@
 
   function barsOf(voices) {
     let bars = 1;
-    for (const v of voices) bars = Math.max(bars, Math.round(v.core.len / T.BAR));
+    for (const v of voices) bars = Math.max(bars, Math.round(v.core.len / T.barTicks(v.core.meter)));
     return Math.min(MAX_BARS, bars);
   }
+  /** the voices' meter: '4/4' unless they say otherwise */
+  function meterOfVoices(voices) {
+    const v = voices.find((x) => x.core && x.core.meter);
+    return v ? T.meter(v.core.meter).id : '4/4';
+  }
+  /** an idea's meter ('4/4', '3/4', '7/8', ...) */
+  function meterOf(idea) { return T.meter(idea && idea.meter).id; }
+  /** an idea's length in ticks: its bars in its meter */
+  function lengthOf(idea) { return Math.max(1, (idea && idea.bars) || 1) * T.barTicks(meterOf(idea)); }
+  /** { meter } for an idea in another meter, nothing for 4/4 */
+  function meterField(voices) { const m = meterOfVoices(voices); return m === '4/4' ? {} : { meter: m }; }
 
   function nameFor(voices) {
     const names = [...new Set(voices.map((v) => v.name))];
@@ -192,7 +215,7 @@
   }
 
   function make(voices, o) {
-    return {
+    return Object.assign({
       id: uid(),
       name: o.name || nameFor(voices),
       bars: barsOf(voices),
@@ -202,7 +225,7 @@
       created: Date.now(),
       starred: false,
       tags: [],
-    };
+    }, meterField(voices));
   }
 
   /** a new idea holding one voice of another */
@@ -212,8 +235,9 @@
     return make([clone(v)], { name: v.name, style: idea.style, from: 'split' });
   }
 
-  /** a new idea holding every voice of the given ideas, in order */
+  /** a new idea holding every voice of the given ideas, in order; null when their meters differ */
   function join(ideas, opts) {
+    if (new Set(ideas.map(meterOf)).size > 1) return null;
     const voices = [];
     for (const idea of ideas) for (const v of idea.voices) voices.push(clone(v));
     if (!voices.length) return null;
@@ -259,20 +283,25 @@
   };
 
   /** "beat 3", "the and of 2", "just after beat 4", with the bar when the idea is longer than one */
-  function placeName(t, len) {
-    const bar = Math.floor(t / T.BAR) + 1;
-    const x = T.mod(t, T.BAR);
-    const beat = Math.floor(x / T.BEAT) + 1;
-    const off = x % T.BEAT;
-    const where = off === 0 ? 'beat ' + beat : off === T.BEAT / 2 ? 'the and of ' + beat : 'just after beat ' + beat;
-    return len > T.BAR ? 'bar ' + bar + ', ' + where : where;
+  function placeName(t, len, mid) {
+    const m = T.meter(mid), BAR = m.ticks;
+    const bar = Math.floor(t / BAR) + 1;
+    const x = T.mod(t, BAR);
+    // the beat it falls in: quarters in x/4, the groups in 6/8 and 7/8
+    let k = 0;
+    m.pulses.forEach((p, i) => { if (p.s * T.STEP <= x) k = i; });
+    const p = m.pulses[k], beat = k + 1, off = x - p.s * T.STEP;
+    const where = off === 0 ? 'beat ' + beat : p.len === 4 && off === T.BEAT / 2 ? 'the and of ' + beat : 'just after beat ' + beat;
+    return len > BAR ? 'bar ' + bar + ', ' + where : where;
   }
 
   /** share of the hits that matter (not ghosts) that fall off the beat */
   function offBeat(core) {
     const real = core.hits.filter((x) => x.w > 0);
     if (!real.length) return 0;
-    return real.filter((x) => x.t % T.BEAT !== 0).length / real.length;
+    const m = T.meter(core.meter);
+    const onBeat = (t) => m.pulses.some((p) => p.s * T.STEP === T.mod(t, m.ticks));
+    return real.filter((x) => !onBeat(x.t)).length / real.length;
   }
 
   /** a short description of one voice's core, e.g. "9 notes · rises and falls back within a 5th · lands on bar 2, beat 1" */
@@ -297,7 +326,7 @@
     const off = offBeat(c);
     parts.push(off < 0.25 ? 'on the beat' : off < 0.55 ? 'some off-beats' : 'syncopated');
     const land = c.hits[c.land];
-    if (land && n > 1) parts.push('lands on ' + placeName(land.t, c.len));
+    if (land && n > 1) parts.push('lands on ' + placeName(land.t, c.len, c.meter));
     return parts.join(' · ');
   }
 
@@ -431,7 +460,7 @@
    */
   function rungEvents(idea, opts) {
     const o = opts || {};
-    const length = o.length || idea.bars * T.BAR;
+    const length = o.length || lengthOf(idea);
     const prefix = o.prefix || '__v';
     const mute = new Set(o.mute || []);
     const out = [];
@@ -480,7 +509,11 @@
       });
     }
     if (!voices.length) return null;
+    // an idea is one meter: voices that disagree with the first are dropped
+    const mid = meterOfVoices(voices);
+    for (let i = voices.length - 1; i >= 0; i--) if (T.meter(voices[i].core.meter).id !== mid) voices.splice(i, 1);
     return {
+      ...meterField(voices),
       id: raw.id != null ? String(raw.id) : uid(),
       name: String(raw.name || nameFor(voices)),
       bars: barsOf(voices),
@@ -495,7 +528,7 @@
   }
 
   Odd.idea = {
-    MAX_BARS, drumClass, metric, extract, landing,
+    MAX_BARS, drumClass, metric, extract, landing, meterOf, lengthOf,
     fromParts, voiceFrom, split, join, removeVoice, nameFor,
     contourOf, describe, placeName, offBeat,
     bonesEvents, fullEvents, events, repair,

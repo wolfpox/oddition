@@ -1,6 +1,7 @@
 /* Oddition — music theory helpers.
  *
- * Time is in ticks: 480 per quarter note, 4/4 only (1 bar = 1920 ticks).
+ * Time is in ticks: 480 per quarter note. BAR is a 4/4 bar (1920 ticks);
+ * code that knows other meters uses meter() below instead.
  * Pitched notes are stored as scale degrees, so a part can be re-voiced into
  * any key, mode, or chord progression ("refit") without being regenerated.
  *
@@ -671,8 +672,84 @@
   /** roles whose notes are GM drum sounds (channel 10), not scale degrees */
   function isDrumRole(role) { return role === 'drums' || role === 'perc'; }
 
+  // ---------------- meters
+
+  /*
+   * A meter is n beats of 1/d notes per bar, felt in groups (in 1/d units):
+   * 7/8 as 2+2+3 puts the strong beats on eighths 1, 3 and 5. The rest of the
+   * engine still works in 4/4 (BAR); these helpers are for code that has been
+   * taught other meters. Everything is on the 16th-note grid ("steps").
+   *
+   *   meter(id) = { id, n, d, groups, unit, steps, ticks, beats, pulses,
+   *                 groupStarts, harm, compound, name, feel }
+   *   unit         steps in one 1/d note (4 for quarters, 2 for eighths)
+   *   steps/ticks  one bar
+   *   beats        one bar in quarter notes (7/8 = 3.5)
+   *   pulses       [{ s, len }] the beats you tap: each quarter in x/4, each
+   *                group in x/8 (6/8 is tapped in two, 7/8 as short-short-long)
+   *   groupStarts  steps where a group starts: the strong beats
+   *   harm         steps where chords usually change: each group start, or
+   *                for three groups or more, the downbeat and the group start
+   *                nearest the middle of the bar
+   */
+  const METERS = {
+    '4/4': { n: 4, d: 4, groups: [2, 2], name: 'Four', feel: 'four steady beats to a bar' },
+    '3/4': { n: 3, d: 4, groups: [3], name: 'Three', feel: 'three beats to a bar, like a waltz: ONE two three' },
+    '6/8': { n: 6, d: 8, groups: [3, 3], name: 'Six-eight', feel: 'two big beats, each split in three, so it rolls: ONE-and-a TWO-and-a' },
+    '5/4': { n: 5, d: 4, groups: [3, 2], name: 'Five', feel: 'five beats to a bar, felt as three then two: ONE two three FOUR five' },
+    '7/8': { n: 7, d: 8, groups: [2, 2, 3], name: 'Seven-eight', feel: 'seven quick beats, felt as two, two, three: short, short, long' },
+  };
+  const METER_IDS = Object.keys(METERS);
+  const meterCache = {};
+
+  function meter(id) {
+    const key = METERS[id] ? id : '4/4';
+    if (meterCache[key]) return meterCache[key];
+    const m = METERS[key];
+    const unit = 16 / m.d;
+    const steps = m.n * unit;
+    const groupStarts = [];
+    let at = 0;
+    m.groups.forEach((g) => { groupStarts.push(at); at += g * unit; });
+    const pulses = [];
+    if (m.d === 4) for (let s = 0; s < steps; s += unit) pulses.push({ s, len: unit });
+    else m.groups.forEach((g, i) => pulses.push({ s: groupStarts[i], len: g * unit }));
+    let harm = groupStarts.slice();
+    if (groupStarts.length > 2) {
+      const mid = groupStarts.slice(1).sort((a, b) => Math.abs(a - steps / 2) - Math.abs(b - steps / 2) || a - b)[0];
+      harm = [0, mid];
+    }
+    const out = {
+      id: key, n: m.n, d: m.d, groups: m.groups.slice(), unit, steps, ticks: steps * STEP, beats: steps / 4,
+      pulses, groupStarts, harm, compound: m.d === 8, name: m.name, feel: m.feel,
+    };
+    meterCache[key] = out;
+    return out;
+  }
+  /** the step within its bar */
+  function barStep(m, s) { return mod(s, m.steps); }
+  /** how strong a step is: 1 the downbeat, 0.75 a group start, 0.5 another beat, 0.25 an eighth, 0 the rest */
+  function stepWeight(m, s) {
+    const x = barStep(m, s);
+    if (x === 0) return 1;
+    if (m.groupStarts.indexOf(x) >= 0) return 0.75;
+    if (m.pulses.some((p) => p.s === x)) return 0.5;
+    return x % 2 === 0 ? 0.25 : 0;
+  }
+  /** one bar of a meter in ticks */
+  function barTicks(id) { return meter(id).ticks; }
+  /** a part's length in ticks: its bars, in its meter (parts without one are 4/4) */
+  function partTicks(part) { return Math.max(1, (part && part.bars) || 1) * meter(part && part.meter).ticks; }
+  /** the MIDI time signature bytes: numerator, log2 denominator, clocks per click, 32nds per quarter */
+  function timeSigBytes(id) {
+    const m = meter(id);
+    const click = m.d === 4 ? 24 : m.groups.every((g) => g === 3) ? 36 : 12;
+    return [m.n, Math.round(Math.log2(m.d)), click, 8];
+  }
+
   Odd.theory = {
     isDrumRole,
+    METERS, METER_IDS, meter, barStep, stepWeight, timeSigBytes, barTicks, partTicks,
     PPQ, BEAT, BAR, STEP, NOTE_NAMES, NUMERALS, SCALES,
     mod, scaleSteps, degToSemis, tonicOffset, pitchOf, degreeOf, midiName, clampPitch,
     MODES, chordAlt, chordShape, isDiatonic, sameChord, chordOnly, rescaleChord, resolveChord, parseChord,

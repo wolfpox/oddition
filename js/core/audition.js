@@ -10,8 +10,11 @@
  *          chords, bass, perc (claps and taps), beat (grows the perc),
  *          pads (support), sound (instrument, tempo and swing: the genre)
  *
- * The only fixed assumptions: 4/4, 2 bars on a 16th grid, 100 BPM until a
- * sound is picked, key of C.
+ * The only fixed assumptions: 2 bars on a 16th grid, 100 BPM until a sound
+ * is picked, key of C. The meter is picked with the rhythm (4/4 unless asked:
+ * "Another meter" goes through 3/4, 6/8, 5/4 and 7/8), and every later layer
+ * follows it: chords change on its strong beats, drums are built from its
+ * groups.
  *
  * Every round offers three options spread along that layer's most telling
  * difference (sparse..busy, answer..question, dark..bright, ...). Requests
@@ -28,6 +31,7 @@
 (function (Odd) {
   'use strict';
 
+  // two bars of 4/4; an idea in another meter has its own (stepsOf)
   const STEPS = 32;
   const STEP_TICKS = 120; // a 16th at PPQ 480
   const LENGTH = STEPS * STEP_TICKS;
@@ -85,7 +89,7 @@
   const NEXT_ORDER = ['chords', 'bass', 'perc', 'beat', 'pads', 'sound'];
   const LAYER_ORDER = ['chords', 'bass', 'pads', 'perc', 'beat'];
   const REQS = {
-    seed1: [{ label: 'Busier', p: 1, reply: 'Busier. Okay, let’s hear it.' }, { label: 'Sparser', p: -1, reply: 'More space. Here.' }, { label: 'Darker scale', s: -1, reply: 'Darker scales. Give me a second.' }, { label: 'Brighter scale', s: 1, reply: 'Brighter. Here we go.' }, WHY],
+    seed1: [{ label: 'Busier', p: 1, reply: 'Busier. Okay, let’s hear it.' }, { label: 'Sparser', p: -1, reply: 'More space. Here.' }, { label: 'Darker scale', s: -1, reply: 'Darker scales. Give me a second.' }, { label: 'Brighter scale', s: 1, reply: 'Brighter. Here we go.' }, { label: 'Another meter', m: 1 }, WHY],
     seed2: [{ label: 'Subtler', s: -1, reply: 'Smaller moves. Listen to how the rhythm comes forward.' }, { label: 'Bigger', s: 1, reply: 'Bigger shapes. These travel.' }, { label: 'More jumps', x: 'jumpy', reply: 'Jumpier. Here.' }, { label: 'Land on home', x: 'home', reply: 'All three land on home now. Hear how finished that sounds?' }, WHY],
     chords: [{ label: 'Darker', p: -1, reply: 'Darker. Same melody, more shadow.' }, { label: 'Brighter', p: 1, reply: 'Brighter. Here.' }, { label: 'Surprise me', x: 'colour', reply: 'Okay, a chord or two from outside the scale. Still fits.' }, WHY],
     bass: [{ label: 'Busier', s: 1, reply: 'Busier bass. Here.' }, { label: 'Simpler', s: -1, reply: 'Simpler. Less is more, sometimes.' }, { label: 'Lock tighter', p: 1, reply: 'Tighter to the melody. Listen.' }, WHY],
@@ -127,40 +131,86 @@
 
   // ---------------------------------------------------------------- rhythm
 
+  // one beat's worth of rhythm. A quarter-note beat is 4 steps; a beat of
+  // three eighths (6/8, the long beat of 7/8) is 6 steps, with its own cells
   const CELLS = { q: [[0, 4]], e: [[0, 2], [2, 2]], off: [[2, 2]], s: [[0, 1], [1, 1], [2, 1], [3, 1]], dot: [[0, 3], [3, 1]], sync: [[0, 1], [1, 2], [3, 1]], es: [[0, 2], [2, 1], [3, 1]], ant: [[3, 1]], rest: [], hold: [] };
+  const CELLS6 = { q: [[0, 6]], e: [[0, 2], [2, 2], [4, 2]], off: [[2, 2], [4, 2]], s: [[0, 1], [1, 1], [2, 1], [3, 1], [4, 2]], dot: [[0, 4], [4, 2]], sync: [[0, 2], [2, 4]], es: [[0, 2], [2, 2], [4, 1], [5, 1]], ant: [[4, 2]], rest: [], hold: [] };
 
-  /** a 2-bar rhythm from density d and push y (0..1), one beat-cell at a time */
-  function makeRhythm(seed, d, y) {
+  // ---------------------------------------------------------------- meter
+  // An idea's meter is its rhythm's (rhythm.m, absent for 4/4). Every later
+  // layer reads it from the melody, so the whole idea stays in one meter.
+
+  const METER_ORDER = ['4/4', '3/4', '6/8', '5/4', '7/8'];
+  function meterOf(mel) { return Odd.theory.meter(mel && mel.r ? mel.r.m : null); }
+  /** the steps in an idea's two bars */
+  function stepsOf(mel) { return 2 * meterOf(mel).steps; }
+  function onPulse(m, s) { const x = mod(s, m.steps); return m.pulses.some((p) => p.s === x); }
+  /** each beat of both bars: [{ s, len, bar, k }] (k: the beat's place in its bar) */
+  function beatsOf(m) {
+    const out = [];
+    for (let bar = 0; bar < 2; bar++) m.pulses.forEach((p, k) => out.push({ s: bar * m.steps + p.s, len: p.len, bar, k }));
+    return out;
+  }
+  /** where chords sit in both bars: [{ s, len }], one per change (half bars in 4/4) */
+  function slotsOf(m) {
+    const out = [];
+    for (let bar = 0; bar < 2; bar++) m.harm.forEach((h, j) => out.push({ s: bar * m.steps + h, len: (j + 1 < m.harm.length ? m.harm[j + 1] : m.steps) - h }));
+    return out;
+  }
+  function slotAt(slots, s) {
+    const x = mod(s, slots[slots.length - 1].s + slots[slots.length - 1].len);
+    for (let i = slots.length - 1; i >= 0; i--) if (x >= slots[i].s) return i;
+    return 0;
+  }
+  /** the beats that answer the strong ones (2 and 4 in 4/4), for claps and snares: [step in bar] */
+  function backsOf(m) {
+    const weak = m.pulses.map((p) => p.s).filter((s) => m.groupStarts.indexOf(s) < 0);
+    return weak.length ? weak : m.groupStarts.slice(1);
+  }
+  /** notes that lean against the beat: off the beat, or (in eighth-note meters) off the eighths or held over one */
+  function offCount(m, hits) {
+    if (!m.compound) return hits.filter((h) => !onPulse(m, h[0])).length;
+    return hits.filter((h) => h[0] % 2 !== 0 || (!onPulse(m, h[0]) && h[1] > 2)).length;
+  }
+
+  /** a 2-bar rhythm from density d and push y (0..1), one beat-cell at a time, in meter mid (default 4/4) */
+  function makeRhythm(seed, d, y, mid) {
+    const m = Odd.theory.meter(mid), total = 2 * m.steps;
     const R = rng(seed);
     const W = { rest: 1.1 * (1 - d), hold: 1.4 * (1 - d), q: 1, e: 0.4 + 1.2 * d, off: 0.9 * y, s: 1.6 * d * d, dot: 0.5 + 0.3 * y, sync: 1.4 * y * d, es: 0.7 * d, ant: 0.6 * y };
     const first = { q: 1, e: 0.4 + d, dot: 0.6, s: d * d, es: 0.6 * d, sync: y * d };
     const bar1 = [weighted(R, first)];
-    for (let b = 1; b < 4; b++) bar1.push(weighted(R, W));
+    for (let b = 1; b < m.pulses.length; b++) bar1.push(weighted(R, W));
     // bar 2 echoes the start of bar 1 more often than not
     const bar2 = bar1.map((c, i) => (i < 2 && R() < 0.6 ? c : i === 0 ? weighted(R, first) : weighted(R, W)));
     const hits = [];
+    const beats = beatsOf(m);
     bar1.concat(bar2).forEach((c, b) => {
-      if (c === 'hold') { const p = hits[hits.length - 1]; if (p && p[0] + p[1] === b * 4) p[1] += 4; return; }
-      CELLS[c].forEach((x) => hits.push([b * 4 + x[0], x[1]]));
+      const bt = beats[b];
+      if (c === 'hold') { const p = hits[hits.length - 1]; if (p && p[0] + p[1] === bt.s) p[1] += bt.len; return; }
+      (bt.len === 6 ? CELLS6 : CELLS)[c].forEach((x) => hits.push([bt.s + x[0], x[1]]));
     });
     if (hits.length < 3) return null;
     const last = hits[hits.length - 1];
-    last[1] = Math.min(STEPS - last[0], Math.max(last[1], 4));
-    hits.forEach((h) => { h[2] = h[0] % 8 === 0 ? 2 : h[0] % 4 === 0 ? 1 : h[1] >= 3 ? 2 : 0; });
+    last[1] = Math.min(total - last[0], Math.max(last[1], 4));
+    hits.forEach((h) => { const x = mod(h[0], m.steps); h[2] = m.groupStarts.indexOf(x) >= 0 ? 2 : onPulse(m, x) ? 1 : h[1] >= 3 ? 2 : 0; });
     hits[0][2] = 2;
     return hits;
   }
-  function rhythmPool() {
-    return cached('rpool', () => {
+  function rhythmPool(mid) {
+    const m = Odd.theory.meter(mid);
+    return cached('rpool' + m.id, () => {
       const seen = {}, out = [];
       const DS = [0.05, 0.3, 0.55, 0.8, 1], YS = [0, 0.35, 0.7, 1];
       for (let i = 0; i < 80; i++) {
-        const hits = makeRhythm(1009 + i * 7919, DS[i % 5], YS[Math.floor(i / 5) % 4]);
+        const hits = makeRhythm(1009 + i * 7919, DS[i % 5], YS[Math.floor(i / 5) % 4], m.id);
         if (!hits) continue;
         const key = JSON.stringify(hits);
         if (seen[key]) continue;
         seen[key] = 1;
-        out.push({ id: 'r' + i, hits, n: hits.length, off: hits.filter((h) => h[0] % 4 !== 0).length });
+        const r = { id: 'r' + i, hits, n: hits.length, off: offCount(m, hits) };
+        if (m.id !== '4/4') Object.assign(r, { id: 'r' + i + '@' + m.id, m: m.id });
+        out.push(r);
       }
       return out;
     });
@@ -255,17 +305,18 @@
 
   // ---------------------------------------------------------------- chords, worked out from the melody
 
-  /** how much each pitch class sounds in each half-bar slot: long, strong and accented notes count most */
-  function slotWeights(notes) {
-    const W = [0, 1, 2, 3].map(() => new Array(12).fill(0));
+  /** how much each pitch class sounds in each chord slot: long, strong and accented notes count most */
+  function slotWeights(notes, m) {
+    const slots = slotsOf(m);
+    const W = slots.map(() => new Array(12).fill(0));
     notes.forEach((e) => {
-      for (let sl = 0; sl < 4; sl++) {
-        const a = Math.max(e.s, sl * 8), b = Math.min(e.s + e.d, (sl + 1) * 8);
-        if (b <= a) continue;
-        let w = (b - a) * (e.s === sl * 8 ? 1.5 : e.s % 4 === 0 ? 1.2 : 1) * (e.w === 2 ? 1.3 : 1);
-        if (e.s < sl * 8) w *= 0.6; // carried over from the slot before
-        W[sl][mod(e.m, 12)] += w;
-      }
+      slots.forEach((sl, k) => {
+        const a = Math.max(e.s, sl.s), b = Math.min(e.s + e.d, sl.s + sl.len);
+        if (b <= a) return;
+        let w = (b - a) * (e.s === sl.s ? 1.5 : onPulse(m, e.s) ? 1.2 : 1) * (e.w === 2 ? 1.3 : 1);
+        if (e.s < sl.s) w *= 0.6; // carried over from the slot before
+        W[k][mod(e.m, 12)] += w;
+      });
     });
     return W;
   }
@@ -286,10 +337,10 @@
     });
     return out;
   }
-  /** chord paths (one chord per half bar), best fit first, each differing from the others in 2+ slots */
+  /** chord paths (one chord per slot: half bars in 4/4), best fit first, each differing from the others in 2+ slots */
   function chordPool(mel, colour) {
     return cached('cp' + JSON.stringify(mel) + colour, () => {
-      const W = slotWeights(melodyNotes(mel));
+      const W = slotWeights(melodyNotes(mel), meterOf(mel));
       const C = chordCands(mel.scale);
       const S = W.map((ws) => C.map((c) => {
         let s = 0;
@@ -298,13 +349,21 @@
         if (c.colour) s += colour ? 0.4 : -0.9;
         return s;
       }));
-      const N = C.length, all = [];
-      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) for (let c = 0; c < N; c++) for (let d = 0; d < N; d++) {
-        const p = [a, b, c, d];
-        if (colour && !p.some((i) => C[i].colour)) continue;
-        let s = S[0][a] + S[1][b] + S[2][c] + S[3][d] + (C[a].root === 0 && !C[a].colour ? 1.5 : 0);
-        for (let i = 1; i < 4; i++) if (p[i] !== p[i - 1]) s -= 0.35;
-        all.push({ p, s });
+      const N = C.length, K = W.length, all = [];
+      // every path through the slots, in order (slot 0's chord changing slowest)
+      const p = new Array(K).fill(0);
+      for (;;) {
+        if (!colour || p.some((i) => C[i].colour)) {
+          let s = 0;
+          for (let i = 0; i < K; i++) s += S[i][p[i]];
+          s += C[p[0]].root === 0 && !C[p[0]].colour ? 1.5 : 0;
+          for (let i = 1; i < K; i++) if (p[i] !== p[i - 1]) s -= 0.35;
+          all.push({ p: p.slice(), s });
+        }
+        let k = K - 1;
+        while (k >= 0 && p[k] === N - 1) { p[k] = 0; k--; }
+        if (k < 0) break;
+        p[k]++;
       }
       all.sort((x, y) => y.s - x.s);
       const diff = (x, y) => x.filter((v, i) => v !== y[i]).length;
@@ -327,29 +386,33 @@
 
   // ---------------------------------------------------------------- the other layers, each made against the melody
 
-  function coverage(notes) {
-    const covered = new Array(STEPS).fill(false);
-    notes.forEach((n) => { for (let t = n.s; t < Math.min(STEPS, n.s + n.d); t++) covered[t] = true; });
+  function coverage(notes, total) {
+    const covered = new Array(total).fill(false);
+    notes.forEach((n) => { for (let t = n.s; t < Math.min(total, n.s + n.d); t++) covered[t] = true; });
     return covered;
   }
   function onsetsOf(notes) { const o = {}; notes.forEach((n) => { o[n.s] = 1; }); return o; }
+  /** every eighth note of both bars */
+  function evensOf(total) { return Array.from({ length: total / 2 }, (_, i) => i * 2); }
 
   function bassStyles(idea) {
+    const m = meterOf(idea.melody), STEPS = 2 * m.steps, slots = slotsOf(m);
     const notes = melodyNotes(idea.melody), chords = chordsFor(idea);
-    const covered = coverage(notes);
-    const ch = (s) => chords[Math.floor(mod(s, STEPS) / 8)];
+    const covered = coverage(notes, STEPS);
+    const ch = (s) => chords[slotAt(slots, s)];
     const root = (s) => 36 + ch(s).root;
     const tone = (s, k) => 36 + ch(s).root + mod(ch(s).pcs[k] - ch(s).root, 12);
     const gapsAt = [];
     for (let t = 0; t < STEPS; t++) if (!covered[t] && (t === 0 || covered[t - 1])) { let e = t; while (e < STEPS && !covered[e]) e++; gapsAt.push([t, e - t]); }
-    const evens = Array.from({ length: 16 }, (_, i) => i * 2);
+    const evens = evensOf(STEPS), beats = beatsOf(m), last = m.pulses.length - 1;
     const S = [
       { id: 'lock', tag: 'Locks on', notes: notes.filter((n) => n.w >= 1).map((n) => ({ s: n.s, d: Math.min(n.d, 4), m: root(n.s) })) },
       { id: 'double', tag: 'Every note with it', notes: notes.map((n) => ({ s: n.s, d: Math.min(n.d, 3), m: root(n.s) })) },
-      { id: 'steady', tag: 'Steady roots', notes: [0, 8, 16, 24].map((s) => ({ s, d: 7, m: root(s) })) },
-      { id: 'pedal', tag: 'Long pedal', notes: [0, 16].map((s) => ({ s, d: 15, m: root(s) })) },
-      { id: 'bounce', tag: 'Bouncing octaves', notes: evens.map((s) => ({ s, d: 2, m: root(s) + (s % 4 === 2 ? 12 : 0) })) },
-      { id: 'walk', tag: 'Walking', notes: [0, 4, 8, 12, 16, 20, 24, 28].map((s, i) => ({ s, d: 4, m: i % 4 === 3 ? root(s + 4) - 1 : tone(s, i % 4) })) },
+      { id: 'steady', tag: 'Steady roots', notes: slots.map((sl) => ({ s: sl.s, d: sl.len - 1, m: root(sl.s) })) },
+      { id: 'pedal', tag: 'Long pedal', notes: [0, m.steps].map((s) => ({ s, d: m.steps - 1, m: root(s) })) },
+      { id: 'bounce', tag: 'Bouncing octaves', notes: evens.map((s) => ({ s, d: 2, m: root(s) + (onPulse(m, s) ? 0 : 12) })) },
+      // a chord tone on each beat, and a half step below the next bar's root on the last one
+      { id: 'walk', tag: 'Walking', notes: beats.map((b) => ({ s: b.s, d: b.len, m: b.k === last ? root(b.s + b.len) - 1 : tone(b.s, b.k % 3) })) },
       { id: 'gaps', tag: 'Fills the gaps', notes: gapsAt.filter((g) => g[1] >= 2).map((g, i) => ({ s: g[0], d: Math.min(g[1], 4), m: i % 2 ? tone(g[0], 2) : root(g[0]) })) },
       { id: 'answer', tag: 'Answers back', notes: [].concat.apply([], gapsAt.filter((g) => g[1] >= 3).map((g) => { const out = []; for (let t = g[0]; t < g[0] + g[1]; t += 2) out.push({ s: t, d: 2, m: (t - g[0]) % 4 ? tone(t, 1) : root(t) }); return out; })) },
     ];
@@ -359,15 +422,17 @@
 
   function padStyles(idea) {
     const notes = melodyNotes(idea.melody), chords = chordsFor(idea), sc = idea.melody.scale;
+    const slots = slotsOf(meterOf(idea.melody)), STEPS = stepsOf(idea.melody);
+    const at = (i) => ({ s: slots[i].s, d: slots[i].len });
     const voiced = (c, base) => c.pcs.map((pc) => base + mod(pc - base, 12));
     const S = [
       { id: 'drone', tag: 'One quiet drone', voice: 'pad', notes: [{ s: 0, d: STEPS, ms: [60 + chords[0].root] }] },
       { id: 'shadow', tag: 'Shadow voice', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 2)] })) },
       { id: 'above', tag: 'Harmony above', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg + 2)] })) },
-      { id: 'dyad', tag: 'Two-note pad', voice: 'pad', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: [c.pcs[1], c.pcs[2]].map((pc) => 60 + mod(pc, 12)) })) },
-      { id: 'held', tag: 'Held chords', voice: 'pad', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: voiced(c, 55) })) },
-      { id: 'wide', tag: 'Wide strings', voice: 'strings', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: [48 + c.root].concat(voiced(c, 55), [67 + mod(c.pcs[2] - 7, 12)]) })) },
-      { id: 'high', tag: 'High shimmer', voice: 'glass', notes: chords.map((c, i) => ({ s: i * 8, d: 8, ms: voiced(c, 72) })) },
+      { id: 'dyad', tag: 'Two-note pad', voice: 'pad', notes: chords.map((c, i) => Object.assign(at(i), { ms: [c.pcs[1], c.pcs[2]].map((pc) => 60 + mod(pc, 12)) })) },
+      { id: 'held', tag: 'Held chords', voice: 'pad', notes: chords.map((c, i) => Object.assign(at(i), { ms: voiced(c, 55) })) },
+      { id: 'wide', tag: 'Wide strings', voice: 'strings', notes: chords.map((c, i) => Object.assign(at(i), { ms: [48 + c.root].concat(voiced(c, 55), [67 + mod(c.pcs[2] - 7, 12)]) })) },
+      { id: 'high', tag: 'High shimmer', voice: 'glass', notes: chords.map((c, i) => Object.assign(at(i), { ms: voiced(c, 72) })) },
     ];
     return S.map((x) => {
       const tot = x.notes.reduce((a, n) => a + n.d, 0) || 1;
@@ -377,19 +442,23 @@
     });
   }
 
+  /** steps in bar terms, repeated in both bars */
+  function bothBars(m, xs) { return xs.concat(xs.map((x) => x + m.steps)); }
+
   function percStyles(idea) {
     const notes = melodyNotes(idea.melody);
+    const m = meterOf(idea.melody), STEPS = 2 * m.steps;
     const at = (arr, k, v) => arr.map((s) => ({ s, k, v: v || 1 }));
-    const evens = Array.from({ length: 16 }, (_, i) => i * 2);
-    const backs = [4, 12, 20, 28];
+    const evens = evensOf(STEPS);
+    const bk = backsOf(m), backs = bothBars(m, bk);
     const S = [
       { id: 'accents', tag: 'Claps on its accents', hits: notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 })) },
       { id: 'back', tag: 'Backbeat claps', hits: at(backs, 'clap') },
       { id: 'taps', tag: 'Taps with the melody', hits: notes.map((n) => ({ s: n.s, k: 'tap', v: [0.5, 0.75, 1][n.w] })) },
-      { id: 'onetwo', tag: 'Tap, clap', hits: at([0, 8, 16, 24], 'tap').concat(at(backs, 'clap')) },
-      { id: 'shake8', tag: 'Shaker and claps', hits: evens.map((s) => ({ s, k: 'shaker', v: s % 4 ? 0.6 : 1 })).concat(at(backs, 'clap')) },
+      { id: 'onetwo', tag: 'Tap, clap', hits: at(bothBars(m, m.groupStarts), 'tap').concat(at(backs, 'clap')) },
+      { id: 'shake8', tag: 'Shaker and claps', hits: evens.map((s) => ({ s, k: 'shaker', v: onPulse(m, s) ? 1 : 0.6 })).concat(at(backs, 'clap')) },
       { id: 'shake16', tag: 'Busy shaker', hits: Array.from({ length: STEPS }, (_, s) => ({ s, k: 'shaker', v: s % 2 ? 0.5 : 0.9 })).concat(notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 }))) },
-      { id: 'tamb', tag: 'Off-beat tambourine', hits: at([2, 6, 10, 14, 18, 22, 26, 30], 'tamb').concat(at([12, 28], 'clap')) },
+      { id: 'tamb', tag: 'Off-beat tambourine', hits: at(evens.filter((s) => !onPulse(m, s)), 'tamb').concat(at(bothBars(m, [bk[bk.length - 1]]), 'clap')) },
     ];
     const onsets = onsetsOf(notes);
     return S.filter((x) => x.hits.length).map((x) => Object.assign(x, { n: x.hits.length, follow: x.hits.filter((h) => onsets[h.s]).length / x.hits.length }));
@@ -404,6 +473,37 @@
     { id: 'broken', tag: 'Broken', k: [0, 6, 10, 19, 22], s: [4, 13, 20, 29], h: EVENS, swing: 0 },
     { id: 'bounce', tag: 'Bouncing kick', k: [0, 3, 8, 11, 16, 19, 24, 27], s: [4, 12, 20, 28], h: [2, 6, 10, 14, 18, 22, 26, 30], swing: 0 },
   ].map((x) => Object.assign(x, { off: x.k.concat(x.s).filter((s) => s % 4 !== 0).length / (x.k.length + x.s.length) + x.swing * 0.5, n: x.k.length + x.s.length + x.h.length }));
+
+  /**
+   * Beats for other meters, built from where the meter's strong beats are
+   * rather than copied from 4/4. Swing only for quarter-note meters: 6/8 and
+   * 7/8 already move in threes.
+   */
+  function kitsFor(m) {
+    if (m.id === '4/4') return KITS;
+    const B = (xs) => bothBars(m, xs);
+    const pulses = m.pulses.map((p) => p.s), groups = m.groupStarts, backs = backsOf(m);
+    const eighths = evensOf(m.steps), offs = eighths.filter((s) => !onPulse(m, s));
+    const mid = m.harm[1] != null ? m.harm[1] : pulses[pulses.length - 1];
+    // a kick an eighth early: it leans into the next strong beat
+    const lean = groups.slice(1).map((g) => g - 2);
+    const out = [
+      { id: 'one', tag: 'Kick on the one', k: B([0]), s: B(backs), h: B(eighths), swing: 0 },
+      // kicks start the groups, the snare starts the last one (or answers the one bar-long group of 3/4)
+      groups.length > 1
+        ? { id: 'groups', tag: 'Kick on each group', k: B(groups.slice(0, -1)), s: B(groups.slice(-1)), h: B(eighths), swing: 0 }
+        : { id: 'groups', tag: 'Kick and answer', k: B([0, pulses[pulses.length - 1]]), s: B(backs.slice(0, 1)), h: B(eighths), swing: 0 },
+      { id: 'drive', tag: 'Driving', k: B(pulses), s: B([mid]), h: B(offs.length ? offs : eighths), swing: 0 },
+      { id: 'half', tag: 'Half-time', k: [0, m.steps - 2, m.steps + 0], s: B([mid]), h: Array.from({ length: 2 * m.steps }, (_, i) => i), swing: 0 },
+      { id: 'lean', tag: 'Leaning', k: B([0].concat(lean.length ? lean : [m.steps - 2])), s: B(backs).map((s, i) => (i >= backs.length ? s + 1 : s)), h: B(eighths), swing: 0 },
+    ];
+    if (!m.compound) out.push({ id: 'swing', tag: 'Swung', k: B([0, mid]), s: B(backs), h: B(eighths), swing: 0.6 });
+    const seen = {};
+    return out.filter((x) => { const key = JSON.stringify([x.k, x.s, x.h, x.swing]); return seen[key] ? false : (seen[key] = 1); }).map((x) => {
+      const ks = x.k.concat(x.s);
+      return Object.assign(x, { off: ks.filter((s) => !onPulse(m, s)).length / Math.max(1, ks.length) + x.swing * 0.5, n: x.k.length + x.s.length + x.h.length });
+    });
+  }
 
   // a genre is the last thing picked: a bundle of tempo, swing and instruments
   const GENRES = {
@@ -556,7 +656,7 @@
     return cached('o' + dir + round.batch + JSON.stringify(st) + JSON.stringify(idea), () => {
       const b = round.batch || 0;
       if (dir === 'seed1') {
-        const rs = spread(rhythmPool().map((r) => ({ r, a: r.n + 0.3 * r.off, b: 0 })), { p: st.p }, b);
+        const rs = spread(rhythmPool(st.m).map((r) => ({ r, a: r.n + 0.3 * r.off, b: 0 })), { p: st.p }, b);
         let sl = SCALE_ORDER.slice();
         if (st.s < 0) sl = sl.slice(0, 4);
         if (st.s > 0) sl = sl.slice(4);
@@ -573,7 +673,7 @@
         if (st.x === 'follow') { const f = pool.filter((c) => c.follow >= 0.5); if (f.length >= 3) pool = f; }
         return spread(pool.map((c) => Object.assign(c, { a: c.n, b: c.follow })), st, b);
       }
-      if (dir === 'beat') return spread(KITS.map((c) => Object.assign({}, c, { a: c.off, b: c.n })), st, b);
+      if (dir === 'beat') return spread(kitsFor(meterOf(idea.melody)).map((c) => Object.assign({}, c, { a: c.off, b: c.n })), st, b);
       return spread(soundStyles(idea, st.x === 'any').map((c) => Object.assign(c, { a: c.bpm, b: 0 })), st, b);
     });
   }
@@ -585,6 +685,15 @@
 
   // ---------------------------------------------------------------- words
 
+  /** Bobby on switching to a meter */
+  function meterLine(id) {
+    const m = Odd.theory.meter(id);
+    if (m.id === '4/4') return 'Back to four: ' + m.feel + '. Most music lives here.';
+    return m.id + ' now: ' + m.feel + '. Count along with one.';
+  }
+  /** the meter, said only when it isn't 4/4 */
+  function meterNote(mel) { const m = meterOf(mel); return m.id === '4/4' ? '' : m.id; }
+
   function shapeTag(kind, range) {
     return SWEEPS.indexOf(kind) >= 0 && range != null && range <= 2 ? 'Gentle ' + SHAPE_TAG[kind].toLowerCase() : SHAPE_TAG[kind];
   }
@@ -595,7 +704,7 @@
     return o.tag;
   }
   function statOf(dir, o) {
-    if (dir === 'seed1') return MODE[o.mel.scale].name.toLowerCase();
+    if (dir === 'seed1') return MODE[o.mel.scale].name.toLowerCase() + (meterNote(o.mel) ? ' · ' + meterNote(o.mel) : '');
     if (dir === 'seed2') return 'lands on ' + IV[o.land];
     if (dir === 'chords') return o.fit + '% fit';
     if (dir === 'bass') return o.n + (o.n === 1 ? ' note' : ' notes');
@@ -613,7 +722,7 @@
     const o = opts[i], rk = rankOf(opts, i);
     if (dir === 'seed1') {
       const r = o.mel.r, m = MODE[o.mel.scale];
-      const sc = m.name + ', so it sounds ' + m.mood + '.';
+      const sc = m.name + ', so it sounds ' + m.mood + '.' + (meterNote(o.mel) ? ' In ' + meterNote(o.mel) + '.' : '');
       if (rk === 'high') return 'Not bad, it’s got motion. Busiest of the three' + (r.off ? ', ' + r.off + ' notes pushing off the beat' : '') + '. ' + sc;
       if (rk === 'low') return 'Lots of air: just ' + r.n + ' notes. ' + sc;
       return 'Middle ground, ' + r.n + ' notes. ' + sc;
@@ -640,7 +749,12 @@
     return rk === 'low' ? t + ' Calmest of the three.' : rk === 'high' ? t + ' Most energy of the three.' : t;
   }
   function whyText(dir, o) {
-    if (dir === 'seed1') return MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
+    if (dir === 'seed1') {
+      const mt = meterOf(o.mel);
+      const t = MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
+      if (mt.id === '4/4') return t;
+      return t + ' It’s in ' + mt.id + ': ' + mt.feel + '. ' + (mt.compound ? 'The top number counts eighth notes, and how they’re grouped decides where the strong beats fall.' : 'The top number is how many beats fill a bar.');
+    }
     if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.') + (o.size === 0 ? ' It only moves a step or two, so repeated notes and rhythm make the hook.' : o.size === 2 ? ' It travels a long way, so the tune itself is the hook. Too many of those and a song gets tiring.' : '');
     if (dir === 'chords') { const col = o.chords.find((c) => c.colour); return 'Each chord was picked so the melody’s long, strong notes are notes of the chord: ' + o.fit + '% of the melody sits on them. ' + (col ? chordName(col) + ' is borrowed from outside the scale; it works because the melody note above it belongs to it.' : 'Minor chords under the same notes sound darker, major ones brighter.'); }
     if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
@@ -653,7 +767,7 @@
   function suggestion(idea) {
     const has = (d) => !!idea.layers[d];
     const notes = melodyNotes(idea.melody), r = idea.melody.r;
-    const gaps = coverage(notes).filter((c) => !c).length;
+    const gaps = coverage(notes, stepsOf(idea.melody)).filter((c) => !c).length;
     if (!has('chords') && notes.some((n) => n.d >= 6)) return 'chords';
     if (!has('bass') && gaps >= 8) return 'bass';
     if (!has('perc') && r.off / r.n > 0.3) return 'perc';
@@ -692,7 +806,11 @@
     const sound = pick('sound'), beat = pick('beat');
     const G = sound ? GENRES[sound.id] : null;
     const P = G ? G.patches : NEUTRAL;
-    const swing = sound ? sound.swing : beat ? beat.swing : 0;
+    const seeding = aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
+    const mel = seeding ? aud.spec.mel : idea.melody;
+    const m = meterOf(mel), STEPS = 2 * m.steps, LENGTH = STEPS * STEP_TICKS, slots = slotsOf(m);
+    // swing delays the off-beat eighths; meters that move in threes (6/8, 7/8) don't swing
+    const swing = m.compound ? 0 : sound ? sound.swing : beat ? beat.swing : 0;
     const shift = swing > 0.5 ? Math.round((swing * 4 - 2) * STEP_TICKS) : 0;
     const tick = (s) => s * STEP_TICKS + (mod(s, 4) === 2 ? shift : 0);
     const events = [];
@@ -702,12 +820,10 @@
       events.push({ t, d: Math.max(30, end - t - (gap == null ? 10 : gap)), p, v: Math.max(1, Math.min(127, Math.round(v))), track });
     };
     const hit = (track, s, p, v) => events.push({ t: tick(s), d: 60, p, v: Math.max(1, Math.min(127, Math.round(v))), track });
-    const seeding = aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
     const g = (d) => (!aud || aud.dir === d || aud.dir === 'sound' ? 1 : 0.6);
     const tracks = {};
     const track = (key, patch, vol) => { tracks[TRACK[key]] = { patch, volume: vol, mute: false, solo: false, channel: key === 'prc' || key === 'bt' ? 9 : 0 }; };
 
-    const mel = seeding ? aud.spec.mel : idea.melody;
     if (mel) {
       const up = (sound && sound.up) || 0;
       track('mel', P.lead, MIX.mel * (aud && !seeding && aud.dir !== 'sound' ? 0.75 : 1));
@@ -719,7 +835,7 @@
         if (!o) return;
         if (d === 'chords') {
           track('chd', P.chords, MIX.chd * g(d));
-          o.chords.forEach((c, i) => c.pcs.forEach((pc) => note(TRACK.chd, i * 8, 8, 48 + c.root + mod(pc - c.root, 12), 80, 20)));
+          o.chords.forEach((c, i) => c.pcs.forEach((pc) => note(TRACK.chd, slots[i].s, slots[i].len, 48 + c.root + mod(pc - c.root, 12), 80, 20)));
         } else if (d === 'bass') {
           track('bas', P.bass, MIX.bas * g(d));
           o.notes.forEach((n) => note(TRACK.bas, n.s, n.d, n.m, 100, 16));
@@ -738,7 +854,7 @@
       });
     }
     events.sort((a, b) => a.t - b.t);
-    return { bpm: sound ? sound.bpm : 100, length: LENGTH, loop: true, tracks, events };
+    return { bpm: sound ? sound.bpm : 100, length: LENGTH, loop: true, tracks, events, steps: STEPS, meter: m.id };
   }
 
   /** the climb: the bones (walk), the melody, then each layer added in the order it was picked */
@@ -772,7 +888,7 @@
       at += len;
     }
     events.sort((a, b) => a.t - b.t);
-    return { bpm, length: at, loop: false, tracks, events, passes };
+    return { bpm, length: at, loop: false, tracks, events, passes, steps: parts[0].steps, meter: parts[0].meter };
   }
 
   /** each step of how the idea got here: [{ dir, spec, stage }] */
@@ -809,27 +925,30 @@
     const uid = (p) => (M && M.uid ? M.uid(p) : p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
     const QUAL = { '': 'maj', m: 'min', '°': 'dim', '+': 'aug' };
     const chords = chordsFor(idea);
-    const prog = chords.map((c) => {
+    const m = meterOf(idea.melody), slots = slotsOf(m);
+    const prog = chords.map((c, i) => {
       const at = T.degreeOf(60 + c.root, 0, scale, 60);
       const ch = T.resolveChord ? T.resolveChord(scale, at.deg, at.acc, QUAL[c.q] || 'maj') : { deg: at.deg };
-      return Object.assign(T.chordOnly(ch), { beats: 2 });
+      return Object.assign(T.chordOnly(ch), { beats: slots[i].len / 4 });
     });
     const ctx = { tonic: 0, scale, prog };
     const tk = (s) => s * STEP_TICKS;
-    const pitched = (role, name, base, notes) => ({
+    // a part in another meter says so; parts without one are 4/4
+    const meta = m.id === '4/4' ? {} : { meter: m.id };
+    const pitched = (role, name, base, notes) => Object.assign({
       id: uid('p'), role, name, style: null, bars: 2, base, ctx: clone(ctx), tags: ['bones'], created: Date.now(), starred: false,
       notes: notes.map((n) => Object.assign({ t: tk(n.s), d: Math.max(30, tk(n.d) - 10), v: n.v || 96 }, T.degreeOf(n.m, 0, scale, base))),
-    });
-    const drums = (role, name, hits) => ({
+    }, meta);
+    const drums = (role, name, hits) => Object.assign({
       id: uid('p'), role, name, style: null, bars: 2, base: null, ctx: clone(ctx), tags: ['bones'], created: Date.now(), starred: false,
       notes: hits.map((h) => ({ t: tk(h.s), d: 60, p: h.p, v: h.v })).sort((a, b) => a.t - b.t),
-    });
+    }, meta);
     const out = [];
     const up = (sound && sound.up) || 0;
     out.push({ label: 'Melody', part: pitched('lead', 'Melody: ' + ideaName(idea), 60 + up, melodyNotes(idea.melody).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
     for (const d of idea.order) {
       const o = idea.layers[d];
-      if (d === 'chords') out.push({ label: 'Chords', part: pitched('chords', 'Chords: ' + o.chords.map(chordName).join(' '), 48, [].concat.apply([], o.chords.map((c, i) => c.pcs.map((pc) => ({ s: i * 8, d: 8, m: 48 + c.root + mod(pc - c.root, 12), v: 80 }))))) });
+      if (d === 'chords') out.push({ label: 'Chords', part: pitched('chords', 'Chords: ' + o.chords.map(chordName).join(' '), 48, [].concat.apply([], o.chords.map((c, i) => c.pcs.map((pc) => ({ s: slots[i].s, d: slots[i].len, m: 48 + c.root + mod(pc - c.root, 12), v: 80 }))))) });
       if (d === 'bass') out.push({ label: 'Bass', part: pitched('bass', 'Bass: ' + o.tag, 36, o.notes.map((n) => ({ s: n.s, d: n.d, m: n.m, v: 100 }))) });
       if (d === 'pads') out.push({ label: 'Pads', part: pitched('pad', 'Pad: ' + o.tag, 48, [].concat.apply([], o.notes.map((n) => n.ms.map((m) => ({ s: n.s, d: n.d, m, v: 80 }))))) });
       if (d === 'perc') out.push({ label: 'Percussion', part: drums('perc', 'Percussion: ' + o.tag, o.hits.map((h) => ({ s: h.s, p: DRUM[h.k] || DRUM.tap, v: Math.round(40 + 80 * (h.v || 1)) }))) });
@@ -890,7 +1009,14 @@
       if (rq.s) steer.s = Math.max(sLo, Math.min(2, (steer.s || 0) + rq.s));
       const stuck = rq.s && steer.s === (S.round.steer.s || 0);
       if (rq.x) steer.x = steer.x === rq.x ? null : rq.x;
-      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : rq.reply });
+      let reply = rq.reply;
+      if (rq.m) {
+        // the next meter round the list; 4/4 drops the key so the steer reads as before
+        const next = METER_ORDER[(METER_ORDER.indexOf(Odd.theory.meter(steer.m).id) + 1) % METER_ORDER.length];
+        if (next === '4/4') delete steer.m; else steer.m = next;
+        reply = meterLine(next);
+      }
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
     },
     /** go back to an earlier round as it was; everything after it stays in the history */
     back(S, row) {
@@ -927,7 +1053,8 @@
 
   Odd.audition = {
     STEPS, STEP_TICKS, LENGTH, ABC, NAMES, IV, DIRS, NEXT_ORDER, LAYER_ORDER, REQS, LINES, line,
-    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, KITS, GENRES, TRACK,
+    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, KITS, GENRES, TRACK, METER_ORDER,
+    meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
     spread, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,

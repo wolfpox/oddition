@@ -19,8 +19,10 @@
   const STORE_KEY = 'oddition.bones.v1';
   const VW = 272, VH = 92;
   const r1 = (v) => Math.round(v * 10) / 10;
-  const xOf = (s) => 4 + s * (VW - 8) / A.STEPS;
-  const sw = (d) => d * (VW - 8) / A.STEPS;
+  // cards are drawn across their idea's two bars: NS steps (32 in 4/4, 24 in 3/4, ...), set per card by vis()
+  let NS = A.STEPS;
+  const xOf = (s, n) => 4 + s * (VW - 8) / (n || NS);
+  const sw = (d) => d * (VW - 8) / NS;
   const mod = (a, n) => ((a % n) + n) % n;
   const VAR = { seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp' };
   const col = (d) => 'var(' + VAR[d] + ')';
@@ -36,7 +38,7 @@
   let S = null;
   let shown = false;
   // what is sounding: src is the key of what plays (or played last), pending the one waiting out its pause
-  const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0 };
+  const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH };
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
   let raf = 0, saveTimer = 0;
@@ -90,6 +92,8 @@
     if (host.stopStudio) host.stopStudio();
     P.playing = true;
     P.passes = seq.passes || null;
+    P.steps = seq.steps || A.STEPS;
+    P.len = seq.length || A.LENGTH;
     Odd.transport.play(seq).catch((e) => {
       P.playing = false;
       if (host.toast) host.toast('Audio could not start: ' + (e && e.message ? e.message : e), { kind: 'warn' });
@@ -170,12 +174,12 @@
         let i = P.passes.findIndex((p) => pos < p.start + p.length);
         if (i < 0) i = P.passes.length - 1;
         const p = P.passes[i];
-        step = ((pos - p.start) / p.length) * A.STEPS;
+        step = ((pos - p.start) / p.length) * P.steps;
         if (i !== P.climb) { P.climb = i; patch(); }
       } else {
-        step = mod(pos, A.LENGTH) / A.STEP_TICKS;
+        step = mod(pos, P.len) / A.STEP_TICKS;
       }
-      const left = r1(xOf(Math.max(0, Math.min(A.STEPS, step)))) + 'px';
+      const left = r1(xOf(Math.max(0, Math.min(P.steps, step)), P.steps)) + 'px';
       root.querySelectorAll('.is-playing .b-ph').forEach((el) => { el.style.left = left; });
       raf = requestAnimationFrame(tick);
     };
@@ -207,7 +211,7 @@
     halt();
     const ns = F.request(S, rq);
     set(ns);
-    hear(curKey(1), rq.reply, busy);
+    hear(curKey(1), ns.line || rq.reply, busy);
   }
 
   function step(fn) {
@@ -295,7 +299,11 @@
   /** what makes the option special, drawn on a 272 x 92 screen */
   function vis(dir, o, idea) {
     let h = '';
-    for (let i = 1; i < 8; i++) h += '<i class="b-gl' + (i === 4 ? ' bar' : '') + '" style="left:' + Math.round(xOf(i * 4)) + 'px"></i>';
+    const mel = dir === 'seed1' || dir === 'seed2' ? o.mel : idea && idea.melody;
+    const m = A.meterOf(mel);
+    NS = 2 * m.steps;
+    // a line on each beat, a darker one between the bars
+    for (let bar = 0; bar < 2; bar++) m.pulses.forEach((p) => { const s = bar * m.steps + p.s; if (s) h += '<i class="b-gl' + (s === m.steps ? ' bar' : '') + '" style="left:' + Math.round(xOf(s)) + 'px"></i>'; });
     // the melody, faintly, under every layer: everything is made against it
     const ghost = (top, hgt) => {
       if (!idea || !idea.melody || !idea.melody.shape) return;
@@ -324,7 +332,8 @@
       h += '<span class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
     } else if (dir === 'chords') {
       ghost(6, 50);
-      o.chords.forEach((c, i) => { h += '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(i * 8)) + 'px;top:62px;width:' + r1(sw(8) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
+      const slots = A.slotsOf(m);
+      o.chords.forEach((c, i) => { h += '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:62px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
     } else if (dir === 'bass') {
       ghost(6, 30);
       const ms = o.notes.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
@@ -502,7 +511,7 @@
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
-            '<span class="b-meta">' + esc(G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + '</span>' +
+            '<span class="b-meta">' + esc((G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + (S.idea.melody && A.meterOf(S.idea.melody).id !== '4/4' ? ' · ' + A.meterOf(S.idea.melody).id : '')) + '</span>' +
             (F.canFinish(S) ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
@@ -545,6 +554,7 @@
         const st = S.round.steer || {};
         const html = '<div class="b-reqs" aria-label="Ask Bobby">' + (A.REQS[S.round.dir] || []).map((rq, i) => {
           const active = (rq.x && st.x === rq.x) || (rq.p && Math.sign(st.p || 0) === Math.sign(rq.p)) || (rq.s && Math.sign(st.s || 0) === Math.sign(rq.s));
+          if (rq.m && st.m) return '<button type="button" class="b-req on" data-act="req" data-i="' + i + '">' + esc(rq.label + ' (' + st.m + ')') + '</button>';
           return '<button type="button" class="b-req' + (active ? ' on' : '') + '" data-act="req" data-i="' + i + '">' + esc(rq.label) + '</button>';
         }).join('') + '</div>';
         const call = root.querySelector('.b-call[data-i="' + S.sel + '"]');

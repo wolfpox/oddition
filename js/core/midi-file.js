@@ -108,7 +108,11 @@
     // conductor track
     const cond = [];
     cond.push({ t: 0, o: 0, b: meta(0x03, textBytes(song.name || 'Oddition')) });
-    cond.push({ t: 0, o: 0, b: meta(0x58, [4, 2, 24, 8]) });
+    // the time signature: song.meter ('7/8', ...) or 4/4; song.meters adds changes: [{ t, meter }]
+    cond.push({ t: 0, o: 0, b: meta(0x58, Odd.theory ? Odd.theory.timeSigBytes(song.meter) : [4, 2, 24, 8]) });
+    for (const mc of song.meters || []) {
+      if (mc.t > 0 && Odd.theory) cond.push({ t: Math.round(mc.t), o: 0, b: meta(0x58, Odd.theory.timeSigBytes(mc.meter)) });
+    }
     const mpq = Math.round(60000000 / bpm);
     cond.push({ t: 0, o: 0, b: meta(0x51, [(mpq >> 16) & 255, (mpq >> 8) & 255, mpq & 255]) });
     if (song.tonic != null) cond.push({ t: 0, o: 0, b: meta(0x59, keySignature(song.tonic, song.scale)) });

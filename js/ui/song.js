@@ -519,7 +519,7 @@
     const c = ctx();
     const mat = SM.material(c, sec.body);
     if (!mat) return;
-    const len = mat.bars * T.BAR, t = step * T.STEP;
+    const len = mat.bars * c.BAR, t = step * T.STEP;
     let notes = mat.notes.map((n) => Object.assign({}, n));
     const hit = notes.findIndex((n) => n.deg === deg && n.t <= t && t < n.t + n.d);
     if (hit >= 0) notes.splice(hit, 1);
@@ -666,12 +666,21 @@
       const id = el.dataset.id, idea = ideas().find((x) => x.id === id);
       S.main = id;
       if (S.guest === id) S.guest = '';
-      S.msg = (idea ? idea.name : 'That one') + '. Good bones. What is it in the song: the verse, the chorus, or the hook?';
+      const g = S.guest && ideas().find((x) => x.id === S.guest);
+      const clash = g && !SM.sameMeter(idea, g);
+      if (clash) S.guest = '';
+      S.msg = (idea ? idea.name : 'That one') + '. Good bones.' + (clash ? ' Your guest was in another meter, so I let it go: a song keeps one meter for now.' : '') + ' What is it in the song: the verse, the chorus, or the hook?';
       render();
     },
     'as-guest': (el) => {
       const id = el.dataset.id, idea = ideas().find((x) => x.id === id);
       if (S.main === id) return;
+      const main = S.main && ideas().find((x) => x.id === S.main);
+      if (idea && main && !SM.sameMeter(main, idea)) {
+        S.msg = idea.name + ' is in ' + Odd.idea.meterOf(idea) + ' and ' + main.name + ' is in ' + Odd.idea.meterOf(main) + '. Their bars are different lengths, so they can’t share a song yet.';
+        render();
+        return;
+      }
       const off = S.guest === id;
       S.guest = off ? '' : id;
       S.msg = off ? 'No guest. Just the one idea.' : (idea ? idea.name : 'That one') + ' comes along as a guest. I’ll move it into your key and weave it in.';
@@ -714,7 +723,7 @@
     }
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home') && e.target && e.target.classList && e.target.classList.contains('sg-tl')) {
       e.preventDefault();
-      seekTo(e.key === 'Home' ? 0 : P.head + (e.key === 'ArrowLeft' ? -1 : 1) * T.BAR);
+      seekTo(e.key === 'Home' ? 0 : P.head + (e.key === 'ArrowLeft' ? -1 : 1) * ctx().BAR);
       return true;
     }
     // C flips between the option being heard and the section as it is
@@ -824,7 +833,7 @@
       const c = ideaCtx(idea), key = 'i:' + idea.id;
       const seq = SM.ideaSeq(c), m = SM.mini(c, seq.events, seq.length);
       const isMain = S.main === idea.id, isGuest = S.guest === idea.id;
-      const stat = (c.genre ? c.genre + ' · ' : '') + c.bpm + ' BPM · ' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars');
+      const stat = (c.genre ? c.genre + ' · ' : '') + c.bpm + ' BPM · ' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars') + (c.meter !== '4/4' ? ' of ' + c.meter : '');
       const lf = lift(key, S.heard === key);
       return '<div class="sg-ic' + (isMain ? ' main' : isGuest ? ' guest' : '') + lf.cls + (P.pending === key ? ' wait' : '') + '"' + (lf.style ? ' style="' + lf.style + '"' : '') + '>' +
         '<button type="button" class="sg-hit" data-act="idea-hear" data-id="' + esc(idea.id) + '" aria-label="Hear ' + esc(idea.name) + '"></button>' +
@@ -892,7 +901,7 @@
         part('fin', 'outro', sec.outro ? SM.PART_BY.outro[sec.outro.k].label : 'Straight on', outB, open && outB > 0, 1, 8, 'Shorter finish', 'Longer finish') +
       '</div>';
       // the dials: set it yourself
-      h += '<div class="sg-dials" role="group" aria-label="Set it yourself">' + SM.DIALS.map((D) => {
+      h += '<div class="sg-dials" role="group" aria-label="Set it yourself">' + SM.DIALS.filter((D) => !(D.id === 'swing' && c.MT.compound)).map((D) => {
         const cyc = D.id === 'curve', lo = !open || D.min(b), hi = !open || D.max(b);
         const val = D.id === 'bpm'
           ? '<span class="sg-dialv"><input class="sg-dialin" type="number" inputmode="numeric" min="40" max="240" step="1" value="' + b.bpm + '" data-dial-in="bpm"' + (open ? '' : ' disabled') + ' aria-label="Tempo in BPM" title="Beats per minute: type a number, or use − and +"></span>'
@@ -903,7 +912,7 @@
       }).join('') + '</div>';
       // ruler and rows over the whole section
       const r = SM.renderSection(c, sec, SM.nextOf(song, sec));
-      const total = Math.max(1, Math.round(r.length / T.BAR));
+      const total = Math.max(1, Math.round(r.length / c.BAR));
       const picked = S.panel === 'bars' ? SM.barSel(sec, S.bars) : [];
       let ruler = '';
       for (let k = 0; k < total; k++) {
@@ -1041,7 +1050,9 @@
 
   function editorHtml(sec) {
     const c = ctx(), mat = SM.material(c, sec.body);
-    const steps = Math.min(64, mat.bars * 16);
+    // a column per 16th, in the song's meter: a strong line each bar, a lighter one each beat
+    const spb = c.MT.steps, beatAt = new Set(c.MT.pulses.map((p) => p.s));
+    const steps = Math.min(4 * spb, mat.bars * spb);
     const degs = mat.notes.map((n) => n.deg);
     const lo = Math.min.apply(null, degs.concat([0])) - 2, hi = Math.max(lo + 11, Math.max.apply(null, degs.concat([4])) + 2);
     const base = mat.base != null ? mat.base : 60;
@@ -1053,8 +1064,8 @@
       for (let s = 0; s < steps; s++) {
         const t = s * T.STEP;
         const nt = mat.notes.find((x) => x.deg === deg && x.t <= t && t < x.t + x.d);
-        const cls = 'sg-ec' + (s % 16 === 0 ? ' b' : s % 4 === 0 ? ' q' : '') + (nt ? (Math.abs(nt.t - t) < T.STEP ? ' on' : ' hold') : '');
-        h += '<button type="button" class="' + cls + '" data-act="cell" data-deg="' + deg + '" data-s="' + s + '" aria-label="' + esc(name) + ', bar ' + (Math.floor(s / 16) + 1) + ', step ' + ((s % 16) + 1) + (nt ? ', note' : '') + '"></button>';
+        const cls = 'sg-ec' + (s % spb === 0 ? ' b' : beatAt.has(s % spb) ? ' q' : '') + (nt ? (Math.abs(nt.t - t) < T.STEP ? ' on' : ' hold') : '');
+        h += '<button type="button" class="' + cls + '" data-act="cell" data-deg="' + deg + '" data-s="' + s + '" aria-label="' + esc(name) + ', bar ' + (Math.floor(s / spb) + 1) + ', step ' + ((s % spb) + 1) + (nt ? ', note' : '') + '"></button>';
       }
       h += '</div>';
     }

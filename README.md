@@ -52,6 +52,10 @@ again from there.
 
 1. **Rhythm and scale.** A 2-bar rhythm walked up and down a scale, so you
    hear its mood. One sparse, one busy, one in between. No genre yet.
+   **Another meter** switches all three to 3/4, then 6/8, 5/4, 7/8 and back
+   to 4/4. The meter stays with the idea: chords change on its strong beats,
+   the drums are built from how its beats are grouped (7/8 as short, short,
+   long), and the Song Builder plays and exports the song in it.
 2. **Shape.** Same rhythm and scale; now where the melody goes and the note
    it lands on: one falls like an answer, one rises like a question, one
    stays near home. Each three mixes sizes: one small (a step or two, with
@@ -545,5 +549,6 @@ js/ui/     views and helpers
 js/app.js  wiring, actions, keyboard
 ```
 
-Limits today: 4/4 time only, one tempo per song, and the built-in synth is
-meant for auditioning rather than final mixes.
+Limits today: the Studio (Session Takeover) is 4/4 only, so ideas in other
+meters grow in the Song Builder instead; a song keeps one meter and one tempo;
+and the built-in synth is meant for auditioning rather than final mixes.

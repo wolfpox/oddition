@@ -378,7 +378,7 @@
     const s = app.session();
     const sel = app.selectedSlot();
     const used = Odd.model.usageCount(app.ws, p.id);
-    const len = p.bars * T.BAR;
+    const len = T.partTicks(p);
     const evs = R.partEvents(p, { tonic: s.tonic, scale: s.scale, prog: p.ctx.prog, length: len });
     const playing = app.isPlaying('preview', p.id);
     return '<li class="card" data-part="' + p.id + '" data-role="' + p.role + '" draggable="true">' +
@@ -430,7 +430,7 @@
       rollSlot(rolls, { glyph: true, idea, mute }, 'idea-glyph', 'height:' + (12 + 22 * n) + 'px') +
       '<ul class="voices">' + voices + '</ul>' +
       '<div class="card-bottom">' +
-        '<span class="card-meta">' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars') + ' · ' + n + (n === 1 ? ' voice' : ' voices') + style + '</span>' +
+        '<span class="card-meta">' + idea.bars + (idea.bars === 1 ? ' bar' : ' bars') + (idea.meter ? ' of ' + esc(idea.meter) : '') + ' · ' + n + (n === 1 ? ' voice' : ' voices') + style + '</span>' +
         '<span class="card-actions">' +
           playBtn('bones', 'Bones', 'Hear only the rhythm and shape: plain sounds, no chords, no swing') +
           playBtn('idea', 'Full', 'Hear the parts as they were found') +

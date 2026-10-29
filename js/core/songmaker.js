@@ -35,12 +35,15 @@
  *
  * Rendering gives events in ticks at the section's own tempo; songs and
  * previews stretch each section to the song's tempo.
+ *
+ * A song is in its main idea's meter (C.meter, C.BAR ticks a bar): bars,
+ * fills, stops and count-ins all follow it. A guest must share it.
  */
 (function (Odd) {
   'use strict';
   const T = Odd.theory;
   const R = Odd.render;
-  const BAR = T.BAR, BEAT = T.BEAT, STEP = T.STEP;
+  const BEAT = T.BEAT, STEP = T.STEP;
 
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -161,14 +164,17 @@
     tracks['sm-low'] = { role: 'bass', patch: pk('bass', 'bass-sub'), volume: 0.75, mute: false, solo: false, channel: nextCh(), name: 'Low notes' };
     const gi = leadOf(guest);
     const leadPart = lead ? main.voices[li].part : null;
+    const meter = Odd.idea && Odd.idea.meterOf ? Odd.idea.meterOf(main) : '4/4', MT = T.meter(meter);
     return {
+      meter, MT, BAR: MT.ticks,
       id: main.id + ':' + main.voices.length + ':' + (song.lv || 0) + '|' + (guest ? guest.id : ''),
       env: E, main, guest, layers, lead, tracks,
       guestLead: gi >= 0 ? guest.voices[gi] : null,
       tonic: ctx.tonic || 0, scale: ctx.scale || 'major', prog: ctx.prog && ctx.prog.length ? ctx.prog : [{ deg: 0, beats: 4 }],
       leadBase: leadPart ? (leadPart.base != null ? leadPart.base : 60) + 12 * (main.voices[li].oct || 0) : 72,
       bpm: snd ? snd.bpm : clamp(Math.round(Number(E.bpm) || 100), 40, 240),
-      swing: snd ? swingAmount(snd.swing) : clamp(Number(E.swing) || 0, 0, 0.6),
+      // meters that move in threes (6/8, 7/8) don't swing
+      swing: MT.compound ? 0 : snd ? swingAmount(snd.swing) : clamp(Number(E.swing) || 0, 0, 0.6),
       ideaBars: main.bars || 2,
       genre: G ? G.name : '',
     };
@@ -308,8 +314,9 @@
     });
   }
 
-  /** stretch, squash or chop a part's notes inside its own length */
-  function xNotes(notes, x, len) {
+  /** stretch, squash or chop a part's notes inside its own length (chop repeats the first beat: `beat` ticks) */
+  function xNotes(notes, x, len, beat) {
+    const BEAT = beat || T.BEAT;
     const tag = (n, o) => Object.assign({}, n, { st: n.st != null ? n.st : n.t }, o);
     if (x === 'half') return notes.filter((n) => n.t < len / 2).map((n) => tag(n, { t: n.t * 2, d: Math.max(30, n.d * 2) }));
     if (x === 'double') {
@@ -330,7 +337,7 @@
     const v = C.lead ? C.main.voices[Number(C.lead.slice(1))] : null;
     const base = v && v.part;
     if (!base) return null;
-    const len = Math.max(1, base.bars || 1) * BAR;
+    const BAR = C.BAR, len = T.partTicks(base);
     const with_ = (o) => Object.assign({}, base, o);
     switch (cfg.src) {
       case 'edit': return cfg.edit ? with_({ notes: cfg.edit }) : base;
@@ -363,10 +370,10 @@
     if (!part) {
       return Odd.idea ? Odd.idea.voiceAt(L.voice, 'shape', { tonic: C.tonic, scale: C.scale, length }) : [];
     }
-    const plen = Math.max(1, part.bars || 1) * BAR;
+    const plen = T.partTicks(part);
     let notes = part.notes || [];
     if (tw.ds && !L.drum) notes = notes.map((n) => (n.deg == null ? n : Object.assign({}, n, { deg: n.deg + tw.ds })));
-    if (tw.x) notes = xNotes(notes, tw.x, plen);
+    if (tw.x) notes = xNotes(notes, tw.x, plen, C.MT.pulses[0].len * STEP);
     if (cfg.half) notes = xNotes(notes, 'half', plen);
     return R.partEvents(Object.assign({}, part, { notes }), {
       tonic: C.tonic, scale: C.scale, prog: C.prog, length,
@@ -401,12 +408,18 @@
     return out;
   }
 
+  /** the last beat of a bar in ticks (a quarter in 4/4, three eighths at the end of 7/8) */
+  function lastBeat(C) { return C.MT.pulses[C.MT.pulses.length - 1].len * STEP; }
+  /** the beats of a bar: [{ t, len, strong }] in ticks */
+  function barBeats(C) { return C.MT.pulses.map((p) => ({ t: p.s * STEP, len: p.len * STEP, strong: C.MT.groupStarts.indexOf(p.s) >= 0 })); }
+  function onBeatTick(C, t) { const x = T.mod(t, C.BAR); return C.MT.pulses.some((p) => p.s * STEP === x); }
+
   function triad(C, deg, base) { return [0, 2, 4].map((i) => T.pitchOf(deg + i, 0, C.tonic, C.scale, base)); }
 
   /** the section itself: { events } in ticks from 0; opts: { fade } */
   function renderBody(C, cfg, opts) {
     const o = opts || {};
-    const n = Math.max(1, cfg.bars), length = n * BAR;
+    const BAR = C.BAR, n = Math.max(1, cfg.bars), length = n * BAR;
     const mask = maskFor(C, cfg);
     const roleOf = {};
     let out = [];
@@ -433,7 +446,8 @@
   const fx = (t, p, v, d) => ({ t: Math.round(t), d: d || 60, p, v: clamp(Math.round(v), 1, 127), track: 'sm-fx', L: 'fx' });
   const held = (t, d, p, v, track) => ({ t, d, p, v: clamp(Math.round(v), 1, 127), track: 'sm-' + track, L: track });
 
-  function snareRoll(t0, t1, push) {
+  function snareRoll(t0, t1, push, bar) {
+    const BAR = bar || T.BAR;
     const snap = (x, g) => Math.round(x / g) * g;
     const w = t1 - t0;
     const qEnd = w >= 2 * BAR - BEAT ? t0 + snap(w / 2, BEAT) : t0;
@@ -451,26 +465,30 @@
     if (!bars.length) return events;
     let out = events;
     const group = (e) => (e.L === 'fx' ? 'rhy' : GROUP[roleOf[e.L]] || 'mel');
+    const BAR = C.BAR, last = lastBeat(C), beats = barBeats(C);
     for (const b of bars) {
       const w = tw[b], a = b * BAR, z = a + BAR;
       const inBar = (e) => e.t >= a && e.t < z;
       if (w === 'drop') out = out.filter((e) => !inBar(e) || group(e) === 'mel' || group(e) === 'harm');
       else if (w === 'fill') {
-        const f = z - BEAT;
+        // a 16th-note snare run through the last beat
+        const f = z - last;
         out = out.filter((e) => !(e.t >= f && e.t < z && group(e) === 'rhy'));
         out.push(fx(f, KICK, 100));
-        for (let i = 0; i < 4; i++) out.push(fx(f + i * STEP, SNARE, 70 + 14 * i));
+        for (let i = 0; i * STEP < last; i++) out.push(fx(f + i * STEP, SNARE, 70 + 14 * i));
       } else if (w === 'stop') {
         out = out.filter((e) => !inBar(e) || e.t === a).map((e) => (inBar(e) ? Object.assign({}, e, { d: Math.min(e.d, 2 * STEP) }) : e));
         out.push(fx(a, KICK, 112), fx(a, CRASH, 100, BAR));
       } else if (w === 'breath') {
-        const f = z - BEAT;
+        const f = z - last;
         out = out.filter((e) => !(e.t >= f && e.t < z)).map((e) => (inBar(e) && e.t + e.d > f ? Object.assign({}, e, { d: Math.max(30, f - e.t) }) : e));
       } else if (w === 'octave') out = out.map((e) => (inBar(e) && e.L === C.lead ? Object.assign({}, e, { p: Math.min(127, e.p + 12) }) : e));
       else if (w === 'stutter') {
-        const first = out.filter((e) => e.L === C.lead && e.t >= a && e.t < a + BEAT);
+        // the melody's first beat, played on every beat of the bar
+        const len1 = beats[0].len;
+        const first = out.filter((e) => e.L === C.lead && e.t >= a && e.t < a + len1);
         out = out.filter((e) => !(inBar(e) && e.L === C.lead));
-        for (let k = 0; k < 4; k++) first.forEach((e) => out.push(Object.assign({}, e, { t: e.t + k * BEAT, d: Math.min(e.d, a + BEAT - e.t) })));
+        for (const bt of beats) first.forEach((e) => out.push(Object.assign({}, e, { t: e.t + bt.t, d: Math.min(e.d, a + len1 - e.t) })));
       }
     }
     return out;
@@ -482,7 +500,7 @@
 
   /** a way in, n bars, from tick 0 */
   function introEvents(C, cfg, intro) {
-    const n = intro.bars, k = intro.k, len = n * BAR;
+    const BAR = C.BAR, n = intro.bars, k = intro.k, len = n * BAR;
     if (!n || k === 'none') return [];
     const base = intoBars(cfg, n);
     if (k === 'climb' || k === 'drums') return renderBody(C, Object.assign(base, { arr: k }));
@@ -490,9 +508,9 @@
     if (k === 'riser' || k === 'gap') {
       if (C.lead && base.lay[C.lead]) base.lay[C.lead].form = 'outline';
       let ev = renderBody(C, Object.assign(base, { arr: 'riser' }));
-      snareRoll(0, len, (e) => ev.push(e));
+      snareRoll(0, len, (e) => ev.push(e), BAR);
       if (k === 'gap') {
-        const g = len - BEAT;
+        const g = len - lastBeat(C);
         ev = ev.filter((e) => e.t < g).map((e) => (e.t + e.d > g ? Object.assign({}, e, { d: Math.max(30, g - e.t) }) : e));
       }
       return ev.sort(R.byTime);
@@ -503,7 +521,8 @@
       tw[n - 1] = 'fill';
       const ev = renderBody(C, Object.assign(base, { arr: 'pickup', twists: tw }));
       if (!C.layers.some((l) => l.role === 'drums' || l.role === 'perc')) {
-        for (let t = 0; t < len - BEAT; t += BEAT) ev.push(fx(t, t % (2 * BEAT) ? SNARE : KICK, 96));
+        // a count-in: kick on the strong beats, snare on the others, the last beat left for the fill
+        for (let b = 0; b < n; b++) barBeats(C).forEach((bt) => { const t = b * BAR + bt.t; if (t < len - lastBeat(C)) ev.push(fx(t, bt.strong ? KICK : SNARE, 96)); });
       }
       return ev.sort(R.byTime);
     }
@@ -513,7 +532,7 @@
 
   /** a way out, n bars, from tick 0 */
   function outroEvents(C, cfg, outro, nextCfg) {
-    const n = outro.bars, k = outro.k, len = n * BAR;
+    const BAR = C.BAR, n = outro.bars, k = outro.k, len = n * BAR;
     if (!n || k === 'none') return [];
     const base = intoBars(cfg, n);
     const s = cfg.shift || 0;
@@ -530,7 +549,7 @@
       for (let t = 0; t < len; t += STEP) {
         const x = t / len;
         if (t % (2 * STEP) === 0) ev.push(held(t, 2 * STEP - 20, r5, 55 + 50 * x, 'low'));
-        if (t % BEAT === 0) ev.push(fx(t, KICK, 70 + 45 * x));
+        if (onBeatTick(C, t)) ev.push(fx(t, KICK, 70 + 45 * x));
         ev.push(fx(t, HAT, 25 + 85 * x));
       }
     } else if (k === 'echo') {
@@ -576,6 +595,7 @@
     const nx = o.outro && o.outro.k === 'handoff' && next ? next.body : null;
     const key = C.id + '|' + JSON.stringify([o.body, o.intro, o.outro, nx]);
     return cached(key, () => {
+      const BAR = C.BAR;
       const inLen = o.intro ? o.intro.bars * BAR : 0;
       const bodyLen = o.body.bars * BAR;
       const outLen = o.outro ? o.outro.bars * BAR : 0;
@@ -584,7 +604,7 @@
       for (const e of renderBody(C, o.body)) events.push(Object.assign(e, { t: e.t + inLen }));
       if (o.outro) for (const e of outroEvents(C, o.body, o.outro, nx)) events.push(Object.assign(e, { t: e.t + inLen + bodyLen }));
       events.sort(R.byTime);
-      return { events, length: inLen + bodyLen + outLen, inLen, bodyLen, outLen, bpm: o.body.bpm || C.bpm, swing: o.body.swing || 0 };
+      return { events, length: inLen + bodyLen + outLen, inLen, bodyLen, outLen, bpm: o.body.bpm || C.bpm, swing: C.MT.compound ? 0 : o.body.swing || 0 };
     });
   }
 
@@ -660,7 +680,11 @@
   function emptySec(id, name) { return { id, name: name || 'Open', kind: null, open: true, body: null, intro: null, outro: null, hist: [] }; }
 
   /** a new song: the idea as the verse, chorus or hook, with an open slot on each side */
+  /** can these two ideas share a song? (one meter per song for now) */
+  function sameMeter(a, b) { return !a || !b || !Odd.idea || Odd.idea.meterOf(a) === Odd.idea.meterOf(b); }
+
   function create(main, guest, role, env) {
+    if (!sameMeter(main, guest)) guest = null;
     const song = { id: uid('song'), name: main.name + (guest ? ' with ' + guest.name : ''), main: clone(main), guest: guest ? clone(guest) : null, role: ROLES[role] ? role : 'chorus', kw: defaultKw(), secs: [], nid: 4, created: Date.now(), updated: Date.now() };
     const C = context(song, env);
     song.secs = [emptySec('s1'), { id: 's2', name: ROLES[song.role].label, kind: 'main', open: true, body: ROLES[song.role].make(C), intro: null, outro: null, hist: [] }, emptySec('s3')];
@@ -914,7 +938,8 @@
     if (!body) return [];
     let pool = [];
     if (tool === 'vibe') {
-      pool = VIBES.filter((v) => !v.ok || v.ok(body)).map((v) => ({ id: v.id, label: txt(v.label, body), sub: txt(v.sub, body), t: v.t, f: (x) => Object.assign(clone(x), v.f(x, C)) }));
+      // no swing for meters that already move in threes
+      pool = VIBES.filter((v) => (!v.ok || v.ok(body)) && !(v.id === 'swing' && C.MT.compound)).map((v) => ({ id: v.id, label: txt(v.label, body), sub: txt(v.sub, body), t: v.t, f: (x) => Object.assign(clone(x), v.f(x, C)) }));
     } else if (tool === 'idea') {
       pool = IDEA_OPTS.filter((o) => ok(c, o) && o.src !== body.src && !!C.lead).map((o) => ({ id: o.id, label: txt(o.label, c), sub: txt(o.sub, c), t: o.t, f: (x) => Object.assign(clone(x), { src: o.src, edit: null }) }));
     } else if (tool === 'tweak') {
@@ -998,6 +1023,7 @@
   }
 
   function windowSeq(C, song, sec, o, made) {
+    const BAR = C.BAR;
     const nx = nextOf(song, sec);
     if (o.group === 'act' && o.act === 'build') {
       const r = renderSection(C, sec, nx, { intro: made.intro, outro: null });
@@ -1064,9 +1090,10 @@
         t: role === 'chords' ? { bright: i - 1 } : { busy: i - 1, full: (i - 1) * 0.4 },
       }));
     }
-    if (!Odd.gen || !Odd.gen.generate) return [];
+    // the style generators write 4/4 only
+    if (!Odd.gen || !Odd.gen.generate || C.meter !== '4/4') return [];
     return cached('L|' + C.id + '|' + role + '|' + b, () => {
-      const bars = clamp(C.ideaBars, 1, 16), len = bars * BAR;
+      const bars = clamp(C.ideaBars, 1, 16), len = bars * C.BAR;
       const style = (C.main.voices.find((v) => v.part && v.part.style) || { part: {} }).part.style || C.main.style || 'lofi';
       const cfg = baseCfg(C);
       const lanes = C.layers.map((L) => ({ role: L.role, events: layerEvents(C, cfg, L, len) }));
@@ -1183,6 +1210,7 @@
   }
   /** a small picture: which rows play in which bar. -> { cells: [{ x, w, y, c }], h } */
   function mini(C, events, length, rowList) {
+    const BAR = C.BAR;
     const n = Math.max(1, Math.round(length / BAR));
     const per = [];
     for (let b = 0; b < n; b++) per.push({});
@@ -1268,6 +1296,7 @@
    *    go: { sel, tool?, panel?, bars?, add? } for the screen to act on
    */
   function analyse(C, song) {
+    const BAR = C.BAR;
     let seconds = 0, bars = 0, appear = 0, twists = 0, trans = 0, guestUsed = false;
     const keys = {}, forms = {}, chart = [], en = {};
     song.secs.forEach((s, i) => {
@@ -1337,7 +1366,7 @@
       return { name: tr.name, channel: tr.channel, program: tr.channel === 9 ? null : gm(tr.patch), notes: byTrack[k] };
     });
     return Odd.midiFile.write({
-      name: song.name, bpm: seq.bpm, tonic: C.tonic, scale: C.scale, length: seq.length,
+      name: song.name, bpm: seq.bpm, tonic: C.tonic, scale: C.scale, length: seq.length, meter: C.meter,
       markers: seq.markers.map((m) => ({ t: m.start, text: (findSec(song, m.id) || {}).name || '' })),
       tracks,
     });
@@ -1415,7 +1444,7 @@
 
   Odd.songmaker = {
     ACTS, ACT, KW, KWD, ROLES, ROLE_ORDER, TREAT, TREAT_BY, INTROS, OUTROS, PART_BY, VIBES, IDEA_OPTS, TWEAKS, FORM_OPTS, TWISTS, TWIST_NAME, FORM_LABEL, ADDS, ADD_BY,
-    score, tagsOf, defaultKw, context, baseCfg,
+    score, tagsOf, defaultKw, context, baseCfg, sameMeter,
     invertNotes, xNotes, leadPart, material, layerEvents, maskFor, renderBody, introEvents, outroEvents, renderSection,
     sequence, sectionSeq, songSeq, ideaSeq, previewSeq, timeline,
     addable, removedLayers, layerOptions, addLayer, removeLayer, restoreLayer, layerPreview,

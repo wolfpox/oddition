@@ -359,7 +359,7 @@
     const idea = M.findIdea(app.ws, id);
     if (!idea) return null;
     const bones = kind === 'bones';
-    const length = idea.bars * T.BAR;
+    const length = Odd.idea.lengthOf(idea);
     const events = Odd.idea.events(idea, { mode: bones ? 'bones' : 'full', tonic: s.tonic, scale: s.scale, mute: app.ideaMute(id), prefix: IDEA_TRACK });
     const { tracks } = ideaTracks(idea, bones);
     if (bones) return { bpm: s.bpm, length, loop: true, events: events.sort(R.byTime), tracks };
@@ -418,8 +418,9 @@
     const s = app.session();
     const idea = M.findIdea(app.ws, L.ideaId);
     if (!idea) return null;
-    const sec = L.target ? M.findSection(s, L.target) : null;
-    const length = Math.max(idea.bars, sec ? sec.bars : 0) * T.BAR;
+    // the Studio's sections are 4/4: an idea in another meter climbs the ladder on its own
+    const sec = L.target && Odd.idea.meterOf(idea) === '4/4' ? M.findSection(s, L.target) : null;
+    const length = sec ? Math.max(idea.bars, sec.bars) * T.BAR : Odd.idea.lengthOf(idea);
     const tgt = sec ? R.sectionTarget(s, sec, length) : { tonic: s.tonic, scale: s.scale, prog: null, length };
     // the voices take over their stems' lanes; the band is everything else the section plays
     const taken = ideaTracks(idea, false).lanes;
@@ -1675,6 +1676,7 @@
     const sec = section || app.selectedSection();
     const voices = idea.voices.filter((v) => v.part);
     if (!voices.length) { D.toast('This idea has no parts to place.'); return; }
+    if (Odd.idea.meterOf(idea) !== '4/4') { D.toast('“' + idea.name + '” is in ' + idea.meter + ', and the Studio only plays 4/4 for now. Grow it into a song in the Song Builder instead.'); return; }
     const where = [];
     commit('Place idea', () => {
       const used = new Set();
@@ -1724,6 +1726,7 @@
     const other = id && M.findIdea(app.ws, id);
     if (!other) return;
     const joined = Odd.idea.join([idea, other]);
+    if (!joined) { D.toast('These two are in different meters (' + Odd.idea.meterOf(idea) + ' and ' + Odd.idea.meterOf(other) + '), so they can’t play together.'); return; }
     commit('Join ideas', (s, ws) => { M.addIdea(ws, joined); }, ['shelf', 'tabs']);
     D.toast('Joined into “' + joined.name + '”', { action: { label: 'Undo', run: undo } });
   }

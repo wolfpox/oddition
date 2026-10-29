@@ -44,14 +44,14 @@
     const lane = laneLike || (session && Odd.model.laneForRole(session, part.role)) || null;
     const tonic = session ? session.tonic : part.ctx.tonic;
     const scale = session ? session.scale : part.ctx.scale;
-    const length = part.bars * T.BAR;
+    const length = T.partTicks(part);
     let events = R.partEvents(part, { tonic, scale, prog: part.ctx.prog, length });
     events = session ? R.perform(session, events, { role: part.role, length }) : events;
     const role = part.role;
     return Odd.midiFile.write({
       name: part.name,
       bpm: session ? session.bpm : 120,
-      tonic, scale, length,
+      tonic, scale, length, meter: part.meter,
       tracks: [{
         name: part.name,
         channel: T.isDrumRole(role) ? 9 : lane ? lane.channel : 0,
