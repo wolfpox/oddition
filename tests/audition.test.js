@@ -150,6 +150,27 @@ test('every round deals its whole pool, three at a time, each card once; the unu
   assert.ok(A.rhythmPool().length === 80 && F.info(rounds[0]).total === 80);
 });
 
+test('later layers come from ingredients: big pools, families mixed in each three, plain versions first', () => {
+  const S = melodyState();
+  for (const d of ['bass', 'pads', 'perc', 'beat', 'sound']) {
+    const R = F.enter(S, d), inf = F.info(R);
+    assert.ok(inf.total >= 40, d + ' has a real pool: ' + inf.total);
+    const first = F.options(R);
+    assert.strictEqual(new Set(first.map((o) => o.fam)).size, 3, d + ': the first three are three different families');
+    // (a band can be all variations: beats in the middle band are the ones with a half-time or late snare)
+    if (d !== 'pads') assert.ok(first.filter((o) => !o.twist).length >= 2, d + ': the first three are mostly plain versions');
+  }
+  const kits = A.kitsFor(T.meter('4/4'));
+  assert.deepStrictEqual(kits.find((k) => k.id === 'four-back-e8').k.slice(0, 4), [0, 4, 8, 12], 'four on the floor keeps the kick under the snare');
+  assert.ok(A.bassStyles(melodyState().idea).every((b) => b.notes.length >= 2), 'every bass line has a note a bar');
+  // a sound that swaps the lead carries its instruments into the sequence
+  const swap = A.soundStyles(S.idea).find((o) => o.genre === 'lofi' && o.patches.lead !== A.GENRES.lofi.patches.lead);
+  assert.ok(swap && /with/.test(swap.tag), 'lo-fi comes with another lead too');
+  assert.strictEqual(swap.patches.kit, A.GENRES.lofi.patches.kit, 'the rest of the recipe stays');
+  const sq = A.seq(S.idea, { dir: 'sound', spec: swap });
+  assert.strictEqual(sq.tracks[A.TRACK.mel].patch, swap.patches.lead);
+});
+
 test('keep the plain walk keeps round 1 exactly', () => {
   let S = F.enter(F.fresh(), 'seed1');
   const walked = A.melodyNotes(F.options(S)[0].mel, true);
@@ -229,7 +250,9 @@ test('the sequence: melody alone in the seed rounds, everything once layered, sw
   assert.ok(aud.tracks[A.TRACK.mel].volume < all.tracks[A.TRACK.mel].volume, 'the melody steps back a little');
   // a swung sound pushes the "and"s late
   const lofi = { id: 'lofi', tag: 'Lo-fi', name: 'Lo-fi', bpm: 80, swing: 0.62, up: 0, why: '' };
-  const swung = A.seq(S.idea, { dir: 'sound', spec: lofi });
+  // with a beat that has closed hats on the eighths
+  const e8 = A.kitsFor(T.meter('4/4')).find((k) => k.id === 'rock-back-e8');
+  const swung = A.seq(Object.assign({}, S.idea, { layers: Object.assign({}, S.idea.layers, { beat: e8 }) }), { dir: 'sound', spec: lofi });
   assert.strictEqual(swung.bpm, 80);
   const hat = swung.events.filter((e) => e.track === A.TRACK.bt && e.p === 42).map((e) => e.t % T.BEAT);
   assert.ok(hat.some((t) => t > T.BEAT / 2), 'swung off-beats');

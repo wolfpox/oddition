@@ -43,6 +43,7 @@
   const TABS = [
     { id: 'vibe', label: 'Vibe', sub: 'Tempo, key, energy, fullness' },
     { id: 'idea', label: 'Idea', sub: 'Main, guest, answer, motif' },
+    { id: 'harm', label: 'Chords', sub: 'Loop, answer, journey, ending' },
     { id: 'tweak', label: 'Vary a layer', sub: 'Outline, stretch, chop, shift' },
     { id: 'add', label: 'Add a layer', sub: 'Chords, bass, pads, a beat' },
   ];
@@ -974,12 +975,14 @@
       const now = L && full ? SM.layerNote(c, sec.body, L) : '';
       const note = !full ? 'Fill the section first, then change it here.' : !open ? 'This section is closed.'
         : S.tool === 'tweak' ? (L ? L.label : 'This layer') + ' in ' + sec.name + ' now: ' + (now || 'as written').toLowerCase() + (sec.body.lay[layerKey] && !sec.body.lay[layerKey].on ? ' (turned off here)' : '') + '. Every way to vary it is below, by name. Only this section changes.'
-        : S.tool === 'idea' ? 'Which melody this section is built on.' : 'The whole section, a different feel.';
+        : S.tool === 'idea' ? 'Which melody this section is built on.'
+        : S.tool === 'harm' ? 'Where the chords go in ' + sec.name + '. Now: ' + SM.harmLabel(sec.body.harm).toLowerCase() + ', ' + SM.harmText(c, sec.body) + '. The melody stays; chords, bass and pads follow.'
+        : 'The whole section, a different feel.';
       h += '<p class="sg-note">' + esc(note) + '</p>';
       if (full && open) {
         const opts = SM.toolOptions(c, song, sec, S.tool, layerKey, S.batch[S.tool]);
         const all = S.tool === 'tweak';
-        h += '<div class="sg-tcards' + (all ? ' all' : '') + '">' + opts.map((o, k) => card(sec, o, { big: true, sub: all, pick: k === 0 && song.kw.some((x) => x.lean) })).join('') + '</div>';
+        h += '<div class="sg-tcards' + (all ? ' all' : '') + '">' + opts.map((o, k) => card(sec, o, { big: true, sub: all || S.tool === 'harm', pick: k === 0 && song.kw.some((x) => x.lean) })).join('') + '</div>';
         const canHand = S.tool === 'tweak' && layerKey === c.lead && !!SM.material(c, sec.body);
         h += '<div class="sg-trow">' + (opts.length && !all ? '<button type="button" class="b-ghost sg-sm" data-act="more" data-g="' + S.tool + '">Three more</button>' : '') +
           (canHand ? '<button type="button" class="b-ghost sg-sm" data-act="edit-toggle" aria-pressed="' + S.edit + '">' + (S.edit ? 'Hide the note editor' : 'Edit notes by hand') + '</button>' : '') +

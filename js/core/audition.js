@@ -400,49 +400,160 @@
   /** every eighth note of both bars */
   function evensOf(total) { return Array.from({ length: total / 2 }, (_, i) => i * 2); }
 
+  // ---------------------------------------------------------------- the later layers, from ingredients
+  //
+  // Each layer's pool is every sensible mix of a few ingredients, worked out
+  // from the melody, the chords and the meter (bass: a job x its notes x held
+  // or short; pads: a rhythm x a voicing x an instrument; percussion: an
+  // instrument x a pattern; beats: a kick x a snare x hats). Mixes that come
+  // out as the same notes merge, the first name found keeping it.
+
+  /** options whose content is the same merge into the first: key(o) names the content */
+  function unique(list, key) {
+    const seen = {};
+    return list.filter((o) => { const k = key(o); if (seen[k]) return false; seen[k] = 1; return true; });
+  }
+  /** a sorted list of steps, each lasting until the next (the last until `end`) */
+  function until(ss, end) {
+    const xs = ss.filter((x, i) => ss.indexOf(x) === i).sort((a, b) => a - b);
+    return xs.map((x, i) => ({ s: x, d: (i + 1 < xs.length ? xs[i + 1] : end) - x }));
+  }
+  /** in each group of the meter (both bars), a note every three 16ths: 3+3+2 in a group of 8 */
+  function dottedOf(m) {
+    const out = [];
+    for (let bar = 0; bar < 2; bar++) m.groupStarts.forEach((g, j) => {
+      const end = j + 1 < m.groupStarts.length ? m.groupStarts[j + 1] : m.steps;
+      for (let x = g; x < end; x += 3) if (end - x >= 2) out.push(bar * m.steps + x);
+    });
+    return out;
+  }
+  /** the stretches where the melody rests: [[start, length]] */
+  function gapsOf(notes, total) {
+    const covered = coverage(notes, total), out = [];
+    for (let t = 0; t < total; t++) if (!covered[t] && (t === 0 || covered[t - 1])) { let e = t; while (e < total && !covered[e]) e++; out.push([t, e - t]); }
+    return out;
+  }
+
+  // a bass's job: when it plays. [id, name, can it be short]
+  const BASS_JOBS = [['lock', 'Locks on', 1], ['double', 'Every note with it', 1], ['steady', 'Steady', 1], ['pedal', 'Long pedal', 0], ['pulse', 'On every beat', 1],
+    ['eighths', 'Driving eighths', 0], ['offbeat', 'Off-beat', 0], ['push', 'Pushing ahead', 1], ['dotted', 'Dotted', 1], ['gaps', 'Fills the gaps', 1], ['answer', 'Answers back', 0]];
+  // and which notes: [id, words]
+  const BASS_NOTES = [['root', ''], ['fifth', 'root and fifth'], ['oct', 'octaves'], ['tones', 'chord tones'], ['lead', 'leading in']];
+
   function bassStyles(idea) {
     const m = meterOf(idea.melody), STEPS = 2 * m.steps, slots = slotsOf(m);
     const notes = melodyNotes(idea.melody), chords = chordsFor(idea);
-    const covered = coverage(notes, STEPS);
-    const ch = (s) => chords[slotAt(slots, s)];
+    const si = (s) => slotAt(slots, s);
+    const ch = (s) => chords[si(s)];
     const root = (s) => 36 + ch(s).root;
-    const tone = (s, k) => 36 + ch(s).root + mod(ch(s).pcs[k] - ch(s).root, 12);
-    const gapsAt = [];
-    for (let t = 0; t < STEPS; t++) if (!covered[t] && (t === 0 || covered[t - 1])) { let e = t; while (e < STEPS && !covered[e]) e++; gapsAt.push([t, e - t]); }
-    const evens = evensOf(STEPS), beats = beatsOf(m), last = m.pulses.length - 1;
-    const S = [
-      { id: 'lock', tag: 'Locks on', notes: notes.filter((n) => n.w >= 1).map((n) => ({ s: n.s, d: Math.min(n.d, 4), m: root(n.s) })) },
-      { id: 'double', tag: 'Every note with it', notes: notes.map((n) => ({ s: n.s, d: Math.min(n.d, 3), m: root(n.s) })) },
-      { id: 'steady', tag: 'Steady roots', notes: slots.map((sl) => ({ s: sl.s, d: sl.len - 1, m: root(sl.s) })) },
-      { id: 'pedal', tag: 'Long pedal', notes: [0, m.steps].map((s) => ({ s, d: m.steps - 1, m: root(s) })) },
-      { id: 'bounce', tag: 'Bouncing octaves', notes: evens.map((s) => ({ s, d: 2, m: root(s) + (onPulse(m, s) ? 0 : 12) })) },
-      // a chord tone on each beat, and a half step below the next bar's root on the last one
-      { id: 'walk', tag: 'Walking', notes: beats.map((b) => ({ s: b.s, d: b.len, m: b.k === last ? root(b.s + b.len) - 1 : tone(b.s, b.k % 3) })) },
-      { id: 'gaps', tag: 'Fills the gaps', notes: gapsAt.filter((g) => g[1] >= 2).map((g, i) => ({ s: g[0], d: Math.min(g[1], 4), m: i % 2 ? tone(g[0], 2) : root(g[0]) })) },
-      { id: 'answer', tag: 'Answers back', notes: [].concat.apply([], gapsAt.filter((g) => g[1] >= 3).map((g) => { const out = []; for (let t = g[0]; t < g[0] + g[1]; t += 2) out.push({ s: t, d: 2, m: (t - g[0]) % 4 ? tone(t, 1) : root(t) }); return out; })) },
-    ];
+    const tone = (s, k) => { const c = ch(s); return 36 + c.root + mod(c.pcs[k % c.pcs.length] - c.root, 12); };
+    const gaps = gapsOf(notes, STEPS), evens = evensOf(STEPS), beats = beatsOf(m), last = m.pulses.length - 1;
+    // each job's notes: [{ s, d, c }] (c: where its chord is read, when that isn't s)
+    const jobs = {
+      lock: notes.filter((n) => n.w >= 1).map((n) => ({ s: n.s, d: Math.min(n.d, 4) })),
+      double: notes.map((n) => ({ s: n.s, d: Math.min(n.d, 3) })),
+      steady: slots.map((sl) => ({ s: sl.s, d: sl.len - 1 })),
+      pedal: [0, m.steps].map((x) => ({ s: x, d: m.steps - 1 })),
+      pulse: beats.map((b) => ({ s: b.s, d: b.len })),
+      eighths: evens.map((x) => ({ s: x, d: 2 })),
+      offbeat: evens.filter((x) => !onPulse(m, x)).map((x) => ({ s: x, d: 2 })),
+      // each chord comes in an eighth early
+      push: slots.map((sl, i) => (i === 0 ? { s: 0, d: sl.len - 2 } : { s: sl.s - 2, d: sl.len, c: sl.s })),
+      dotted: until(dottedOf(m), STEPS).map((x) => ({ s: x.s, d: Math.min(x.d, 3) })),
+      gaps: gaps.filter((g) => g[1] >= 2).map((g) => ({ s: g[0], d: Math.min(g[1], 4) })),
+      answer: [].concat.apply([], gaps.filter((g) => g[1] >= 3).map((g) => { const out = []; for (let t = g[0]; t < g[0] + g[1]; t += 2) out.push({ s: t, d: 2 }); return out; })),
+    };
+    jobs.push = jobs.push.map((x) => Object.assign(x, { d: Math.min(x.d, STEPS - x.s) }));
+    /** the pitch of each note: its place among the notes on the same chord picks it */
+    const pitched = (list, how) => {
+      const n = list.map((x) => ({ s: x.s, d: x.d, c: x.c == null ? x.s : x.c }));
+      return n.map((x, i) => {
+        const k = n.filter((y, j) => j < i && si(y.c) === si(x.c)).length;
+        const lastOnChord = !n.some((y, j) => j > i && si(y.c) === si(x.c)) && k > 0;
+        const r = root(x.c);
+        let p = r;
+        if (how === 'fifth') p = k % 2 ? r + 7 : r;
+        else if (how === 'oct') p = onPulse(m, x.s) ? r : r + 12;
+        else if (how === 'tones') p = tone(x.c, k);
+        else if (how === 'lead' && lastOnChord) {
+          // a half step into the next chord's root
+          const nr = 36 + chords[(si(x.c) + 1) % chords.length].root;
+          if (nr !== r) p = nr > r ? nr - 1 : nr + 1;
+        }
+        return { s: x.s, d: x.d, m: p };
+      });
+    };
+    const out = [];
+    BASS_JOBS.forEach(([job, name, canShort]) => {
+      const list = jobs[job];
+      if (!list.length) return;
+      BASS_NOTES.forEach(([how, words]) => [0, 1].forEach((short) => {
+        if (short && !canShort) return;
+        const ns = pitched(list, how).map((x) => (short ? Object.assign(x, { d: 1 }) : x));
+        const tag = job === 'eighths' && how === 'oct' ? 'Bouncing octaves' : name;
+        out.push({ id: job + '-' + how + (short ? '-short' : ''), fam: job, twist: (how === 'root' ? 0 : 1) + short, tag, detail: [words, short ? 'short' : ''].filter(Boolean).join(', '), notes: ns });
+      }));
+    });
+    // walking: a chord tone on each beat, and a half step below the next bar's root on the last one
+    out.push({ id: 'walk', tag: 'Walking', detail: '', notes: beats.map((b) => ({ s: b.s, d: b.len, m: b.k === last ? root(b.s + b.len) - 1 : tone(b.s, b.k % 3) })) });
     const onsets = onsetsOf(notes);
-    return S.filter((x) => x.notes.length).map((x) => Object.assign(x, { lock: x.notes.filter((n) => onsets[n.s]).length / x.notes.length, n: x.notes.length }));
+    // a bass line needs at least a note a bar
+    return unique(out.filter((x) => x.notes.length >= 2), (x) => JSON.stringify(x.notes))
+      .map((x) => Object.assign(x, { lock: Math.round(100 * x.notes.filter((n) => onsets[n.s]).length / x.notes.length) / 100, n: x.notes.length }));
   }
+
+  // pads: when they play, how the chord is voiced, and on what
+  const PAD_RHYTHMS = [['held', 'Held chords'], ['breath', 'Breathing'], ['stabs', 'Off-beat stabs'], ['pulse', 'On the beats'], ['push', 'Pushed ahead'], ['accents', 'On its accents']];
+  const PAD_VOICINGS = [['one', 'one note'], ['two', 'two notes'], ['three', 'triad'], ['open', 'open fifths'], ['wide', 'wide']];
+  const PAD_INST = { pad: 'warm pad', strings: 'strings', glass: 'glass', voice: 'e-piano' };
 
   function padStyles(idea) {
     const notes = melodyNotes(idea.melody), chords = chordsFor(idea), sc = idea.melody.scale;
-    const slots = slotsOf(meterOf(idea.melody)), STEPS = stepsOf(idea.melody);
-    const at = (i) => ({ s: slots[i].s, d: slots[i].len });
+    const m = meterOf(idea.melody), slots = slotsOf(m), STEPS = stepsOf(idea.melody);
+    const ch = (s) => chords[slotAt(slots, s)];
     const voiced = (c, base) => c.pcs.map((pc) => base + mod(pc - base, 12));
-    const S = [
-      { id: 'drone', tag: 'One quiet drone', voice: 'pad', notes: [{ s: 0, d: STEPS, ms: [60 + chords[0].root] }] },
-      { id: 'shadow', tag: 'Shadow voice', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 2)] })) },
-      { id: 'above', tag: 'Harmony above', voice: 'voice', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg + 2)] })) },
-      { id: 'dyad', tag: 'Two-note pad', voice: 'pad', notes: chords.map((c, i) => Object.assign(at(i), { ms: [c.pcs[1], c.pcs[2]].map((pc) => 60 + mod(pc, 12)) })) },
-      { id: 'held', tag: 'Held chords', voice: 'pad', notes: chords.map((c, i) => Object.assign(at(i), { ms: voiced(c, 55) })) },
-      { id: 'wide', tag: 'Wide strings', voice: 'strings', notes: chords.map((c, i) => Object.assign(at(i), { ms: [48 + c.root].concat(voiced(c, 55), [67 + mod(c.pcs[2] - 7, 12)]) })) },
-      { id: 'high', tag: 'High shimmer', voice: 'glass', notes: chords.map((c, i) => Object.assign(at(i), { ms: voiced(c, 72) })) },
-    ];
-    return S.map((x) => {
+    const VOICE = {
+      one: (c, hi) => [(hi ? 72 : 60) + mod(c.pcs[1] - (hi ? 72 : 60), 12)],
+      two: (c, hi) => [c.pcs[1], c.pcs[2]].map((pc) => (hi ? 72 : 60) + mod(pc, 12)),
+      three: (c, hi) => voiced(c, hi ? 67 : 55),
+      open: (c, hi) => { const r = (hi ? 60 : 48) + c.root; return [r, r + 7, r + 12]; },
+      wide: (c) => [48 + c.root].concat(voiced(c, 55), [67 + mod(c.pcs[2] - 7, 12)]),
+    };
+    const evens = evensOf(STEPS), beats = beatsOf(m);
+    const accents = notes.filter((n) => n.w === 2).map((n) => n.s);
+    const RH = {
+      held: slots.map((sl) => ({ s: sl.s, d: sl.len })),
+      breath: slots.map((sl) => ({ s: sl.s, d: Math.ceil(sl.len / 2) })),
+      stabs: evens.filter((x) => !onPulse(m, x)).map((x) => ({ s: x, d: 1 })),
+      pulse: beats.map((b) => ({ s: b.s, d: b.len - 1 })),
+      push: slots.map((sl, i) => (i === 0 ? { s: 0, d: sl.len - 2 } : { s: sl.s - 2, d: Math.min(sl.len, STEPS - sl.s + 2), c: sl.s })),
+      accents: until(accents, STEPS),
+    };
+    const out = [];
+    PAD_RHYTHMS.forEach(([rh, name]) => {
+      if (!RH[rh].length) return;
+      PAD_VOICINGS.forEach(([v, words]) => [0, 1].forEach((hi) => {
+        if (hi && (v === 'wide' || !/held|breath|stabs/.test(rh))) return;
+        // held chords come on every instrument; the rest on the one that suits them
+        const insts = rh === 'held' ? ['pad', 'strings', 'glass', 'voice'] : [rh === 'stabs' || rh === 'pulse' ? 'voice' : hi ? 'glass' : v === 'wide' ? 'strings' : 'pad'];
+        insts.forEach((inst) => out.push({
+          id: rh + '-' + v + (hi ? '-hi' : '') + '-' + inst, fam: rh, twist: (v === 'three' ? 0 : 1) + hi + (inst === insts[0] ? 0 : 1), tag: name, voice: inst, detail: words + (hi ? ', high' : '') + ' · ' + PAD_INST[inst],
+          notes: RH[rh].map((x) => ({ s: x.s, d: x.d, ms: VOICE[v](ch(x.c == null ? x.s : x.c), hi) })),
+        }));
+      }));
+    });
+    // lines that move with the melody, and drones under it
+    out.push(
+      { id: 'shadow', tag: 'Shadow voice', voice: 'voice', detail: 'a third below', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 2)] })) },
+      { id: 'above', tag: 'Harmony above', voice: 'voice', detail: 'a third above', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg + 2)] })) },
+      { id: 'sixth', tag: 'Harmony below', voice: 'voice', detail: 'a sixth below', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 5)] })) },
+      { id: 'drone', tag: 'One quiet drone', voice: 'pad', detail: 'the home note', notes: [{ s: 0, d: STEPS, ms: [60 + chords[0].root] }] },
+      { id: 'fifths', tag: 'Open drone', voice: 'strings', detail: 'home and its fifth', notes: [{ s: 0, d: STEPS, ms: [48 + chords[0].root, 55 + chords[0].root] }] },
+    );
+    return unique(out, (x) => x.voice + JSON.stringify(x.notes)).map((x) => {
       const tot = x.notes.reduce((a, n) => a + n.d, 0) || 1;
       const voices = x.notes.reduce((a, n) => a + n.ms.length * n.d, 0) / tot;
-      const reg = x.notes.reduce((a, n) => a + n.ms.reduce((b, m) => b + m, 0) / n.ms.length, 0) / x.notes.length;
+      const reg = x.notes.reduce((a, n) => a + n.ms.reduce((b, mm) => b + mm, 0) / n.ms.length, 0) / x.notes.length;
       return Object.assign(x, { voices: Math.round(voices * 10) / 10, reg });
     });
   }
@@ -450,61 +561,109 @@
   /** steps in bar terms, repeated in both bars */
   function bothBars(m, xs) { return xs.concat(xs.map((x) => x + m.steps)); }
 
+  // hand percussion: [id, name, high sound, low sound (on the strong beats) or none]
+  const PERC_INST = [['clap', 'Claps', 'clap'], ['tap', 'Woodblock', 'tap', 'tapLo'], ['shaker', 'Shaker', 'shaker'], ['tamb', 'Tambourine', 'tamb'], ['rim', 'Rimshot', 'rim'],
+    ['cowbell', 'Cowbell', 'cowbell'], ['conga', 'Congas', 'conga', 'congaLo'], ['bongo', 'Bongos', 'bongo', 'bongoLo'], ['claves', 'Claves', 'claves'],
+    ['agogo', 'Agogô', 'agogo', 'agogoLo'], ['guiro', 'Guiro', 'guiro'], ['tri', 'Triangle', 'tri']];
+  // where they play, and which instruments suit it
+  const PERC_PATTERNS = [
+    ['accents', 'on its accents', 'clap conga cowbell tamb rim bongo claves'], ['backs', 'on the backbeat', 'clap rim tamb tap claves cowbell'],
+    ['beats', 'on every beat', 'clap tap cowbell conga rim claves tri'], ['eighths', 'in eighths', 'shaker tamb cowbell agogo conga bongo claves tap tri rim'],
+    ['offs', 'off the beat', 'tamb shaker cowbell tri rim tap agogo clap'], ['sixteenths', 'in sixteenths', 'shaker tamb guiro bongo'],
+    ['melody', 'with the melody', 'tap conga bongo claves rim agogo'], ['gaps', 'in the gaps', 'conga bongo tap shaker claves'],
+    ['dotted', 'dotted', 'claves rim cowbell conga tap agogo'], ['clave', 'in a clave', 'claves rim tap cowbell'],
+  ];
+  // a shaker, tambourine, guiro or triangle keeping time can have claps on the backbeat too
+  const PERC_LAYER = ['shaker', 'tamb', 'guiro', 'tri'];
+
   function percStyles(idea) {
     const notes = melodyNotes(idea.melody);
     const m = meterOf(idea.melody), STEPS = 2 * m.steps;
-    const at = (arr, k, v) => arr.map((s) => ({ s, k, v: v || 1 }));
-    const evens = evensOf(STEPS);
-    const bk = backsOf(m), backs = bothBars(m, bk);
-    const S = [
-      { id: 'accents', tag: 'Claps on its accents', hits: notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 })) },
-      { id: 'back', tag: 'Backbeat claps', hits: at(backs, 'clap') },
-      { id: 'taps', tag: 'Taps with the melody', hits: notes.map((n) => ({ s: n.s, k: 'tap', v: [0.5, 0.75, 1][n.w] })) },
-      { id: 'onetwo', tag: 'Tap, clap', hits: at(bothBars(m, m.groupStarts), 'tap').concat(at(backs, 'clap')) },
-      { id: 'shake8', tag: 'Shaker and claps', hits: evens.map((s) => ({ s, k: 'shaker', v: onPulse(m, s) ? 1 : 0.6 })).concat(at(backs, 'clap')) },
-      { id: 'shake16', tag: 'Busy shaker', hits: Array.from({ length: STEPS }, (_, s) => ({ s, k: 'shaker', v: s % 2 ? 0.5 : 0.9 })).concat(notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, k: 'clap', v: 1 }))) },
-      { id: 'tamb', tag: 'Off-beat tambourine', hits: at(evens.filter((s) => !onPulse(m, s)), 'tamb').concat(at(bothBars(m, [bk[bk.length - 1]]), 'clap')) },
-    ];
+    const evens = evensOf(STEPS), backs = bothBars(m, backsOf(m)), pulses = bothBars(m, m.pulses.map((p) => p.s));
+    const strong = (s) => m.groupStarts.indexOf(mod(s, m.steps)) >= 0;
+    const covered = coverage(notes, STEPS);
+    const P = {
+      accents: notes.filter((n) => n.w === 2).map((n) => ({ s: n.s, v: 1 })),
+      backs: backs.map((x) => ({ s: x, v: 1 })),
+      beats: pulses.map((x) => ({ s: x, v: strong(x) ? 1 : 0.8 })),
+      eighths: evens.map((x) => ({ s: x, v: onPulse(m, x) ? 1 : 0.6 })),
+      offs: evens.filter((x) => !onPulse(m, x)).map((x) => ({ s: x, v: 0.85 })),
+      sixteenths: Array.from({ length: STEPS }, (_, x) => ({ s: x, v: onPulse(m, x) ? 1 : x % 2 ? 0.5 : 0.8 })),
+      melody: notes.map((n) => ({ s: n.s, v: [0.5, 0.75, 1][n.w] })),
+      gaps: evens.filter((x) => !covered[x]).map((x) => ({ s: x, v: 0.7 })),
+      dotted: dottedOf(m).map((x) => ({ s: x, v: strong(x) ? 1 : 0.8 })),
+      // son clave, 3 then 2: only where the bar is four beats long
+      clave: m.id === '4/4' ? [0, 6, 12, 20, 24].map((x) => ({ s: x, v: 1 })) : [],
+    };
+    const out = [];
+    PERC_PATTERNS.forEach(([pat, words, fits]) => {
+      if (!P[pat].length) return;
+      fits.split(' ').forEach((iid) => {
+        const inst = PERC_INST.find((x) => x[0] === iid);
+        const hits = P[pat].map((h) => ({ s: h.s, k: inst[3] && strong(h.s) ? inst[3] : inst[2], v: h.v }));
+        const tag = inst[1] + ' ' + words;
+        out.push({ id: iid + '-' + pat, fam: iid, tag, detail: '', hits });
+        if (PERC_LAYER.indexOf(iid) >= 0 && /eighths|offs|sixteenths/.test(pat)) {
+          const claps = pat === 'sixteenths' ? P.accents : P.backs;
+          if (claps.length) out.push({ id: iid + '-' + pat + '-claps', fam: iid, twist: 1, tag, detail: '+ claps', hits: hits.concat(claps.map((h) => ({ s: h.s, k: 'clap', v: 1 }))) });
+        }
+      });
+    });
+    // the woodblock counts the groups and the claps answer
+    out.push({ id: 'tapclap', tag: 'Tap, clap', detail: '', hits: bothBars(m, m.groupStarts).map((x) => ({ s: x, k: 'tap', v: 1 })).concat(backs.map((x) => ({ s: x, k: 'clap', v: 1 }))) });
     const onsets = onsetsOf(notes);
-    return S.filter((x) => x.hits.length).map((x) => Object.assign(x, { n: x.hits.length, follow: x.hits.filter((h) => onsets[h.s]).length / x.hits.length }));
+    return unique(out.filter((x) => x.hits.length), (x) => JSON.stringify(x.hits.slice().sort((a, b) => a.s - b.s || (a.k < b.k ? -1 : 1))))
+      .map((x) => Object.assign(x, { n: x.hits.length, follow: x.hits.filter((h) => onsets[h.s]).length / x.hits.length }));
   }
 
-  const EVENS = Array.from({ length: 16 }, (_, i) => i * 2);
-  const KITS = [
-    { id: 'four', tag: 'Four on the floor', k: [0, 4, 8, 12, 16, 20, 24, 28], s: [4, 12, 20, 28], h: [2, 6, 10, 14, 18, 22, 26, 30], swing: 0 },
-    { id: 'back', tag: 'Backbeat', k: [0, 10, 16, 26], s: [4, 12, 20, 28], h: EVENS, swing: 0 },
-    { id: 'half', tag: 'Half-time', k: [0, 11, 14, 22], s: [8, 24], h: Array.from({ length: STEPS }, (_, i) => i), swing: 0 },
-    { id: 'boombap', tag: 'Boom bap swing', k: [0, 7, 10, 16, 23, 26], s: [4, 12, 20, 28], h: EVENS, swing: 0.6 },
-    { id: 'broken', tag: 'Broken', k: [0, 6, 10, 19, 22], s: [4, 13, 20, 29], h: EVENS, swing: 0 },
-    { id: 'bounce', tag: 'Bouncing kick', k: [0, 3, 8, 11, 16, 19, 24, 27], s: [4, 12, 20, 28], h: [2, 6, 10, 14, 18, 22, 26, 30], swing: 0 },
-  ].map((x) => Object.assign(x, { off: x.k.concat(x.s).filter((s) => s % 4 !== 0).length / (x.k.length + x.s.length) + x.swing * 0.5, n: x.k.length + x.s.length + x.h.length }));
+  // beats: a kick pattern, where the snare goes, and the hats. 4/4 has its own kick vocabulary;
+  // other meters build theirs from where their groups start
+  const KICKS44 = [['four', 'Four on the floor', [0, 4, 8, 12]], ['rock', 'Straight rock', [0, 8]], ['rockpush', 'Rock, pushed', [0, 8, 10]],
+    ['back', 'Backbeat', [0, 10]], ['boombap', 'Boom bap', [0, 7, 10]], ['broken', 'Broken', [0, 6, 10], [3, 6]], ['half', 'Half-time kick', [0, 11, 14], [6]],
+    ['bounce', 'Bouncing kick', [0, 3, 8, 11]], ['tresillo', 'Tresillo kick', [0, 6, 12]], ['pushing', 'Pushing kick', [0, 8, 14]], ['one', 'Kick on the one', [0]]];
+  const HATS = [['e8', '8ths'], ['s16', '16ths'], ['off', 'open off-beats'], ['ride', 'ride'], ['q', 'quarter hats']];
+  const HAT_P = { e8: 42, s16: 42, off: 46, ride: 51, q: 42 };
 
-  /**
-   * Beats for other meters, built from where the meter's strong beats are
-   * rather than copied from 4/4. Swing only for quarter-note meters: 6/8 and
-   * 7/8 already move in threes.
-   */
   function kitsFor(m) {
-    if (m.id === '4/4') return KITS;
     const B = (xs) => bothBars(m, xs);
     const pulses = m.pulses.map((p) => p.s), groups = m.groupStarts, backs = backsOf(m);
     const eighths = evensOf(m.steps), offs = eighths.filter((s) => !onPulse(m, s));
     const mid = m.harm[1] != null ? m.harm[1] : pulses[pulses.length - 1];
-    // a kick an eighth early: it leans into the next strong beat
-    const lean = groups.slice(1).map((g) => g - 2);
-    const out = [
-      { id: 'one', tag: 'Kick on the one', k: B([0]), s: B(backs), h: B(eighths), swing: 0 },
-      // kicks start the groups, the snare starts the last one (or answers the one bar-long group of 3/4)
-      groups.length > 1
-        ? { id: 'groups', tag: 'Kick on each group', k: B(groups.slice(0, -1)), s: B(groups.slice(-1)), h: B(eighths), swing: 0 }
-        : { id: 'groups', tag: 'Kick and answer', k: B([0, pulses[pulses.length - 1]]), s: B(backs.slice(0, 1)), h: B(eighths), swing: 0 },
-      { id: 'drive', tag: 'Driving', k: B(pulses), s: B([mid]), h: B(offs.length ? offs : eighths), swing: 0 },
-      { id: 'half', tag: 'Half-time', k: [0, m.steps - 2, m.steps + 0], s: B([mid]), h: Array.from({ length: 2 * m.steps }, (_, i) => i), swing: 0 },
-      { id: 'lean', tag: 'Leaning', k: B([0].concat(lean.length ? lean : [m.steps - 2])), s: B(backs).map((s, i) => (i >= backs.length ? s + 1 : s)), h: B(eighths), swing: 0 },
-    ];
-    if (!m.compound) out.push({ id: 'swing', tag: 'Swung', k: B([0, mid]), s: B(backs), h: B(eighths), swing: 0.6 });
-    const seen = {};
-    return out.filter((x) => { const key = JSON.stringify([x.k, x.s, x.h, x.swing]); return seen[key] ? false : (seen[key] = 1); }).map((x) => {
+    let kicks;
+    if (m.id === '4/4') kicks = KICKS44.map(([id, tag, a, b]) => ({ id, tag, k: a.concat((b || a).map((x) => x + m.steps)) }));
+    else {
+      const lean = groups.slice(1).map((g) => g - 2);
+      const dots = dottedOf(m).filter((x) => x < m.steps);
+      kicks = [
+        { id: 'one', tag: 'Kick on the one', k: B([0]) },
+        { id: 'groups', tag: groups.length > 1 ? 'Kick on each group' : 'Kick and answer', k: B(groups.length > 1 ? groups.slice(0, -1) : [0, pulses[pulses.length - 1]]) },
+        { id: 'drive', tag: 'Driving', k: B(pulses) },
+        { id: 'lean', tag: 'Leaning', k: B([0].concat(lean.length ? lean : [m.steps - 2])) },
+        { id: 'dotted', tag: 'Dotted kick', k: B(dots) },
+        { id: 'pushing', tag: 'Pushing kick', k: B([0, m.steps - 2]) },
+      ];
+    }
+    const SN = {
+      back: { words: 'backbeat', s: B(backs) },
+      half: { words: 'half-time', s: B([mid]) },
+      // the last snare of the second bar comes a 16th late
+      late: { words: 'late snare', s: B(backs).map((x, i) => (i === 2 * backs.length - 1 ? x + 1 : x)) },
+    };
+    const H = { e8: B(eighths), s16: Array.from({ length: 2 * m.steps }, (_, i) => i), off: B(offs.length ? offs : eighths), ride: B(eighths), q: B(pulses) };
+    const out = [];
+    const add = (kk, sn, hat, swing) => {
+      // the kick stays under the snare where they meet: four on the floor keeps all four
+      const sx = SN[sn].s, k = kk.k;
+      out.push({ id: kk.id + '-' + sn + '-' + hat + (swing ? '-swung' : ''), fam: kk.id, twist: (hat === 'e8' ? 0 : 1) + (swing ? 1 : 0), tag: kk.tag, detail: (sn === 'back' ? '' : SN[sn].words + ' · ') + HATS.find((x) => x[0] === hat)[1], k, s: sx, h: H[hat], hp: HAT_P[hat], swing: swing ? 0.6 : 0 });
+    };
+    kicks.forEach((kk) => {
+      ['e8', 's16', 'off'].forEach((hat) => { add(kk, 'back', hat); add(kk, 'half', hat); });
+      if (/rock|one|back$|groups/.test(kk.id)) { add(kk, 'back', 'ride'); add(kk, 'back', 'q'); }
+      if (/broken|boombap|bounce|pushing|lean|dotted/.test(kk.id)) add(kk, 'late', 'e8');
+      // swing: only where the beat moves in twos (not 6/8 or 7/8)
+      if (!m.compound && /boombap|broken|one|rock$|back$|groups|lean/.test(kk.id)) add(kk, 'back', 'e8', 1);
+    });
+    return unique(out, (x) => JSON.stringify([x.k, x.s, x.h, x.hp, x.swing])).map((x) => {
       const ks = x.k.concat(x.s);
       return Object.assign(x, { off: ks.filter((s) => !onPulse(m, s)).length / Math.max(1, ks.length) + x.swing * 0.5, n: x.k.length + x.s.length + x.h.length });
     });
@@ -521,15 +680,43 @@
     trap: { name: 'Trap', bpm: 140, swing: 0, inst: 'bell', up: 12, patches: { lead: 'bell', chords: 'pad-warm', bass: 'bass-808', kit: 'kit-808' }, why: 'quick notes ride on top of rolling hi-hats' },
     dnb: { name: 'Drum and bass', bpm: 172, swing: 0, inst: 'square lead', patches: { lead: 'lead-square', chords: 'pad-warm', bass: 'bass-sub', kit: 'kit-acoustic' }, why: 'it’s busy enough to keep up with a fast break' },
   };
-  /** genres ranked by how well they suit the melody's rhythm (top five, or all with "Surprise me") */
-  function soundStyles(idea, any) {
+  // a sound's lead instrument, in words
+  const LEAD_WORD = { epiano: 'electric piano', keys: 'soft keys', bell: 'bell', pluck: 'pluck', 'lead-saw': 'saw lead', 'lead-square': 'square lead', 'lead-soft': 'soft lead', organ: 'organ' };
+  const LEADS = Object.keys(LEAD_WORD);
+  /** the genres, best fit for the melody's rhythm first */
+  function genreFit(idea) {
     const r = idea.melody.r, offR = r.off / r.n, avg = r.hits.reduce((a, h) => a + h[1], 0) / r.n;
     const fit = {
       lofi: 2 - Math.abs(r.n - 8) / 6 + 0.6 * offR, ambient: (r.n <= 6 ? 1.5 : 0) + avg / 4, boombap: 1.2 + 0.5 * offR - Math.abs(r.n - 9) / 10,
       pop: (1 - offR) * 1.6 + 0.3, synthwave: avg / 3 + 0.4, house: 2.4 * offR + (avg < 3 ? 0.8 : 0), trap: r.n / 8 + 0.3, dnb: r.n / 10 + offR,
     };
-    const ids = Object.keys(fit).sort((a, b) => fit[b] - fit[a]);
-    return (any ? ids : ids.slice(0, 5)).map((id) => ({ id, tag: GENRES[id].name, name: GENRES[id].name, bpm: GENRES[id].bpm, swing: GENRES[id].swing, inst: GENRES[id].inst, up: GENRES[id].up || 0, why: GENRES[id].why }));
+    return Object.keys(fit).sort((a, b) => fit[b] - fit[a]);
+  }
+  /**
+   * Sounds: each genre mix as it is (a reliable starting point), and the same
+   * mix slower, faster, swung or straight, and with other lead instruments.
+   * A genre is a recipe of ingredients, not a lock. `rare`: the genres that
+   * suit the rhythm least, and the changed recipes, come later in the deck.
+   */
+  function soundStyles(idea) {
+    const order = genreFit(idea), out = [];
+    order.forEach((g, rank) => {
+      const G = GENRES[g];
+      const base = { genre: g, name: G.name, bpm: G.bpm, swing: G.swing, inst: G.inst, up: G.up || 0, why: G.why, patches: Object.assign({}, G.patches) };
+      const add = (id, tag, ch, rare) => out.push(Object.assign({}, base, { id, fam: g, twist: rare ? 1 : 0, tag, name: tag, rare: rank >= 5 || !!rare }, ch, { patches: Object.assign({}, base.patches, ch.patches || {}) }));
+      add(g, G.name, {});
+      add(g + '-slow', G.name + ', slower', { bpm: Math.round(G.bpm * 0.82) }, 1);
+      add(g + '-fast', G.name + ', faster', { bpm: Math.round(G.bpm * 1.18) }, 1);
+      if (G.swing) add(g + '-straight', G.name + ', straight', { swing: 0 }, 1);
+      else if (G.bpm < 130) add(g + '-swung', G.name + ', swung', { swing: 0.6 }, 1);
+      // two other leads, the next ones round the list
+      const own = LEADS.indexOf(G.patches.lead);
+      [1, 3].forEach((k) => {
+        const lead = LEADS[(own + k) % LEADS.length];
+        add(g + '-' + lead, G.name + ' with ' + LEAD_WORD[lead], { inst: LEAD_WORD[lead], up: 0, patches: { lead } }, 1);
+      });
+    });
+    return out;
   }
 
   // ---------------------------------------------------------------- the deck: every option, three at a time
@@ -562,7 +749,7 @@
   function dealBands(bands, pick, plan) {
     const qs = bands.map((b) => b.slice()), out = [];
     let P = null;
-    const take = (i, used) => { const q = qs[i]; const j = pick ? pick(q, i, P, used) : 0; return q.splice(j, 1)[0]; };
+    const take = (i, used) => { const q = qs[i]; const j = pick ? pick(q, i, P, used) : apart(q, used); return q.splice(j, 1)[0]; };
     for (let k = 0; qs.some((q) => q.length); k++) {
       const batch = [];
       P = plan ? plan(qs, k) : null;
@@ -577,6 +764,33 @@
     return out;
   }
 
+  /** an option's family: the ingredient that most changes how it sounds (bass job, pad rhythm, instrument, kick, genre) */
+  function famOf(o) { return o.fam || o.tag; }
+  /** the first of the next few cards that shares neither family nor detail with the batch so far (else neither family) */
+  function apart(q, used) {
+    const look = Math.min(q.length, 8);
+    for (let j = 0; j < look; j++) if (!used.some((u) => famOf(u) === famOf(q[j]) || (u.detail && u.detail === q[j].detail))) return j;
+    for (let j = 0; j < look; j++) if (!used.some((u) => famOf(u) === famOf(q[j]))) return j;
+    return 0;
+  }
+  /**
+   * A band's cards taking turns by family, in the order each family first
+   * comes, so neighbours differ. plain: each family's plainest version first
+   * (twist counts the ingredients changed from its plain form).
+   */
+  function byTurns(list, plain) {
+    const fams = [], groups = {};
+    list.forEach((o) => { const f = famOf(o); if (!groups[f]) { groups[f] = []; fams.push(f); } groups[f].push(o); });
+    if (plain) {
+      fams.forEach((f) => { groups[f] = groups[f].map((o, i) => [o, i]).sort((x, y) => (x[0].twist || 0) - (y[0].twist || 0) || x[1] - y[1]).map((x) => x[0]); });
+      // families with a plain version here lead; one whose plain version fell in the next band waits
+      const lead = (f) => groups[f][0].twist || 0;
+      fams.sort((a, b2) => lead(a) - lead(b2) || fams.indexOf(a) - fams.indexOf(b2));
+    }
+    const out = [];
+    for (let k = 0; out.length < list.length; k++) fams.forEach((f) => { if (groups[f][k]) out.push(groups[f][k]); });
+    return out;
+  }
   /** a sorted pool cut in thirds, each third ordered clearest first, cards once left out last; shuffled on later deals */
   function bandsOf(pool, deal, seed) {
     const n = pool.length;
@@ -585,8 +799,8 @@
     const mid = (pool[0].a + pool[n - 1].a) / 2;
     const bands = [pool.slice(0, t1), pool.slice(t1, t2).sort((x, y) => Math.abs(x.a - mid) - Math.abs(y.a - mid)), pool.slice(t2).reverse()];
     return bands.map((b, i) => {
-      if (deal) return shuffled(b, rng(seedOf(seed + ':' + deal + ':' + i)));
-      return b.filter((c) => !c.rare).concat(b.filter((c) => c.rare));
+      if (deal) return byTurns(shuffled(b, rng(seedOf(seed + ':' + deal + ':' + i))));
+      return byTurns(b.filter((c) => !c.rare), true).concat(byTurns(b.filter((c) => c.rare), true));
     });
   }
 
@@ -619,7 +833,7 @@
         cands = cands.map((c) => Object.assign(c, { a: c.n, b: c.follow }));
       } else if (dir === 'beat') cands = kitsFor(meterOf(idea.melody)).map((c) => Object.assign({}, c, { a: c.off, b: c.n }));
       // the sounds that fit the rhythm least come last; "Surprise me" deals them in from the start
-      else cands = soundStyles(idea, true).map((c, i) => Object.assign(c, { a: c.bpm, b: 0, rare: i >= 5 }));
+      else cands = soundStyles(idea).map((c) => Object.assign(c, { a: c.bpm, b: c.swing }));
       const pool = steerPool(cands, st);
       const shake = st.x === 'any' ? deal + 1 : deal;
       return { batches: dealBands(bandsOf(pool, shake, dir)), total: pool.length };
@@ -764,11 +978,11 @@
     if (dir === 'seed1') return MODE[o.mel.scale].name.toLowerCase() + (meterNote(o.mel) ? ' · ' + meterNote(o.mel) : '');
     if (dir === 'seed2') return 'lands on ' + IV[o.land];
     if (dir === 'chords') return o.fit + '% fit';
-    if (dir === 'bass') return o.n + (o.n === 1 ? ' note' : ' notes');
-    if (dir === 'pads') return o.voices + (o.voices === 1 ? ' voice' : ' voices');
-    if (dir === 'perc') return o.n + ' hits';
-    if (dir === 'beat') return o.swing ? 'swung' : Math.round(o.off * 100) + '% off grid';
-    return o.bpm + ' BPM';
+    if (dir === 'bass') return o.detail || o.n + (o.n === 1 ? ' note' : ' notes');
+    if (dir === 'pads') return o.detail || o.voices + (o.voices === 1 ? ' voice' : ' voices');
+    if (dir === 'perc') return o.detail || o.n + ' hits';
+    if (dir === 'beat') return (o.swing ? 'swung' + (o.detail ? ' · ' : '') : '') + (o.detail || (o.swing ? '' : Math.round(o.off * 100) + '% off grid'));
+    return o.bpm + ' BPM' + (o.swing && o.swing > 0.5 ? ' · swung' : '');
   }
   function rankOf(opts, i) {
     const as = opts.map((o) => o.a);
@@ -840,7 +1054,12 @@
 
   const NEUTRAL = { lead: 'lead-soft', chords: 'keys', bass: 'bass-pluck', kit: 'kit-acoustic' };
   const PAD_PATCH = { pad: 'pad-warm', voice: 'epiano', strings: 'strings', glass: 'pad-glass' };
-  const DRUM = { clap: 39, tap: 76, shaker: 70, tamb: 54, kick: 36, snare: 38, hat: 42 };
+  const DRUM = {
+    clap: 39, tap: 76, tapLo: 77, shaker: 70, tamb: 54, rim: 37, cowbell: 56, conga: 62, congaLo: 64, bongo: 60, bongoLo: 61,
+    claves: 75, agogo: 67, agogoLo: 68, guiro: 73, tri: 81, kick: 36, snare: 38, hat: 42,
+  };
+  /** a hat's loudness: 16ths lean on the eighths, open and ride hats sit back a little */
+  function hatVel(o, s) { return o.hp === 46 ? 58 : o.hp === 51 ? (s % 4 ? 52 : 66) : s % 2 ? 50 : 78; }
   const MIX = { mel: 0.9, chd: 0.5, bas: 0.8, pad: 0.45, prc: 0.75, bt: 0.75 };
   const TRACK = { mel: 'b2g-mel', chd: 'b2g-chd', bas: 'b2g-bas', pad: 'b2g-pad', prc: 'b2g-prc', bt: 'b2g-bt' };
 
@@ -861,8 +1080,8 @@
   function seq(idea, aud) {
     const pick = (d) => (aud && aud.dir === d ? aud.spec : idea.layers[d]);
     const sound = pick('sound'), beat = pick('beat');
-    const G = sound ? GENRES[sound.id] : null;
-    const P = G ? G.patches : NEUTRAL;
+    const G = sound ? GENRES[sound.genre || sound.id] : null;
+    const P = (sound && sound.patches) || (G ? G.patches : NEUTRAL);
     const seeding = aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
     const mel = seeding ? aud.spec.mel : idea.melody;
     const m = meterOf(mel), STEPS = 2 * m.steps, LENGTH = STEPS * STEP_TICKS, slots = slotsOf(m);
@@ -905,8 +1124,8 @@
         } else if (d === 'beat') {
           track('bt', P.kit, MIX.bt * g(d));
           o.k.forEach((s) => hit(TRACK.bt, s, DRUM.kick, 112));
-          o.s.forEach((s) => hit(TRACK.bt, s, DRUM.snare, 105));
-          o.h.forEach((s) => hit(TRACK.bt, s, DRUM.hat, s % 2 ? 50 : 78));
+          o.s.forEach((s) => hit(TRACK.bt, s, o.sn || DRUM.snare, 105));
+          o.h.forEach((s) => hit(TRACK.bt, s, o.hp || DRUM.hat, hatVel(o, s)));
         }
       });
     }
@@ -1009,7 +1228,7 @@
       if (d === 'bass') out.push({ label: 'Bass', part: pitched('bass', 'Bass: ' + o.tag, 36, o.notes.map((n) => ({ s: n.s, d: n.d, m: n.m, v: 100 }))) });
       if (d === 'pads') out.push({ label: 'Pads', part: pitched('pad', 'Pad: ' + o.tag, 48, [].concat.apply([], o.notes.map((n) => n.ms.map((m) => ({ s: n.s, d: n.d, m, v: 80 }))))) });
       if (d === 'perc') out.push({ label: 'Percussion', part: drums('perc', 'Percussion: ' + o.tag, o.hits.map((h) => ({ s: h.s, p: DRUM[h.k] || DRUM.tap, v: Math.round(40 + 80 * (h.v || 1)) }))) });
-      if (d === 'beat') out.push({ label: 'Beat', part: drums('drums', 'Beat: ' + o.tag, o.k.map((s) => ({ s, p: DRUM.kick, v: 112 })).concat(o.s.map((s) => ({ s, p: DRUM.snare, v: 105 })), o.h.map((s) => ({ s, p: DRUM.hat, v: s % 2 ? 50 : 78 })))) });
+      if (d === 'beat') out.push({ label: 'Beat', part: drums('drums', 'Beat: ' + o.tag, o.k.map((s) => ({ s, p: DRUM.kick, v: 112 })).concat(o.s.map((s) => ({ s, p: o.sn || DRUM.snare, v: 105 })), o.h.map((s) => ({ s, p: o.hp || DRUM.hat, v: hatVel(o, s) })))) });
     }
     return out;
   }
@@ -1131,7 +1350,7 @@
 
   Odd.audition = {
     STEPS, STEP_TICKS, LENGTH, ABC, NAMES, IV, DIRS, NEXT_ORDER, LAYER_ORDER, REQS, LINES, line,
-    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, KITS, GENRES, TRACK, METER_ORDER,
+    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, GENRES, LEAD_WORD, TRACK, METER_ORDER,
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,

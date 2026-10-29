@@ -77,7 +77,16 @@ again from there.
    beat**, on the grid to against it), **Pads and support** (thin to full) and
    **Sound and feel** (instrument, tempo and swing: calm to energetic). Each
    is worked out from the melody and the layers under it, nothing else.
-   Bobby's pick is highlighted.
+   Bobby's pick is highlighted. Each layer's deck is every sensible mix of
+   a few ingredients: a bass is a job (steady, locks on, driving eighths,
+   pushing ahead, dotted, walking, ...) with its notes (roots, root and
+   fifth, octaves, chord tones, leading into the next chord), held or short;
+   a pad is a rhythm with a voicing and an instrument; percussion is one of
+   twelve hand instruments (congas, bongos, claves, cowbell, agogô, guiro,
+   ...) with a pattern that suits it; a beat is a kick pattern with a snare
+   placement and hats; a sound is a genre mix as it is, or slower, faster,
+   swung, straight or with another lead. Each batch mixes families (three
+   different bass jobs, three instruments), plain versions first.
 
 Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
 **Land on home**, **Surprise me** and so on re-roll the three with that
@@ -129,6 +138,15 @@ each side.
   squash, chop, a scale step or an octave up or down, as written); tap one
   to hear it in the section, **Use this** keeps it. **Edit notes by hand**
   opens a grid for the melody.
+- **Chords** below makes the section's chords go somewhere instead of
+  looping: **Answers itself** (every second time round, close relatives of
+  the chords), **Goes somewhere** (the middle passes move away and come back),
+  **Borrowed colour** (chords from the parallel key near the end), each with an
+  ending that **lands home** or **ends open**. Each card shows its chords
+  and why they work. The melody never moves: Bobby only offers chords that
+  fit it, and the chords, bass and pads follow. **Lighter** sections end
+  open and **Up a fourth** lands home by default; ways in and out keep the
+  idea's own loop.
 - **Add a layer** (or **+ Add a layer** under the stack): pick chords, bass,
   pads, percussion or a beat and Bobby makes three that fit your idea (an
   idea from the Idea Builder gets that screen's own layer rounds; any other

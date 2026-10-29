@@ -126,8 +126,9 @@
     const main = song.main, guest = song.guest || null;
     const bones = main.bones && main.bones.layers ? main.bones : null;
     const snd = bones ? bones.layers.sound : null;
-    const G = snd && Odd.audition && Odd.audition.GENRES ? Odd.audition.GENRES[snd.id] : null;
-    const P = G ? G.patches : NEUTRAL;
+    // a sound carries its own instruments; ideas saved before that name a genre
+    const G = snd && Odd.audition && Odd.audition.GENRES ? Odd.audition.GENRES[snd.genre || snd.id] : null;
+    const P = (snd && snd.patches) || (G ? G.patches : NEUTRAL);
     const seen = {};
     const layers = [];
     main.voices.forEach((v, i) => {
@@ -207,8 +208,8 @@
   /* What a section can be. c = { C, mainCfg, song } */
   const TREAT = [
     { id: 'asis', nm: 'Chorus', label: 'As written', sub: 'Your idea, exactly as you made it.', t: { adv: -1, change: -1, full: 0.6 }, cfg: (c) => clone(c.mainCfg) },
-    { id: 'light', nm: 'Verse', label: 'Lighter', sub: 'Melody, chords, bass and a little percussion. Room to grow.', t: { full: -0.8, drive: -0.4, busy: -0.4 }, cfg: (c) => ROLES.verse.make(c.C) },
-    { id: 'up4', nm: 'Last chorus', label: 'Up a fourth', sub: 'The same section, lifted five semitones. Classic for a last chorus.', t: { bright: 1, adv: 0.4, drive: 0.4, change: 0.5 }, cfg: (c) => withMain(c, { shift: 5 }) },
+    { id: 'light', nm: 'Verse', label: 'Lighter', sub: 'Melody, chords, bass and a little percussion, ending open. Room to grow.', t: { full: -0.8, drive: -0.4, busy: -0.4 }, cfg: (c) => Object.assign(ROLES.verse.make(c.C), { harm: { dev: 'loop', end: 'open' } }) },
+    { id: 'up4', nm: 'Last chorus', label: 'Up a fourth', sub: 'The same section, lifted five semitones, landing home. Classic for a last chorus.', t: { bright: 1, adv: 0.4, drive: 0.4, change: 0.5 }, cfg: (c) => withMain(c, { shift: 5, harm: { dev: 'loop', end: 'home' } }) },
     { id: 'guest', nm: 'Verse', needs: 'guest', label: (c) => c.C.guest.name + ' melody', sub: (c) => c.C.guest.name + '’s tune, moved into your key, over your chords.', t: { adv: 1, change: 1 }, cfg: (c) => withMain(c, { src: 'guest', energy: 0.55 }) },
     { id: 'answer', nm: 'Verse', needs: 'lead', label: 'Answer phrase', sub: 'Your melody turned upside down, landing home.', t: { change: 0.8, adv: 0.4, bright: -0.3 }, cfg: (c) => withMain(c, { src: 'answer', energy: 0.55 }) },
     { id: 'callans', nm: 'Verse', needs: 'lead', label: 'Call and answer', sub: 'Your melody asks, its mirror answers.', t: { change: 1, busy: 0.3, long: 0.4 }, cfg: (c) => withMain(c, { src: 'callans', energy: 0.6 }) },
@@ -361,6 +362,191 @@
     return p ? { bars: p.bars || 1, base: p.base, notes: p.notes.filter((n) => n.deg != null).map((n) => ({ t: n.t, d: n.d, deg: n.deg, acc: n.acc || 0, v: n.v })) } : null;
   }
 
+  // ---------------------------------------------------------------- chords that go somewhere
+  //
+  // A section repeats its idea; its chords needn't loop with it. body.harm = { dev, end }:
+  //   dev  loop     the idea's chords every time round
+  //        answer   every second time round, chords (all but the first) swap for a
+  //                 relative a third away: it shares two of their three notes
+  //        journey  the middle passes move to another chord (IV, vi, ii or V) and come back
+  //        colour   the last pass borrows from the parallel key (iv, bVI, bVII in major;
+  //                 IV and a major V in minor)
+  //   end  same | home (the last two chords become V I: a full stop) | open (ends on V: a question)
+  // Every changed chord is checked against what the melody plays over it, and
+  // isn't used where it clashes. Layers that follow the chords (chords, bass,
+  // pads, arps) refit to them; the melody never moves. No harm: the idea loops.
+
+  const DEVS = [
+    { id: 'loop', label: 'Loops as written', sub: 'Your idea’s chords, every time round.', t: { change: -1, adv: -0.6 }, min: 1 },
+    { id: 'answer', label: 'Answers itself', sub: 'Every second time round the chords swap for close relatives (a third away, two notes in common): the same tune in a new light.', t: { change: 0.6, adv: 0.3 }, min: 2 },
+    { id: 'journey', label: 'Goes somewhere', sub: 'In the middle the chords move to another home, then come back: the section travels instead of circling.', t: { change: 1, adv: 0.8, long: 0.5 }, min: 3 },
+    { id: 'colour', label: 'Borrowed colour', sub: 'The last time round borrows chords from the parallel key: a shadow over major, a sudden light in minor.', t: { adv: 1, bright: -0.2, change: 0.4 }, min: 1 },
+  ];
+  const ENDS = [
+    { id: 'same', label: '', sub: '', t: {} },
+    { id: 'home', label: 'lands home', sub: 'It ends V to I, the cadence most ears expect: a full stop.', t: { adv: -0.4, long: 0.2 } },
+    { id: 'open', label: 'ends open', sub: 'It ends on V: a question the next section answers.', t: { adv: 0.4, push: 0.5 } },
+  ];
+  const DEV_BY = {}, END_BY = {};
+  DEVS.forEach((d) => { DEV_BY[d.id] = d; });
+  ENDS.forEach((e) => { END_BY[e.id] = e; });
+  const MINORISH = /minor|dorian|phrygian|aeolian|locrian/i;
+  // how much worse than the written chord a change may fit the melody
+  const FIT_SLACK = 0.15;
+
+  function chordPcs(C, c) {
+    const alt = T.chordAlt(c, C.scale);
+    return [0, 2, 4].map((i) => T.mod(T.pitchOf(c.deg + i, alt[T.mod(c.deg + i, 7)], C.tonic, C.scale, 60), 12));
+  }
+  const isDim = (C, c) => T.chordQuality(c, C.scale) === 'dim';
+  const majorV = (C) => (MINORISH.test(C.scale) ? T.resolveChord(C.scale, 4, 0, 'maj') : { deg: 4 });
+  function harmLabel(h) {
+    const d = DEV_BY[(h && h.dev) || 'loop'] || DEVS[0], e = END_BY[(h && h.end) || 'same'] || ENDS[0];
+    if (d.id === 'loop' && e.id !== 'same') return e.id === 'home' ? 'Lands home' : 'Ends open';
+    return d.label + (e.label ? ', ' + e.label : '');
+  }
+
+  /**
+   * The section's chords: { prog, items: [{ c, a, b, pass }], names: [[name]], changed }.
+   * prog spans the whole section (Odd.render reads it like any progression).
+   */
+  function harmOf(C, cfg) {
+    const h = cfg.harm || {};
+    const dev = DEV_BY[h.dev] ? h.dev : 'loop', end = END_BY[h.end] ? h.end : 'same';
+    const BEAT = T.BEAT, length = Math.max(1, cfg.bars) * C.BAR, passLen = T.progTicks(C.prog);
+    const key = 'h' + C.id + '|' + dev + end + '|' + cfg.bars + '|' + cfg.src + '|' + (cfg.src === 'edit' ? JSON.stringify(cfg.edit) : '');
+    return cached(key, () => {
+      // the melody over the whole section, to check each chord against
+      const lp = leadPart(C, cfg);
+      const mel = lp ? R.partEvents(lp, { tonic: C.tonic, scale: C.scale, prog: C.prog, length, refit: false }) : [];
+      const fit = (c, a, b) => {
+        const pcs = chordPcs(C, c);
+        let on = 0, tot = 0;
+        for (const e of mel) {
+          const ov = Math.min(b, e.t + e.d) - Math.max(a, e.t);
+          if (ov <= 0) continue;
+          const w = ov * (e.t >= a && onBeatTick(C, e.t) ? 1.5 : 1);
+          tot += w;
+          on += pcs.includes(T.mod(e.p, 12)) ? w : -0.45 * w;
+        }
+        return tot ? on / tot : 0;
+      };
+      // every chord of every pass, cut at the section's end
+      const items = [];
+      for (let p = 0, t = 0; t < length; p++) {
+        for (const c of C.prog) {
+          const len = c.beats * BEAT;
+          if (t < length) items.push({ c: T.chordOnly(c), a: t, b: Math.min(length, t + len), pass: p });
+          t += len;
+        }
+        if (passLen <= 0) break;
+      }
+      const P = items.length ? items[items.length - 1].pass + 1 : 1;
+      const ok = (x, c, slack) => !isDim(C, c) && fit(c, x.a, x.b) >= fit(x.c, x.a, x.b) - (slack == null ? FIT_SLACK : slack);
+      const same = (a, b) => T.sameChord(Object.assign({}, a), Object.assign({}, b));
+      if (dev === 'answer') {
+        items.forEach((x, i) => {
+          if (x.pass % 2 === 0 || items[i - 1] && items[i - 1].pass !== x.pass) return;
+          if (!T.isDiatonic(x.c)) return;
+          // a relative a third away (vi for I, ii for IV ...), the best fit that isn't the chord before
+          const cands = [-2, 2].map((k) => ({ deg: T.mod(x.c.deg + k, 7) })).filter((c) => ok(x, c) && !same(c, items[i - 1].c));
+          cands.sort((u, v) => fit(v, x.a, x.b) - fit(u, x.a, x.b));
+          if (cands.length) x.c = cands[0];
+        });
+      } else if (dev === 'journey' && P >= 3) {
+        const moved = P === 3 ? [1] : P === 4 ? [2] : Array.from({ length: P - 1 - Math.floor(P / 2) }, (_, k) => Math.floor(P / 2) + k);
+        const inPass = (p) => items.filter((x) => x.pass === p);
+        const avg = (xs, f) => xs.reduce((t, x) => t + f(x), 0) / Math.max(1, xs.length);
+        let best = null;
+        for (const k of [3, 5, 1, 4]) {
+          const all = moved.flatMap(inPass);
+          // a chord that would come out diminished takes its neighbour a third below, or stays
+          const to = (x) => {
+            if (!T.isDiatonic(x.c)) return x.c;
+            const c = { deg: T.mod(x.c.deg + k, 7) };
+            if (!isDim(C, c)) return c;
+            const c2 = { deg: T.mod(x.c.deg + k - 2, 7) };
+            return isDim(C, c2) ? x.c : c2;
+          };
+          if (all.every((x) => same(to(x), x.c))) continue;
+          const gain = avg(all, (x) => fit(to(x), x.a, x.b)) - avg(all, (x) => fit(x.c, x.a, x.b));
+          if (gain >= -0.2 && (!best || gain > best.gain)) best = { k, gain, to };
+        }
+        if (best) moved.flatMap(inPass).forEach((x) => { x.c = best.to(x); });
+      } else if (dev === 'colour') {
+        const minor = MINORISH.test(C.scale);
+        const last = items.filter((x) => x.pass === P - 1);
+        let changed = 0;
+        last.forEach((x) => {
+          if (!T.isDiatonic(x.c)) return;
+          let c = null;
+          if (!minor && x.c.deg === 3) c = T.resolveChord(C.scale, 3, 0, 'min');
+          else if (!minor && x.c.deg === 5) c = T.resolveChord(C.scale, 5, -1, 'maj');
+          else if (minor && x.c.deg === 3) c = T.resolveChord(C.scale, 3, 0, 'maj');
+          else if (minor && x.c.deg === 4) c = T.resolveChord(C.scale, 4, 0, 'maj');
+          if (c && fit(c, x.a, x.b) >= fit(x.c, x.a, x.b) - 0.2) { x.c = c; changed++; }
+        });
+        // nothing to borrow for: the chord before the last becomes bVII (major) or bVI (minor)
+        if (!changed && last.length >= 2) {
+          const x = last[last.length - 2];
+          const c = minor ? T.resolveChord(C.scale, 5, 0, 'maj') : T.resolveChord(C.scale, 6, -1, 'maj');
+          if (!isDim(C, c) && fit(c, x.a, x.b) >= fit(x.c, x.a, x.b) - 0.2) x.c = c;
+        }
+      }
+      if (end !== 'same' && items.length) {
+        const fin = items[items.length - 1], pen = items.length > 1 ? items[items.length - 2] : null;
+        const lenient = (x, c) => !isDim(C, c) && fit(c, x.a, x.b) >= Math.min(-0.25, fit(x.c, x.a, x.b) - 0.3);
+        if (end === 'home') {
+          if (lenient(fin, { deg: 0 })) fin.c = { deg: 0 };
+          // V, else IV or ii (a plagal or softer approach) before home
+          if (pen) { const c = [majorV(C), { deg: 3 }, { deg: 1 }].find((c2) => lenient(pen, c2)); if (c) pen.c = c; }
+        } else {
+          const v = majorV(C);
+          if (lenient(fin, v)) fin.c = v;
+          if (pen && !same(pen.c, { deg: 3 }) && !same(pen.c, { deg: 1 })) {
+            const c = [{ deg: 3 }, { deg: 1 }].filter((c2) => lenient(pen, c2)).sort((u, v2) => fit(v2, pen.a, pen.b) - fit(u, pen.a, pen.b))[0];
+            if (c) pen.c = c;
+          }
+        }
+      }
+      const prog = items.map((x) => Object.assign(T.chordOnly(x.c), { beats: (x.b - x.a) / BEAT }));
+      const names = [];
+      items.forEach((x) => { (names[x.pass] = names[x.pass] || []).push(nameOf(C, x.c)); });
+      const base = C.prog.map((c) => nameOf(C, T.chordOnly(c))).join(' ');
+      return { prog, items, names, changed: names.some((n) => n.join(' ') !== base.split(' ').slice(0, n.length).join(' ')) };
+    });
+  }
+  // in keys written with flats (minor, dorian, phrygian, mixolydian) a black-key root reads as a flat
+  const FLATS = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
+  function nameOf(C, c) {
+    const n = T.chordName(c, C.tonic, C.scale);
+    return /minor|dorian|phrygian|aeolian|locrian|mixolydian/i.test(C.scale) ? n.replace(/^[A-G]#/, (r) => FLATS[r]) : n;
+  }
+  /** what the ending does, from the chords it lands on (the melody may have ruled out V) */
+  function endSub(C, cfg) {
+    const e = END_BY[(cfg.harm && cfg.harm.end) || 'same'];
+    if (!e || e.id === 'same') return '';
+    const items = harmOf(C, cfg).items, n = items.length;
+    const is = (x, c) => !!x && T.sameChord(T.chordOnly(x.c), T.chordOnly(c));
+    const fin = items[n - 1], pen = items[n - 2];
+    const minor = MINORISH.test(C.scale);
+    if (e.id === 'home') {
+      if (!is(fin, { deg: 0 })) return 'The melody won’t sit on the home chord here, so the ending stays as written.';
+      if (is(pen, majorV(C))) return e.sub;
+      if (is(pen, { deg: 3 })) return 'It ends ' + (minor ? 'iv to i' : 'IV to I') + ', the soft “amen” close: home without the push of V.';
+      return 'It comes home to the first chord: a full stop.';
+    }
+    if (is(fin, majorV(C))) return e.sub;
+    return 'It ends away from home: a question the next section answers.';
+  }
+  /** a section's chords, written out: passes that repeat collapse to ×n */
+  function harmText(C, cfg) {
+    const names = harmOf(C, cfg).names.map((n) => n.join(' '));
+    const out = [];
+    names.forEach((n) => { const l = out[out.length - 1]; if (l && l.n === n) l.k++; else out.push({ n, k: 1 }); });
+    return out.map((x) => x.n + (x.k > 1 ? ' ×' + x.k : '')).join(' | ');
+  }
+
   /** one layer of a section: its part, tweaked, through Odd.render */
   function layerEvents(C, cfg, L, length) {
     const lay = cfg.lay[L.key] || {};
@@ -375,8 +561,10 @@
     if (tw.ds && !L.drum) notes = notes.map((n) => (n.deg == null ? n : Object.assign({}, n, { deg: n.deg + tw.ds })));
     if (tw.x) notes = xNotes(notes, tw.x, plen, C.MT.pulses[0].len * STEP);
     if (cfg.half) notes = xNotes(notes, 'half', plen);
+    // the melody keeps its notes; layers that follow the chords follow the section's
+    const prog = isLead || L.drum || !cfg.harm ? C.prog : harmOf(C, cfg).prog;
     return R.partEvents(Object.assign({}, part, { notes }), {
-      tonic: C.tonic, scale: C.scale, prog: C.prog, length,
+      tonic: C.tonic, scale: C.scale, prog, length,
       oct: (isLead && cfg.src === 'guest' && C.guestLead ? C.guestLead.oct || 0 : L.voice.oct || 0) + (tw.oct || 0),
       form: lay.form && lay.form !== 'full' ? lay.form : undefined,
       refit: !part.imported,
@@ -495,7 +683,10 @@
   }
 
   function intoBars(cfg, n, over) {
-    return Object.assign(clone(cfg), { bars: n, twists: {}, curve: 'flat' }, over || {});
+    // a way in or out loops the idea's chords: the section's ending belongs to the section
+    const out = Object.assign(clone(cfg), { bars: n, twists: {}, curve: 'flat' }, over || {});
+    delete out.harm;
+    return out;
   }
 
   /** a way in, n bars, from tick 0 */
@@ -942,6 +1133,23 @@
       pool = VIBES.filter((v) => (!v.ok || v.ok(body)) && !(v.id === 'swing' && C.MT.compound)).map((v) => ({ id: v.id, label: txt(v.label, body), sub: txt(v.sub, body), t: v.t, f: (x) => Object.assign(clone(x), v.f(x, C)) }));
     } else if (tool === 'idea') {
       pool = IDEA_OPTS.filter((o) => ok(c, o) && o.src !== body.src && !!C.lead).map((o) => ({ id: o.id, label: txt(o.label, c), sub: txt(o.sub, c), t: o.t, f: (x) => Object.assign(clone(x), { src: o.src, edit: null }) }));
+    } else if (tool === 'harm') {
+      const passes = Math.ceil(body.bars * C.BAR / Math.max(1, T.progTicks(C.prog)));
+      const now = harmText(C, body), seen = {};
+      seen[now] = 1;
+      DEVS.forEach((d) => ENDS.forEach((e) => {
+        if (passes < d.min) return;
+        const harm = d.id === 'loop' && e.id === 'same' ? null : { dev: d.id, end: e.id };
+        const y = Object.assign(clone(body), { harm });
+        if (!harm) delete y.harm;
+        const text = harmText(C, y);
+        // the same chords as another option (or as now): one is enough
+        if (seen[text]) return;
+        seen[text] = 1;
+        const t = {};
+        [d.t, e.t].forEach((m) => Object.keys(m).forEach((k) => { t[k] = (t[k] || 0) + m[k]; }));
+        pool.push({ id: d.id + '-' + e.id, label: harmLabel(harm), sub: [d.id === 'loop' && e.id !== 'same' ? '' : d.sub, endSub(C, y)].filter(Boolean).join(' ') + ' ' + text, t, f: (x) => { const z = clone(x); if (harm) z.harm = harm; else delete z.harm; return z; } });
+      }));
     } else if (tool === 'tweak') {
       const L = C.layers.find((l) => l.key === layerKey) || C.layers[0];
       if (!L) return [];
@@ -1445,6 +1653,7 @@
   Odd.songmaker = {
     ACTS, ACT, KW, KWD, ROLES, ROLE_ORDER, TREAT, TREAT_BY, INTROS, OUTROS, PART_BY, VIBES, IDEA_OPTS, TWEAKS, FORM_OPTS, TWISTS, TWIST_NAME, FORM_LABEL, ADDS, ADD_BY,
     score, tagsOf, defaultKw, context, baseCfg, sameMeter,
+    DEVS, ENDS, harmOf, harmText, harmLabel,
     invertNotes, xNotes, leadPart, material, layerEvents, maskFor, renderBody, introEvents, outroEvents, renderSection,
     sequence, sectionSeq, songSeq, ideaSeq, previewSeq, timeline,
     addable, removedLayers, layerOptions, addLayer, removeLayer, restoreLayer, layerPreview,

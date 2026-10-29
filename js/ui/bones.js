@@ -371,8 +371,9 @@
       o.notes.forEach((n) => n.ms.forEach((m) => { h += blk(xOf(n.s), 42 + (hi - m) / span * 38, Math.max(4, sw(n.d) - 2), 6, col('pads'), 'half'); }));
     } else if (dir === 'perc') {
       ghost(6, 26);
-      const row = { clap: 44, tap: 58, tamb: 72, shaker: 72 };
-      o.hits.forEach((x) => { const sh = x.k === 'shaker'; h += blk(xOf(x.s), row[x.k], sh ? 4 : 6, sh ? 6 : 10, col('perc'), sh ? 'half' : ''); });
+      // claps and sticks on top, wood and bells, then skins, then the shakers and jingles that keep time
+      const ROW = { clap: 42, rim: 42, claves: 42, tap: 52, tapLo: 52, cowbell: 52, agogo: 52, agogoLo: 52, conga: 62, congaLo: 62, bongo: 62, bongoLo: 62, shaker: 74, tamb: 74, guiro: 74, tri: 74 };
+      o.hits.forEach((x) => { const sh = ROW[x.k] === 74; h += blk(xOf(x.s), (ROW[x.k] || 52) + (/Lo$/.test(x.k) ? 4 : 0), sh ? 4 : 6, sh ? 6 : 10, col('perc'), sh ? 'half' : ''); });
     } else if (dir === 'beat') {
       ghost(6, 22);
       o.h.forEach((s) => { h += blk(xOf(s), 40, 4, 6, col('beat'), 'half'); });

@@ -405,3 +405,41 @@ test('Bar Builder takes twists back off', () => {
   assert.deepStrictEqual(Object.keys(SM.findSec(song, 's2').body.twists), ['1']);
   assert.strictEqual(SM.clearTwists(song, 's2', [3]), song, 'nothing to clear');
 });
+
+test('chords that go somewhere: the section develops, the melody stays, the rest follows', () => {
+  const song = SM.create(MAIN, null, 'chorus');
+  const C = SM.context(song);
+  const body = Object.assign({}, song.secs[1].body, { bars: 8 });
+  const lead = (r) => JSON.stringify(r.filter((e) => e.L === C.lead).map((e) => [e.t, e.p]));
+  const follow = C.layers.filter((l) => ['chords', 'bass', 'pad'].includes(l.role)).map((l) => l.key);
+  const under = (r) => JSON.stringify(r.filter((e) => follow.includes(e.L)).map((e) => [e.t, e.p]));
+  const plain = SM.renderBody(C, body);
+  // no harm, or loop as written: exactly the section as before
+  assert.strictEqual(JSON.stringify(SM.renderBody(C, Object.assign({}, body, { harm: { dev: 'loop', end: 'same' } }))), JSON.stringify(plain));
+  const passes = SM.harmOf(C, body).names.length;
+  assert.strictEqual(passes, 8 * C.BAR / T.progTicks(C.prog), 'one pass of chords per time round');
+  for (const d of SM.DEVS) for (const e of SM.ENDS) {
+    const b = Object.assign({}, body, { harm: { dev: d.id, end: e.id } });
+    const h = SM.harmOf(C, b);
+    assert.strictEqual(T.progTicks(h.prog), 8 * C.BAR, d.id + '/' + e.id + ' spans the section');
+    const r = SM.renderBody(C, b);
+    assert.strictEqual(lead(r), lead(plain), d.id + '/' + e.id + ': the melody never moves');
+    assert.ok(r.every((x) => x.t >= 0 && x.t < 8 * C.BAR && x.p >= 0 && x.p <= 127));
+    assert.ok(h.items.every((x) => T.chordQuality(x.c, C.scale) !== 'dim' || C.prog.some((c) => T.sameChord(T.chordOnly(c), x.c))), 'no new diminished chords');
+    if (h.changed) assert.notStrictEqual(under(r), under(plain), d.id + '/' + e.id + ': chords, bass and pads follow the new chords');
+  }
+  // landing home ends on the home chord (when the melody allows it)
+  const home = SM.harmOf(C, Object.assign({}, body, { harm: { dev: 'loop', end: 'home' } }));
+  const fin = home.items[home.items.length - 1].c;
+  assert.ok(fin.deg === 0 || T.sameChord(fin, T.chordOnly(C.prog[C.prog.length - 1])), 'ends on I');
+  // the Chords tab: different chords each, none the same as now, each written out
+  const sec = Object.assign({}, song.secs[1], { body });
+  const opts = [0, 1, 2, 3].flatMap((b) => SM.toolOptions(C, song, sec, 'harm', null, b));
+  assert.ok(opts.length >= 3);
+  assert.ok(opts.every((o) => !o.sub.endsWith(SM.harmText(C, body))), 'nothing the same as now');
+  // ways in and out loop the idea's chords; Lighter ends open, Up a fourth lands home
+  assert.deepStrictEqual(SM.TREAT_BY.light.cfg({ C, song, mainCfg: SM.ROLES.chorus.make(C) }).harm, { dev: 'loop', end: 'open' });
+  const withIntro = Object.assign({}, sec, { body: Object.assign({}, body, { harm: { dev: 'answer', end: 'home' } }), intro: { k: 'tease', bars: 2 } });
+  const rs = SM.renderSection(C, withIntro, null);
+  assert.ok(rs.events.every((x) => x.t >= 0 && x.t < rs.length));
+});
