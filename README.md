@@ -42,8 +42,15 @@ file** to keep a copy or move it to another machine.
 
 ## Bones to Gold: audition a starting idea
 
-Press **Audition a starting idea** and an idea grows from the bottom up, one
-layer at a time. Every round is a deck: its whole pool of options (80
+Press **Audition a starting idea** and Bobby asks what you're in the mood
+for: **Groove**, **Melody** or **Riff**. Each card plays an example when you
+tap it (or press `1` `2` `3`); tap it again, or press **Start with a ...**,
+to begin. You pick one; there is no default. The choice decides what the idea
+is built around and which rounds come first. **New idea** (top right, during
+the rounds) goes back to this choice.
+
+Whichever you pick, the idea grows from the bottom up, one layer at a time.
+Every round is a deck: its whole pool of options (80
 rhythms, around 70 shapes, 24 chord progressions, ...), dealt three at a
 time. The three are spread along what matters most for that layer, so they
 sound clearly different; options that sound alike are never dealt together.
@@ -57,6 +64,8 @@ in new threes. The first three are each round's clearest; the unusual ones
 later, not never. Every round you promoted from stays in the history below,
 where you can hear its cards again or go **Back to this round** and build
 again from there.
+
+### Melody: a tune first
 
 1. **Rhythm and scale.** A 2-bar rhythm walked up and down a scale, so you
    hear its mood. One sparse, one busy, one in between. No genre yet.
@@ -77,7 +86,7 @@ again from there.
    beat**, on the grid to against it), **Pads and support** (thin to full) and
    **Sound and feel** (instrument, tempo and swing: calm to energetic). Each
    is worked out from the melody and the layers under it, nothing else.
-   Bobby's pick is highlighted. Each layer's deck is every sensible mix of
+   Bobby doesn't pick one for you. Each layer's deck is every sensible mix of
    a few ingredients: a bass is a job (steady, locks on, driving eighths,
    pushing ahead, dotted, walking, ...) with its notes (roots, root and
    fifth, octaves, chord tones, leading into the next chord), held or short;
@@ -90,13 +99,42 @@ again from there.
    swung, straight or with another lead. Each batch mixes families (three
    different bass jobs, three instruments), plain versions first.
 
+### Groove: the beat and bass first
+
+1. **The pocket.** Just drums: a kick, snare and hats with a tempo and a
+   swing. **Slower**, **Faster**, **Busier**, **Sparser**, **Swing it** and
+   **Another meter** steer it.
+2. **Bass line.** A bass over the pocket: a job (locks to the kick, walks,
+   pumps eighths, ...) moving through two chords in a scale, from minor
+   pentatonic and blues to major and the modes. **Darker** and **Brighter**
+   move the scale.
+3. **Chords on top.** Keys over the bass, from held to chopped, thin to full.
+   **No chords: drums and bass are enough** skips them.
+4. **Where next.** **Percussion**, **A hook** (a short tune that sits in the
+   gaps of the bass and kick; or **Leave the space**), **Pads and support**
+   and **Sound and feel**, in any order.
+
+### Riff: one figure first
+
+1. **The riff's rhythm.** A 2-bar figure on one note: accents, held notes,
+   threes against the beat. **Straighter** and **Against the beat** steer it.
+2. **Its notes.** The same rhythm in a family of notes: a pedal, a blues
+   turn, a climb, a crawl. **Stranger** brings out the odd ones (the tritone,
+   half steps).
+3. **Its weight.** Who plays it: a bass alone, a gritty guitar, both in
+   octaves, in fifths, power chords or thirds.
+4. **Where next.** **Drums** (with the riff or against it), **Under it** (a
+   drone or slow chords; or **Nothing under it**), **Percussion** and
+   **Sound and feel** (stoner, metal, post-punk, funk, surf, ...).
+
 Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
 **Land on home**, **Surprise me** and so on re-roll the three with that
 steer, from a narrower deck; **Why does that work?** has him explain. When something is playing and you pick another card, it stops, its
 card lowers, and Bobby gives your ears two seconds before the next one plays.
 
-**That's the idea** (available once there is a melody) shows how it got
-here: **Play the climb** plays the bones, then the melody, then each layer as
+**That's the idea** (available once the opening rounds are done) shows how it got
+here: **Play the climb** plays the bones, then the melody (or the pocket, or the
+riff's rhythm and notes), then each layer as
 it was added. **Save to Ideas** puts it on the Studio's shelf as an idea with
 a part per layer; its menu there has **Keep building in Bones to Gold**.
 
@@ -538,7 +576,8 @@ WAV export always renders at full quality.
 
 ## Keyboard
 
-On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: `1` `2` `3` hear options A, B, C; `Space` plays or stops;
+On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: on the opening choice `1` `2` `3` hear Groove, Melody and
+Riff; in a round they hear options A, B, C; `Space` plays or stops;
 `Esc` stops. In the Song Builder: `Space` plays the song from the playhead
 or stops it; `C` flips between the option you're hearing and the section as
 it is; on the timeline `←` `→` move the playhead a bar and `Home`

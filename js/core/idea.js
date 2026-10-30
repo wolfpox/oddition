@@ -523,7 +523,7 @@
       created: Number(raw.created) || Date.now(),
       starred: !!raw.starred,
       tags: Array.isArray(raw.tags) ? raw.tags : [],
-      ...(raw.bones && typeof raw.bones === 'object' && raw.bones.melody ? { bones: raw.bones } : {}),
+      ...(raw.bones && typeof raw.bones === 'object' && (raw.bones.melody || raw.bones.path) ? { bones: raw.bones } : {}),
     };
   }
 

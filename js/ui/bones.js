@@ -1,5 +1,7 @@
 /* Oddition — Bones to Gold screen: audition a starting idea with Bobby Beatdown.
  *
+ * Opens on a choice of three (Groove, Melody, Riff): tapping a card plays
+ * an example of that kind of idea, a second tap starts down its path.
  * Draws the rounds Odd.audition.flow steps through and plays them on the
  * app's transport. Listening paces itself: from silence a card plays at once;
  * switching away from something playing stops it, lowers its card, and gives
@@ -24,11 +26,20 @@
   const xOf = (s, n) => 4 + s * (VW - 8) / (n || NS);
   const sw = (d) => d * (VW - 8) / NS;
   const mod = (a, n) => ((a % n) + n) % n;
-  const VAR = { seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp' };
+  const VAR = {
+    seed1: '--r-lead', seed2: '--r-lead', chords: '--r-chords', bass: '--r-bass', perc: '--r-perc', beat: '--r-drums', pads: '--r-pad', sound: '--r-arp',
+    pocket: '--r-drums', gbass: '--r-bass', keys: '--r-chords', hook: '--r-lead', rrhythm: '--r-lead', rnotes: '--r-lead', weight: '--r-lead', drums: '--r-drums', under: '--r-pad',
+  };
   const col = (d) => 'var(' + VAR[d] + ')';
-  const PROMOTE = { seed1: 'Promote: give it a shape', seed2: 'Promote: that’s the melody' };
+  const PROMOTE = {
+    seed1: 'Promote: give it a shape', seed2: 'Promote: that’s the melody', pocket: 'Promote: add a bass line', gbass: 'Promote: put chords on top', keys: 'Promote: that’s the groove',
+    hook: 'Promote: give it a shape', rrhythm: 'Promote: give it notes', rnotes: 'Promote: give it weight', weight: 'Promote: that’s the riff',
+  };
   // what a round's deck holds, for the counter under the cards
-  const NOUN = { seed1: 'rhythms', seed2: 'shapes', chords: 'chord progressions', bass: 'bass lines', pads: 'pads', perc: 'percussion parts', beat: 'beats', sound: 'sounds' };
+  const NOUN = {
+    seed1: 'rhythms', seed2: 'shapes', chords: 'chord progressions', bass: 'bass lines', pads: 'pads', perc: 'percussion parts', beat: 'beats', sound: 'sounds',
+    pocket: 'beats', gbass: 'bass lines', keys: 'ways to play the chords', hook: 'hook rhythms', rrhythm: 'riff rhythms', rnotes: 'note patterns', weight: 'weights', drums: 'beats', under: 'things to put under it',
+  };
   const SLIDE_MS = 200;
 
   function esc(s) {
@@ -41,7 +52,7 @@
   let S = null;
   let shown = false;
   // what is sounding: src is the key of what plays (or played last), pending the one waiting out its pause
-  const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH };
+  const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH, ex: {} };
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
   let raf = 0, saveTimer = 0, sliding = false;
@@ -71,7 +82,9 @@
 
   function audioFor(key) {
     let m;
-    if (key === 'all') return S.idea.melody ? { seq: () => A.seq(S.idea, null) } : null;
+    if (key === 'all') return A.isStarted(S.idea) ? { seq: () => A.seq(S.idea, null) } : null;
+    // an example of a path, on the opening cards: a new one each time a card is lifted
+    if ((m = /^x-(\w+)$/.exec(key))) return A.PATHS[m[1]] ? { seq: () => A.example(m[1], P.ex[m[1]] || 0), extra: { peek: m[1] } } : null;
     if ((m = /^c(\d+)-(\d)$/.exec(key))) {
       if (!S.round || Number(m[1]) !== S.seq) return null;
       const i = Number(m[2]), o = F.options(S)[i];
@@ -84,8 +97,8 @@
     }
     if ((m = /^g(\d+)$/.exec(key))) {
       const l = Number(m[1]);
-      if (!S.idea.melody) return null;
-      return { seq: () => (l === 0 ? A.seq(A.emptyIdea(), { dir: 'seed1', spec: { mel: S.idea.melody } }) : A.seq(A.upTo(S.idea, l - 1), null)) };
+      if (!A.isDone(S.idea)) return null;
+      return { seq: () => A.climb(S.idea)[l] };
     }
     return null;
   }
@@ -141,7 +154,7 @@
     }
     P.pc = (P.pc + 1) % L.pause.length;
     P.pending = key;
-    set(Object.assign({}, S, { line: line || L.pause[P.pc], sel: -1 }));
+    set(Object.assign({}, S, { line: line || L.pause[P.pc], sel: -1, peek: null }));
     P.timer = setTimeout(() => {
       if (P.pending !== key) return;
       P.pending = '';
@@ -196,14 +209,11 @@
     const dir = S.round.dir;
     const busy = P.playing || !!P.pending;
     halt();
-    const ns = own ? F.keepWalk(S) : F.pick(S, i);
+    const ns = own ? F.own(S) : F.pick(S, i);
     P.src = '';
     P.heard = '';
     set(ns);
-    if (ns.phase === 'next') {
-      const line = dir === 'seed2' ? (own ? L.walk : A.line(L.melody, ns.seq)) : A.line(L.added, ns.seq).replace('{x}', A.DIRS[dir].label.toLowerCase());
-      hear('all', line, busy);
-    }
+    if (ns.phase === 'next') hear('all', A.pickedLine(ns.idea, dir, own, ns.seq), busy);
   }
 
   function request(idx) {
@@ -254,17 +264,29 @@
     }
   }
 
+  /** an opening card: the first tap plays an example and lifts it, a second goes in */
+  function peek(path) {
+    if (S.phase !== 'start') return;
+    if (S.peek === path) { begin(path); return; }
+    P.ex[path] = (P.ex[path] || 0) + 1;
+    hear('x-' + path, A.line(L.peek[path], P.ex[path] - 1));
+  }
+  function begin(path) {
+    step((s) => F.begin(s, path));
+  }
+
   function saveIdea() {
-    if (!host.saveIdea || !S.idea.melody) return;
+    if (!host.saveIdea || !A.isDone(S.idea)) return;
     const id = host.saveIdea({ sources: A.toParts(S.idea), name: A.ideaName(S.idea), bones: clone(S.idea) });
     if (id) set(Object.assign({}, S, { saved: id, line: L.saved }));
   }
 
   const ACTS = {
-    begin: () => step((s) => F.enter(s, 'seed1')),
+    peek: (el) => peek(el.dataset.path),
+    begin: (el) => begin(el.dataset.path),
     hear: (el) => hear(el.dataset.key),
     promote: (el) => promote(Number(el.dataset.i)),
-    walk: () => promote(-1, true),
+    own: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
     next: () => slide(F.next),
     prev: () => slide(F.prev),
@@ -300,9 +322,9 @@
       if (P.playing || P.pending) stop();
       else if (S.phase === 'round') hear(curKey(Math.max(0, S.sel)));
       else if (S.phase === 'next' || S.phase === 'gold') hear('all');
-      else ACTS.begin();
       return true;
     }
+    if (/^[1-3]$/.test(k) && S.phase === 'start') { peek(A.PATH_ORDER[Number(k) - 1]); return true; }
     if (/^[1-3]$/.test(k) && S.phase === 'round') {
       const i = Number(k) - 1;
       if (F.options(S)[i]) hear(curKey(i));
@@ -323,20 +345,41 @@
     return '<i class="b-blk' + (cls ? ' ' + cls : '') + '" style="left:' + r1(x) + 'px;top:' + r1(y) + 'px;width:' + r1(w) + 'px;height:' + r1(h) + 'px' + (bg ? ';background:' + bg : '') + '"></i>';
   }
 
+  /** the meter a card is drawn in: its own in a first round, else the idea's */
+  function meterFor(dir, o, idea) {
+    const T = Odd.theory;
+    if (o.mel) return A.meterOf(o.mel);
+    if (dir === 'pocket') return T.meter(o.m);
+    if (dir === 'rrhythm') return T.meter(o.r.m);
+    return A.ideaMeter(idea);
+  }
+  /** blocks for a run of notes, their height by pitch between top and top + hgt */
+  function lane(ns, top, hgt, color, cls, thick) {
+    if (!ns.length) return '';
+    const ms = ns.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
+    return ns.map((n) => blk(xOf(n.s), top + (hi - n.m) / span * (hgt - (thick || 6)), Math.max(3, sw(n.d) - 2), thick || 6, color, cls)).join('');
+  }
+  function kitVis(o) {
+    let h = '';
+    o.h.forEach((s) => { h += blk(xOf(s), 40, 4, 6, col('beat'), 'half'); });
+    o.s.forEach((s) => { h += blk(xOf(s), 55, 7, 10, col('beat')); });
+    o.k.forEach((s) => { h += blk(xOf(s), 72, 7, 12, col('beat'), 'kick'); });
+    return h;
+  }
+  function chordRow(chords, m, top) {
+    const slots = A.slotsOf(m);
+    return chords.map((c, i) => '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
+  }
+
   /** what makes the option special, drawn on a 272 x 92 screen */
   function vis(dir, o, idea) {
     let h = '';
-    const mel = dir === 'seed1' || dir === 'seed2' ? o.mel : idea && idea.melody;
-    const m = A.meterOf(mel);
+    const m = meterFor(dir, o, idea);
     NS = 2 * m.steps;
     // a line on each beat, a darker one between the bars
     for (let bar = 0; bar < 2; bar++) m.pulses.forEach((p) => { const s = bar * m.steps + p.s; if (s) h += '<i class="b-gl' + (s === m.steps ? ' bar' : '') + '" style="left:' + Math.round(xOf(s)) + 'px"></i>'; });
-    // the melody, faintly, under every layer: everything is made against it
-    const ghost = (top, hgt) => {
-      if (!idea || !idea.melody || !idea.melody.shape) return;
-      const ns = A.melodyNotes(idea.melody), ms = ns.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
-      ns.forEach((n) => { h += blk(xOf(n.s), top + (hi - n.m) / span * (hgt - 4), Math.max(3, sw(n.d) - 2), 4, '', 'ghost'); });
-    };
+    // what the layer is made against (the melody, the riff, a groove's bass), faintly, under it
+    const ghost = (top, hgt) => { if (idea) h += lane(A.refNotes(idea), top, hgt, '', 'ghost', 4); };
     if (dir === 'seed1') {
       o.mel.r.hits.forEach((x) => { const hh = [12, 20, 30][x[2]]; h += blk(xOf(x[0]), VH - 24 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
       const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
@@ -374,11 +417,42 @@
       // claps and sticks on top, wood and bells, then skins, then the shakers and jingles that keep time
       const ROW = { clap: 42, rim: 42, claves: 42, tap: 52, tapLo: 52, cowbell: 52, agogo: 52, agogoLo: 52, conga: 62, congaLo: 62, bongo: 62, bongoLo: 62, shaker: 74, tamb: 74, guiro: 74, tri: 74 };
       o.hits.forEach((x) => { const sh = ROW[x.k] === 74; h += blk(xOf(x.s), (ROW[x.k] || 52) + (/Lo$/.test(x.k) ? 4 : 0), sh ? 4 : 6, sh ? 6 : 10, col('perc'), sh ? 'half' : ''); });
-    } else if (dir === 'beat') {
+    } else if (dir === 'beat' || dir === 'drums') {
       ghost(6, 22);
-      o.h.forEach((s) => { h += blk(xOf(s), 40, 4, 6, col('beat'), 'half'); });
-      o.s.forEach((s) => { h += blk(xOf(s), 55, 7, 10, col('beat')); });
-      o.k.forEach((s) => { h += blk(xOf(s), 72, 7, 12, col('beat'), 'kick'); });
+      h += kitVis(o);
+    } else if (dir === 'pocket') {
+      h += kitVis(o);
+      h += '<span class="b-nlab" style="left:8px;top:8px">' + esc(o.bpm + ' BPM' + (o.swing ? ' · swung' : '')) + '</span>';
+    } else if (dir === 'gbass') {
+      // the kick it plays against, the bass, and the chords it implies
+      idea.layers.pocket.k.forEach((s) => { h += blk(xOf(s), 82, 5, 6, '', 'ghost'); });
+      h += lane(o.notes, 32, 46, col('gbass'), '', 7);
+      h += chordRow(o.chords, m, 4);
+    } else if (dir === 'keys') {
+      ghost(70, 18);
+      if (o.none) h += '<span class="b-nlab" style="left:10px;top:24px">no chords: just drums and bass</span>';
+      else o.notes.forEach((n) => n.ms.forEach((p, k) => { h += blk(xOf(n.s), 52 - k * 9, Math.max(3, sw(n.d) - 2), 6, col('keys'), 'half'); }));
+      h += chordRow(idea.layers.gbass ? idea.layers.gbass.chords : [], m, 4);
+    } else if (dir === 'hook') {
+      ghost(6, 30);
+      o.mel.r.hits.forEach((x) => { const hh = [10, 16, 24][x[2]]; h += blk(xOf(x[0]), VH - 8 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+    } else if (dir === 'rrhythm') {
+      // hard hits tall, plain ones short, muted ones a sliver
+      o.r.hits.forEach((x) => { const hh = [8, 22, 44][x[2]]; h += blk(xOf(x[0]), VH - 10 - hh, Math.max(3, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+    } else if (dir === 'rnotes') {
+      // drawn at the rhythm's lengths, so muted hits still show
+      const ns = A.riffNotes({ r: idea.riff.r, notes: o }).map((n, i) => Object.assign(n, { d: idea.riff.r.hits[i][1] }));
+      h += lane(ns, 10, 72, '', 'acc', 7);
+    } else if (dir === 'weight') {
+      // a lane per voice: the bass at the bottom, the doubles above
+      const ns = A.riffNotes(idea.riff), vs = o.voices, gap = Math.min(20, 78 / vs.length);
+      vs.slice().sort((a, b) => A.riffPitch(b, 0, idea.riff.scale) - A.riffPitch(a, 0, idea.riff.scale)).forEach((v, k) => {
+        ns.forEach((n) => { h += blk(xOf(n.s), 8 + k * gap, Math.max(3, sw(n.d) - 2), Math.max(4, gap - 6), v.part === 'low' ? col('bass') : '', v.part === 'low' ? '' : 'acc'); });
+      });
+    } else if (dir === 'under') {
+      ghost(6, 24);
+      o.notes.forEach((n) => n.ms.forEach((p, k) => { h += blk(xOf(n.s), 78 - k * 10, Math.max(3, sw(n.d) - 2), 6, col('under'), 'half'); }));
+      if (o.changes) h += chordRow(o.chords, m, 36);
     } else {
       ghost(8, 70);
       h += '<span class="b-nlab" style="left:10px;top:74px">' + esc(o.inst + (o.swing ? ' · swung' : '')) + '</span>';
@@ -410,20 +484,16 @@
   const BOBBY_SVG = Odd.brand.BOBBY;
 
   function bobby(opts) {
-    if (S.phase === 'start') return L.start;
-    if (P.src === 'climb' && P.playing && P.climb >= 0) {
-      if (P.climb === 0) return L.climbFirst;
-      if (P.climb === 1) return L.climbMelody;
-      const d = S.idea.order[P.climb - 2];
-      return d ? '+ ' + A.DIRS[d].label + '.' + (P.climb - 1 === S.idea.order.length ? ' That’s gold.' : '') : 'That’s gold.';
-    }
+    if (S.phase === 'start') return S.peek ? A.line(L.peek[S.peek], (P.ex[S.peek] || 1) - 1) : S.line || L.start;
+    if (P.src === 'climb' && P.playing && P.climb >= 0) return A.climbLines(S.idea)[P.climb] || 'That’s gold.';
     if (S.line) return S.line;
     if (P.playing && P.src.charAt(0) === 'h') {
       const pr = P.src.slice(1).split('-').map(Number), row = S.hist.find((x) => x.id === pr[0]);
       if (row) return row.chosen === pr[1] ? L.picked : L.passed;
     }
-    if (S.phase === 'next') return A.line(L.next, S.seq);
-    if (S.phase === 'gold') return A.line(L.gold, S.hid);
+    const path = A.pathOf(S.idea);
+    if (S.phase === 'next') return A.line(path === 'melody' ? L.next : L.nextBy[path], S.seq);
+    if (S.phase === 'gold') return A.line(path === 'melody' ? L.gold : L.goldBy[path], S.hid);
     if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
     if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
     return A.line(L.entry[S.round.dir], S.seq);
@@ -433,15 +503,22 @@
     const idea = S.idea, out = [];
     const chip = (label, sub, cls, color) => '<span class="b-chip ' + cls + '"><i style="background:' + color + '"></i>' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>';
     if (S.phase === 'start') return '';
-    const dir = S.round ? S.round.dir : '';
-    if (!idea.melody || !idea.melody.shape) {
+    const dir = S.round ? S.round.dir : '', path = A.pathOf(idea), open = A.PATHS[path].open;
+    const pop = (d) => (S.added === d && S.anim !== lastAnim ? 'pop' : '');
+    if (path === 'melody' && !(idea.melody && idea.melody.shape)) {
       out.push(chip('Rhythm and scale', idea.melody ? 'picked' : '', idea.melody ? '' : 'now', col('seed1')));
       out.push(chip('Shape', '', idea.melody ? 'now' : 'todo', idea.melody ? col('seed2') : 'transparent'));
-    } else {
-      out.push(chip('Melody', 'leads', 'lead', col('seed2')));
-      idea.order.forEach((d) => out.push(chip(A.DIRS[d].label, '', (S.added === d && S.anim !== lastAnim ? 'pop' : '') + (dir === d ? ' now' : ''), col(d))));
-      if (S.round && idea.order.indexOf(dir) < 0) out.push(chip(A.DIRS[dir].label, 'choosing', 'now', col(dir)));
+      return out.join('');
     }
+    if (path === 'melody') out.push(chip('Melody', 'leads', 'lead', col('seed2')));
+    else if (!A.isDone(idea)) {
+      // a groove's or riff's first screens, in order
+      open.forEach((d) => { const has = A.hasOpen(idea, d); out.push(chip(A.DIRS[d].label, has ? 'picked' : '', dir === d ? 'now' : has ? '' : 'todo', has || dir === d ? col(d) : 'transparent')); });
+      return out.join('');
+    } else out.push(chip(A.PATHS[path].label, 'leads', 'lead', col(open[0])));
+    idea.order.filter((d) => open.indexOf(d) < 0).forEach((d) => out.push(chip(d === 'hook' ? 'Hook' : A.DIRS[d].label, '', pop(d) + (dir === d ? ' now' : ''), col(d))));
+    const now = dir === 'seed2' && path !== 'melody' ? 'hook' : dir;
+    if (S.round && idea.order.indexOf(now) < 0) out.push(chip(now === 'hook' ? 'Hook' : A.DIRS[now].label, dir === 'seed2' ? 'its shape' : 'choosing', 'now', col(now)));
     return out.join('');
   }
 
@@ -455,7 +532,8 @@
       if (kind === 'next') { anim = 'b-in-r'; delay = (i * 0.05).toFixed(2) + 's'; }
       if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
-      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: PROMOTE[dir] || 'Add it', style });
+      const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Promote: that’s the hook' : PROMOTE[dir] || 'Add it';
+      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style });
     }).join('');
     const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
     const last = inf.batch >= inf.batches - 1;
@@ -478,22 +556,20 @@
         '<span class="b-count">' + esc(count) + '</span>' +
       '</div>' +
       '<div class="b-actions">' +
-        (dir === 'seed2' ? '<button type="button" class="b-ghost" data-act="walk">Keep the plain walk</button>' : '') +
-        (/^seed/.test(dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">Not now</button>') +
+        (A.ownLabel(dir) ? '<button type="button" class="b-ghost" data-act="own">' + esc(A.ownLabel(dir)) + '</button>' : '') +
+        (A.isOpening(S.idea, dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">' + esc(A.SKIP_LABEL[dir] || 'Not now') + '</button>') +
         '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 
   function nextHtml(animate) {
-    const sugg = A.suggestion(S.idea);
     const dirs = A.directions(S.idea).map((d, i) => {
       const has = S.idea.layers[d];
-      return '<button type="button" class="b-dir' + (d === sugg ? ' tip' : '') + (has ? ' done' : '') + '" data-act="go" data-dir="' + d + '"' + (animate ? ' style="animation-delay:' + (i * 0.05).toFixed(2) + 's"' : ' style="animation:none"') + '>' +
+      return '<button type="button" class="b-dir' + (has ? ' done' : '') + '" data-act="go" data-dir="' + d + '"' + (animate ? ' style="animation-delay:' + (i * 0.05).toFixed(2) + 's"' : ' style="animation:none"') + '>' +
         '<span class="b-dir-top"><i class="b-dot-c" style="background:' + col(d) + '"></i><b>' + esc(A.DIRS[d].label) + '</b>' +
-          (d === sugg ? '<span class="b-pickb">Bobby’s pick</span>' : '') +
           (has ? '<span class="b-doneb">Added · try again</span>' : '') +
         '</span>' +
-        '<span class="b-dir-sub">' + esc(has ? 'Now: ' + A.tagOf(d, has) : A.DIRS[d].sub) + '</span>' +
+        '<span class="b-dir-sub">' + esc(has ? 'Now: ' + A.tagOf(d, has) : A.dirSub(S.idea, d)) + '</span>' +
       '</button>';
     }).join('');
     return '<div class="b-dirs">' + dirs + '</div>' +
@@ -543,13 +619,25 @@
       '<div class="b-h-title"><span>Earlier rounds</span><span>Newest first. Click any card to hear it.</span></div>' + rows + '</section>';
   }
 
+  /** the opening choice: three big cards, a tap to hear one, a second to start there */
+  function openHtml(animate) {
+    const cards = A.PATH_ORDER.map((p, i) => {
+      const P0 = A.PATHS[p], name = P0.label.toLowerCase();
+      return '<div class="b-big" data-key="x-' + p + '" data-path="' + p + '"' + (animate ? ' style="animation-delay:' + (i * 0.08).toFixed(2) + 's"' : ' style="animation:none"') + '>' +
+        '<button type="button" class="b-hit" data-act="peek" data-path="' + p + '" aria-label="' + esc(P0.label + ': hear an example. Tap again to start with a ' + name) + '"></button>' +
+        '<span class="b-big-name" style="color:' + col(A.PATHS[p].open[0]) + '">' + esc(P0.label) + '</span>' +
+        '<span class="b-big-line">' + esc(P0.line) + '</span>' +
+        '<button type="button" class="b-primary b-big-go" data-act="begin" data-path="' + p + '">Start with a ' + esc(name) + '</button>' +
+      '</div>';
+    }).join('');
+    return '<div class="b-open">' + cards + '</div><p class="b-hint b-open-hint">Tap a card to hear an example of it. Each time is a new one.</p>';
+  }
+
   function full() {
     const animate = S.anim !== lastAnim;
-    const G = S.idea.layers.sound;
     let body = '';
-    if (S.phase === 'start') {
-      body = '<div class="b-start"><button type="button" class="b-go" data-act="begin">Audition a starting idea</button><p>A melody, 2 bars. No genre yet: just bones.</p></div>';
-    } else if (S.phase === 'round') body = roundHtml(animate);
+    if (S.phase === 'start') body = openHtml(animate);
+    else if (S.phase === 'round') body = roundHtml(animate);
     else if (S.phase === 'next') body = nextHtml(animate);
     else body = goldHtml(animate);
     root.innerHTML =
@@ -558,8 +646,9 @@
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
-            '<span class="b-meta">' + esc((G ? G.name + ' · ' + G.bpm + ' BPM' : 'Melody · 2 bars · 100 BPM') + (S.idea.melody && A.meterOf(S.idea.melody).id !== '4/4' ? ' · ' + A.meterOf(S.idea.melody).id : '')) + '</span>' +
+            (S.phase === 'start' ? '' : '<span class="b-meta">' + esc(A.metaOf(S.idea)) + '</span>') +
             (F.canFinish(S) ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
+            (S.phase === 'round' || S.phase === 'next' ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
         '</header>' +
@@ -589,6 +678,7 @@
       el.classList.toggle('is-playing', on);
       el.classList.toggle('is-wait', P.pending === key);
       if (el.dataset.i != null && el.classList.contains('b-card')) el.classList.toggle('lifted', S.sel === Number(el.dataset.i) && S.phase === 'round');
+      if (el.classList.contains('b-big')) el.classList.toggle('lifted', S.phase === 'start' && S.peek === el.dataset.path);
       const hit = el.querySelector('.b-hit');
       if (hit) hit.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -600,7 +690,8 @@
       if (S.phase === 'round' && S.sel >= 0 && !P.pending) {
         const st = S.round.steer || {};
         const html = '<div class="b-reqs" aria-label="Ask Bobby">' + (A.REQS[S.round.dir] || []).map((rq, i) => {
-          const active = (rq.x && st.x === rq.x) || (rq.p && Math.sign(st.p || 0) === Math.sign(rq.p)) || (rq.s && Math.sign(st.s || 0) === Math.sign(rq.s));
+          const same = (k) => rq[k] && Math.sign(st[k] || 0) === Math.sign(rq[k]);
+          const active = (rq.x && st.x === rq.x) || same('p') || same('s') || same('t') || same('c');
           if (rq.m && st.m) return '<button type="button" class="b-req on" data-act="req" data-i="' + i + '">' + esc(rq.label + ' (' + st.m + ')') + '</button>';
           return '<button type="button" class="b-req' + (active ? ' on' : '') + '" data-act="req" data-i="' + i + '">' + esc(rq.label) + '</button>';
         }).join('') + '</div>';

@@ -195,14 +195,12 @@ test('each layer is made from the melody and spreads along its telling differenc
   assert.deepStrictEqual(F.options(F.enter(S, 'bass')).map((o) => o.id), F.options(F.enter(S, 'bass')).map((o) => o.id));
 });
 
-test('grow the beat opens only after percussion; the pick is a direction still open', () => {
+test('grow the beat opens only after percussion; Bobby picks no direction', () => {
   let S = melodyState();
   assert.ok(!A.directions(S.idea).includes('beat'));
   S = build(S, ['perc']);
   assert.ok(A.directions(S.idea).includes('beat'));
-  assert.strictEqual(A.suggestion(S.idea), 'beat');
-  const all = build(S, ['beat', 'chords', 'bass', 'pads', 'sound']);
-  assert.strictEqual(A.suggestion(all.idea), '');
+  assert.strictEqual(A.suggestion, undefined, 'no Bobby’s pick in the Idea Builder');
 });
 
 test('going back restores that round and keeps everything after it in the history', () => {

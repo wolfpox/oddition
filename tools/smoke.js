@@ -52,8 +52,11 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
 
   // ---- Bones to Gold
   const bones = () => page.evaluate(() => ({ phase: Odd.bones.state.phase, sel: Odd.bones.state.sel, dir: Odd.bones.state.round && Odd.bones.state.round.dir, playing: Odd.bones.playing && Odd.transport.playing, order: Odd.bones.state.idea.order.slice() }));
-  ok(await page.evaluate(() => document.body.dataset.screen === 'bones' && !!document.querySelector('[data-act="begin"]') && getComputedStyle(document.querySelector('#desk')).display === 'none'), 'Idea Builder opens Bones to Gold');
-  await page.click('[data-act="begin"]');
+  ok(await page.evaluate(() => document.body.dataset.screen === 'bones' && document.querySelectorAll('.b-open .b-big').length === 3 && getComputedStyle(document.querySelector('#desk')).display === 'none'), 'the Idea Builder opens on Groove, Melody or Riff');
+  await page.click('.b-big[data-path="melody"] .b-hit');
+  await page.waitForTimeout(500);
+  ok(await page.evaluate(() => Odd.bones.playing && Odd.bones.state.peek === 'melody' && !!document.querySelector('.b-big.lifted [data-act="begin"]') && /melody/.test(document.querySelector('.b-say').textContent)), 'a tap plays an example and lifts its card');
+  await page.click('.b-big[data-path="melody"] .b-hit');
   await page.waitForTimeout(500);
   ok((await page.$$('.b-cards .b-card')).length === 3, 'three rhythm-and-scale options');
   await page.click('.b-cards .b-card[data-i="0"] .b-hit');
@@ -74,12 +77,12 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.waitForTimeout(500);
   b = await bones();
   ok(b.dir === 'seed2' && b.sel === 1, 'promoting moves on to the shape');
-  ok(!!(await page.$('[data-act="walk"]')) && !!(await page.$('[data-act="finish"]')) === false, 'the plain walk is on offer; gold waits for a melody');
+  ok(!!(await page.$('[data-act="own"]')) && !!(await page.$('[data-act="finish"]')) === false, 'the plain walk is on offer; gold waits for a melody');
   await page.click('.b-cards .b-card[data-i="1"] [data-act="promote"]');
   await page.waitForTimeout(500);
   b = await bones();
   ok(b.phase === 'next' && b.playing, 'the melody plays on its own');
-  ok((await page.$$('.b-dir')).length === 5 && (await page.$$('.b-dir.tip')).length === 1, 'five ways on, one highlighted');
+  ok((await page.$$('.b-dir')).length === 5 && (await page.$$('.b-dir.tip, .b-pickb')).length === 0, 'five ways on, none highlighted');
   for (const d of ['perc', 'bass']) {
     await page.click('[data-act="go"][data-dir="' + d + '"]');
     await page.waitForTimeout(300);
@@ -105,6 +108,26 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   b = await bones();
   ok(b.phase === 'round' && b.dir === 'perc' && !b.playing, 'back to an earlier round');
   await page.screenshot({ path: path.join(out, 'bones.png'), fullPage: true });
+  // a groove and a riff: three first screens each, then their own ways on
+  for (const [p, dirs] of [['groove', 'perc,hook,pads,sound'], ['riff', 'drums,under,perc,sound']]) {
+    await page.click('.b-top [data-act="restart"]');
+    await page.waitForTimeout(300);
+    await page.click('.b-big[data-path="' + p + '"] .b-hit');
+    await page.waitForTimeout(300);
+    await page.click('.b-big.lifted [data-act="begin"]');
+    await page.waitForTimeout(400);
+    for (let k = 0; k < 3; k++) {
+      await page.click('.b-cards .b-card[data-i="0"] .b-hit');
+      await page.waitForTimeout(300);
+      await page.click('.b-card.lifted [data-act="promote"]');
+      await page.waitForTimeout(400);
+    }
+    await page.waitForTimeout(2100); // promoted while playing: Bobby's two-second gap first
+    b = await bones();
+    const ways = await page.evaluate(() => [...document.querySelectorAll('.b-dir')].map((x) => x.dataset.dir).join());
+    ok(b.phase === 'next' && b.playing && ways === dirs, 'a ' + p + ' in three screens, then ' + dirs);
+    await page.screenshot({ path: path.join(out, 'bones-' + p + '.png') });
+  }
   await page.click('[data-act="studio"]');
   await page.waitForTimeout(400);
   ok(await page.evaluate(() => document.body.dataset.screen === 'studio' && !Odd.transport.playing && getComputedStyle(document.querySelector('#bones')).display === 'none'), 'Studio switches to the sheet, booth and shelf');

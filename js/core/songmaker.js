@@ -126,6 +126,8 @@
     const main = song.main, guest = song.guest || null;
     const bones = main.bones && main.bones.layers ? main.bones : null;
     const snd = bones ? bones.layers.sound : null;
+    // a groove picked its tempo with its pocket
+    const pocket = bones && !snd ? bones.layers.pocket : null;
     // a sound carries its own instruments; ideas saved before that name a genre
     const G = snd && Odd.audition && Odd.audition.GENRES ? Odd.audition.GENRES[snd.genre || snd.id] : null;
     const P = (snd && snd.patches) || (G ? G.patches : NEUTRAL);
@@ -143,12 +145,16 @@
     const ctx = srcPart && srcPart.ctx ? srcPart.ctx : { tonic: 0, scale: 'major', prog: [{ deg: 0, beats: 4 }] };
     const patchFor = (role) => {
       if (bones) {
-        if (role === 'lead' || role === 'arp') return P.lead;
-        if (role === 'chords') return P.chords;
-        if (role === 'bass') return P.bass;
+        // a riff's voices and a groove's keys keep their own instruments until a sound is picked
+        const rv = !snd && bones.riff && bones.riff.weight ? bones.riff.weight.voices : [];
+        const own = (part) => (rv.find((x) => x.part === part) || {}).patch;
+        const keys = bones.layers.keys;
+        if (role === 'lead' || role === 'arp') return own('high') || P.lead;
+        if (role === 'chords') return !snd && keys && !keys.none ? keys.voice : P.chords;
+        if (role === 'bass') return own('low') || P.bass;
         if (role === 'drums') return P.kit;
         if (role === 'perc') return 'kit-perc';
-        if (role === 'pad') return PAD_PATCH[bones.layers.pads && bones.layers.pads.voice] || 'pad-warm';
+        if (role === 'pad') return bones.layers.under ? bones.layers.under.voice : PAD_PATCH[bones.layers.pads && bones.layers.pads.voice] || 'pad-warm';
       }
       return (E.patchFor && E.patchFor(role)) || (Odd.model ? Odd.model.roleInfo(role).defaultPatch : 'keys');
     };
@@ -173,9 +179,9 @@
       guestLead: gi >= 0 ? guest.voices[gi] : null,
       tonic: ctx.tonic || 0, scale: ctx.scale || 'major', prog: ctx.prog && ctx.prog.length ? ctx.prog : [{ deg: 0, beats: 4 }],
       leadBase: leadPart ? (leadPart.base != null ? leadPart.base : 60) + 12 * (main.voices[li].oct || 0) : 72,
-      bpm: snd ? snd.bpm : clamp(Math.round(Number(E.bpm) || 100), 40, 240),
+      bpm: snd ? snd.bpm : pocket ? pocket.bpm : clamp(Math.round(Number(E.bpm) || 100), 40, 240),
       // meters that move in threes (6/8, 7/8) don't swing
-      swing: MT.compound ? 0 : snd ? swingAmount(snd.swing) : clamp(Number(E.swing) || 0, 0, 0.6),
+      swing: MT.compound ? 0 : snd ? swingAmount(snd.swing) : pocket ? swingAmount(pocket.swing) : clamp(Number(E.swing) || 0, 0, 0.6),
       ideaBars: main.bars || 2,
       genre: G ? G.name : '',
     };
@@ -1269,9 +1275,10 @@
   ];
   const cap = (x) => String(x || '').charAt(0).toUpperCase() + String(x || '').slice(1);
 
+  /** a Melody-path idea from the Idea Builder, whose layers can be added and taken out here (grooves and riffs add from the styles) */
   function bonesOf(song) {
     const b = song.main && song.main.bones;
-    return b && b.melody && b.melody.shape && Odd.audition && Odd.audition.toParts ? b : null;
+    return b && (!b.path || b.path === 'melody') && b.melody && b.melody.shape && Odd.audition && Odd.audition.toParts ? b : null;
   }
   /** the layers this song doesn't have yet */
   function addable(C) { return ADDS.filter((a) => !C.layers.some((l) => l.role === a.role)); }

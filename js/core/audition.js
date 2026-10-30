@@ -16,14 +16,21 @@
  * follows it: chords change on its strong beats, drums are built from its
  * groups.
  *
+ * That is the Melody path. The Idea Builder opens on a choice of three
+ * (PATHS): a Groove starts from the pocket (a beat at a tempo), a bass line
+ * that sets the chords, and chords on top; a Riff from a rhythm with accents,
+ * its notes and its weight. After those first screens any order goes. An
+ * idea remembers its path (idea.path, 'melody' when absent).
+ *
  * Every round deals its whole pool as a deck, three cards at a time, the
  * three spread along that layer's most telling difference (sparse..busy,
  * answer..question, dark..bright, ...). Previous and Next move through it;
  * every card comes up before the deck is shuffled. Requests narrow the
  * pool and deal again ("Busier", "Darker", "Surprise me").
  *
- *   idea  = { melody, layers: { [dir]: option }, order: [dir] }
+ *   idea  = { path, melody, riff, layers: { [dir]: option }, order: [dir] }
  *   melody = { r: rhythm, scale, shape }   shape null until round 2
+ *   riff   = { r: rhythm with accents, scale, notes, weight }   null until picked
  *   rhythm = { id, hits: [[step, length, weight]], n, off }
  *   round = { dir, batch, deal, seen, steer: { p, s, x, m } }
  *           batch: which three of the deck; deal: how often it was shuffled; seen: the furthest batch dealt
@@ -88,9 +95,36 @@
     beat: { label: 'Grow the beat', color: '#f27b62', sub: 'Turn the claps into a full beat', low: 'right on the grid', high: 'leaning against it' },
     pads: { label: 'Pads and support', color: '#6fb0ff', sub: 'Pads, strings, a second voice', low: 'thin', high: 'full' },
     sound: { label: 'Sound and feel', color: '#ef84c7', sub: 'Its instrument, tempo and swing', low: 'calm', high: 'with energy' },
+    // a groove
+    pocket: { label: 'The pocket', color: '#f27b62', low: 'right on the grid', high: 'leaning against it' },
+    gbass: { label: 'Bass line', color: '#a395ff', low: 'plays between the kicks', high: 'locks to the kick' },
+    keys: { label: 'Chords on top', color: '#4ec8b2', low: 'held', high: 'chopped' },
+    hook: { label: 'A hook on top', color: '#f1cd58', sub: 'Optional. Plenty of grooves leave the space empty', low: 'sparse', high: 'busy' },
+    // a riff
+    rrhythm: { label: 'Riff rhythm', color: '#f1cd58', low: 'on the grid', high: 'against it' },
+    rnotes: { label: 'Riff notes', color: '#f1cd58', low: 'barely moves', high: 'travels' },
+    weight: { label: 'Weight', color: '#f1cd58', low: 'lean', high: 'heavy' },
+    drums: { label: 'Drums', color: '#f27b62', sub: 'With the riff, or against it', low: 'with the riff', high: 'against it' },
+    under: { label: 'Under it', color: '#6fb0ff', sub: 'A drone, or chords that move under the riff', low: 'still', high: 'moving' },
   };
   const NEXT_ORDER = ['chords', 'bass', 'perc', 'beat', 'pads', 'sound'];
-  const LAYER_ORDER = ['chords', 'bass', 'pads', 'perc', 'beat'];
+  const LAYER_ORDER = ['pocket', 'gbass', 'keys', 'chords', 'bass', 'pads', 'under', 'perc', 'beat', 'drums'];
+
+  // Three ways in. Each path's first screens (open) make the idea, in order; then any of `next`, in any order
+  const PATHS = {
+    groove: { label: 'Groove', line: 'Start with the body: drums and bass that make heads nod. A tune can come later, or never.', open: ['pocket', 'gbass', 'keys'], next: ['perc', 'hook', 'pads', 'sound'] },
+    melody: { label: 'Melody', line: 'Start with a line you could hum. Everything else gets built to hold it up.', open: ['seed1', 'seed2'], next: NEXT_ORDER },
+    riff: { label: 'Riff', line: 'Start with a figure that repeats and hits hard. Short and stubborn, and it can carry a whole song.', open: ['rrhythm', 'rnotes', 'weight'], next: ['drums', 'under', 'perc', 'sound'] },
+  };
+  const PATH_ORDER = ['groove', 'melody', 'riff'];
+  // what a layer is for, when a path changes it
+  const SUBS = {
+    groove: { perc: 'Spice: hand percussion over the pocket', pads: 'Pads and strings around the groove', sound: 'Its kit, bass and keys. The tempo stays' },
+    riff: { perc: 'Claps, shakers and bells over the riff', sound: 'Its instruments, tempo and swing' },
+  };
+  // a round's own way out: kept as it is, or nothing at all
+  const OWN = { seed2: ['Keep the plain walk', 'Kept the plain walk'], keys: ['No chords: drums and bass are enough', 'No chords'] };
+  const SKIP_LABEL = { hook: 'Leave the space', under: 'Nothing under it' };
   const REQS = {
     seed1: [{ label: 'Busier', p: 1, reply: 'Busier. Okay, let’s hear it.' }, { label: 'Sparser', p: -1, reply: 'More space. Here.' }, { label: 'Darker scale', s: -1, reply: 'Darker scales. Give me a second.' }, { label: 'Brighter scale', s: 1, reply: 'Brighter. Here we go.' }, { label: 'Another meter', m: 1 }, WHY],
     seed2: [{ label: 'Subtler', s: -1, reply: 'Smaller moves. Listen to how the rhythm comes forward.' }, { label: 'Bigger', s: 1, reply: 'Bigger shapes. These travel.' }, { label: 'More jumps', x: 'jumpy', reply: 'Jumpier. Here.' }, { label: 'Land on home', x: 'home', reply: 'All three land on home now. Hear how finished that sounds?' }, WHY],
@@ -100,11 +134,25 @@
     beat: [{ label: 'Straighter', p: -1, reply: 'Straighter. Right on the grid.' }, { label: 'Looser', p: 1, reply: 'Looser. Let it lean.' }, { label: 'Harder', s: 1, reply: 'Harder. Here.' }, WHY],
     pads: [{ label: 'Fuller', p: 1, reply: 'Fuller. Here.' }, { label: 'Thinner', p: -1, reply: 'Thinner. Just a shadow.' }, { label: 'Higher', s: 1, reply: 'Higher up. Listen.' }, WHY],
     sound: [{ label: 'More energy', p: 1, reply: 'More energy. Here.' }, { label: 'Calmer', p: -1, reply: 'Calmer. Here.' }, { label: 'Surprise me', x: 'any', reply: 'Anything goes. Let’s see what fits.' }, WHY],
+    pocket: [{ label: 'Slower', t: -1, reply: 'Slower. Same pockets, more weight.' }, { label: 'Faster', t: 1, reply: 'Faster. Here.' }, { label: 'Busier', s: 1, reply: 'Busier. More hits.' }, { label: 'Sparser', s: -1, reply: 'Sparser. More air.' }, { label: 'Swing it', x: 'swing', reply: 'Swung. The off-beats come a little late.' }, { label: 'Another meter', m: 1 }, WHY],
+    gbass: [{ label: 'Darker', c: -1, reply: 'Darker. Same pocket, more shadow.' }, { label: 'Brighter', c: 1, reply: 'Brighter. Here.' }, { label: 'Simpler', s: -1, reply: 'Simpler. Fewer notes.' }, { label: 'Busier', s: 1, reply: 'Busier bass. Here.' }, WHY],
+    keys: [{ label: 'More held', p: -1, reply: 'Longer chords. Here.' }, { label: 'More chopped', p: 1, reply: 'Chopped up. The chords join the rhythm.' }, { label: 'Fuller', s: 1, reply: 'Fuller chords. Here.' }, { label: 'Thinner', s: -1, reply: 'Thinner. A couple of notes.' }, WHY],
+    hook: [{ label: 'Busier', p: 1, reply: 'Busier. Here.' }, { label: 'Sparser', p: -1, reply: 'Fewer notes. Here.' }, { label: 'In the gaps', x: 'gaps', reply: 'These stay out of the bass’s way.' }, WHY],
+    rrhythm: [{ label: 'Busier', s: 1, reply: 'Busier. More hits.' }, { label: 'Sparser', s: -1, reply: 'More rests. Here.' }, { label: 'Straighter', p: -1, reply: 'Straighter. Right on the beat.' }, { label: 'Against the beat', p: 1, reply: 'The accents move off the beat. Hear it pull?' }, { label: 'Another meter', m: 1 }, WHY],
+    rnotes: [{ label: 'Darker', s: -1, reply: 'Darker scales. Here.' }, { label: 'Brighter', s: 1, reply: 'Brighter. Here.' }, { label: 'Simpler', p: -1, reply: 'Fewer notes. The rhythm does more.' }, { label: 'Wider', p: 1, reply: 'Wider. These travel.' }, { label: 'Stranger', x: 'odd', reply: 'Notes from outside the scale. On purpose.' }, WHY],
+    weight: [{ label: 'Heavier', p: 1, reply: 'Heavier. Here.' }, { label: 'Lighter', p: -1, reply: 'Lighter. Here.' }, WHY],
+    drums: [{ label: 'With the riff', p: -1, reply: 'These follow the riff.' }, { label: 'Against it', p: 1, reply: 'These push against it.' }, { label: 'Harder', s: 1, reply: 'Harder. Here.' }, WHY],
+    under: [{ label: 'Stiller', p: -1, reply: 'Stiller. Let the riff grind on it.' }, { label: 'More movement', p: 1, reply: 'Chords that move. Same riff, new colour.' }, WHY],
   };
 
   // Bobby's lines. Lists are picked from by a counter so he doesn't repeat himself.
   const LINES = {
-    start: 'Hey, I’m Bobby. Let’s find an idea. We start with bones: a rhythm and a scale. No genre yet.',
+    start: 'What are you in the mood for, boss? Pick any of them. I’ve got lots of material to work with.',
+    peek: {
+      groove: ['That’s a groove: drums and bass first. Every one I play you is different. Tap it again to start there.', 'Another groove. Tap again to start one of your own.'],
+      melody: ['That’s a melody, with a little behind it. Tap it again to start there.', 'Another tune. Tap again to start one of your own.'],
+      riff: ['That’s a riff: short and stubborn. Tap it again to start there.', 'Another riff. Tap again to start one of your own.'],
+    },
     pause: ['Just a moment.', 'Okay, let’s hear that one.', 'Hang on. Fresh ears.', 'Right. This one.', 'Let that settle. Okay.', 'Clear your ears. Now this.', 'Breathe. Next one.', 'Give it a second.'],
     entry: {
       seed1: ['Three starting points. Each is a rhythm and a scale, walking up and down so you hear its mood. One sparse, one busy, one in between.'],
@@ -115,11 +163,38 @@
       beat: ['Let’s grow those claps into a beat. One right on the grid, one leaning against it, one in between.'],
       pads: ['Something to fill the space around the melody. One thin, one full, one in between.', 'Support for the melody. One just a shadow, one wide and full, one in between.'],
       sound: ['Same idea, three ways to dress it. One calm, one with energy, one in between.', 'Now the clothes: instrument, tempo, swing. Calm, energetic, and one between.'],
+      pocket: ['Start with the pocket: a beat at a tempo. Speed is part of the feel, so it gets picked here. One right on the grid, one leaning, one in between.'],
+      gbass: ['Now the bass. It locks to that kick or plays between it, and it decides the chords: stay on one, sway between two, or walk a loop.'],
+      keys: ['Chords on top of that bass. Held, chopped, or somewhere between. Or none: plenty of grooves are just drums and bass.'],
+      hook: ['A hook on top: a short line that sits in the groove’s gaps. Like a melody, rhythm first, then its shape.'],
+      rrhythm: ['A riff starts as a rhythm. One note, hits and rests, and which hits land hard. One right on the grid, one against it, one in between.'],
+      rnotes: ['Same rhythm. Now the notes. Some barely move, some travel. The rhythm does half the work either way.'],
+      weight: ['Now its weight: who plays it, and how thick. One lean, one heavy, one in between.'],
+      drums: ['Drums for the riff. One follows it, one pushes against it, one in between.', 'The kit. With the riff, against it, or somewhere between.'],
+      under: ['Something under the riff. A drone it can grind against, or chords that move while it stays put.'],
     },
     more: ['Three more from the deck. The last three are still there: go back any time.', 'Next three. Nothing’s thrown away; they’re just to the left.', 'Fresh three. Every one in the pool gets its turn before anything repeats.'],
     prev: ['The three before. Still here.', 'Back a step. Same three as before.'],
     shuffled: ['That’s every one in the pool. Shuffled: same cards, new company.', 'You’ve heard the whole deck. Shuffled, dealing again: new threes this time.'],
     next: ['The melody leads; everything we add backs it up. Where to?', 'Where next? Nothing’s wrong from here, only different.', 'Your melody is the boss. What should back it up?'],
+    nextBy: {
+      groove: ['The groove leads now. What goes with it?', 'Where next? Nothing’s wrong from here, only different.', 'Spice, a hook, or the sound. Or just call it.'],
+      riff: ['The riff is the boss. What goes around it?', 'Where next? Nothing’s wrong from here, only different.', 'Drums, something under it, or the sound.'],
+    },
+    goldBy: {
+      groove: ['That’s gold. A while ago it was a beat. Play the climb to hear how it got here.'],
+      riff: ['Gold. It started as hits on one note. Play the climb.'],
+    },
+    climbBy: {
+      groove: ['The pocket: just the beat.'],
+      riff: ['The riff’s rhythm, on one note.', '+ Its notes.', '+ Its weight. That’s the riff.'],
+    },
+    grooveDone: 'That’s your groove: drums, bass and chords. From here, anything goes.',
+    noChords: 'No chords. Drums and bass, and plenty of room.',
+    riffDone: 'That’s your riff. Now let’s build around it.',
+    hook: 'There’s your hook, sitting in the groove.',
+    hookWalk: 'The plain walk it is. A hook can be that simple.',
+    swingCompound: 'It already rolls in threes, so there’s nothing to swing. Same pockets.',
     melody: ['That’s your melody. Here it is on its own. From now on, it leads.'],
     added: ['Here it is with the {x} in.', 'There it is, with the {x}. Hear how the melody sits now.', 'With the {x}. Still the melody up front.'],
     skipped: ['Fine by me. Where else?', 'Not every idea needs that. Pick another way.'],
@@ -230,10 +305,14 @@
   const SCALES = {
     phrygian: [0, 1, 3, 5, 7, 8, 10], minor: [0, 2, 3, 5, 7, 8, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
     penta: [0, 2, 4, 7, 9], mixolydian: [0, 2, 4, 5, 7, 9, 10], major: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11],
+    // for grooves and riffs
+    mpenta: [0, 3, 5, 7, 10], blues: [0, 3, 5, 6, 7, 10],
   };
+  // the seven-note scale a five- or six-note one lives in, for its chords
+  const PARENT = { penta: 'major', mpenta: 'minor', blues: 'minor' };
   const SCALE_ORDER = ['phrygian', 'minor', 'harmonic', 'dorian', 'penta', 'mixolydian', 'major', 'lydian']; // dark to bright
   // the studio's name for each scale (pentatonic lives inside major)
-  const STUDIO_SCALE = { phrygian: 'phrygian', minor: 'minor', harmonic: 'harmonicMinor', dorian: 'dorian', penta: 'major', mixolydian: 'mixolydian', major: 'major', lydian: 'lydian' };
+  const STUDIO_SCALE = { phrygian: 'phrygian', minor: 'minor', harmonic: 'harmonicMinor', dorian: 'dorian', penta: 'major', mixolydian: 'mixolydian', major: 'major', lydian: 'lydian', mpenta: 'minor', blues: 'minor' };
   const MODE = {
     phrygian: { name: 'Phrygian', mood: 'tense', why: 'Phrygian has the note just above home only a half step away. That closeness sounds tense.' },
     minor: { name: 'Minor', mood: 'dark', why: 'Minor lowers the 3rd note of the scale, and that one note does most of the darkening.' },
@@ -243,9 +322,11 @@
     mixolydian: { name: 'Mixolydian', mood: 'loose', why: 'Mixolydian is major with a lowered 7th, which takes away the pull home. It feels laid back.' },
     major: { name: 'Major', mood: 'bright', why: 'Major puts a major 3rd above home, and that interval is most of what we hear as bright.' },
     lydian: { name: 'Lydian', mood: 'floating', why: 'Lydian raises the 4th. That note wants to go up, so the tune seems to float.' },
+    mpenta: { name: 'Minor pentatonic', mood: 'raw', why: 'Minor pentatonic is minor with the two notes that rub taken out. Most riffs live in this box.' },
+    blues: { name: 'Blues', mood: 'gritty', why: 'The blues scale is minor pentatonic plus the ♭5, a note that rubs on purpose.' },
   };
   function degMidi(scale, deg) { const s = SCALES[scale]; return 60 + 12 * Math.floor(deg / s.length) + s[mod(deg, s.length)]; }
-  function parentScale(scale) { return SCALES[scale].length === 7 ? SCALES[scale] : SCALES.major; }
+  function parentScale(scale) { return SCALES[PARENT[scale] || scale]; }
   function landFeel(iv) { return iv === 0 ? 'finished, like home' : iv === 3 || iv === 4 ? 'settled' : iv === 7 ? 'open, like there’s more to say' : 'like it wants to keep going'; }
 
   // ---------------------------------------------------------------- shape
@@ -342,11 +423,14 @@
     });
     return out;
   }
-  /** chord paths (one chord per slot: half bars in 4/4), best fit first, each differing from the others in 2+ slots (1 when there are only 2) */
+  /** chord paths (one chord per slot: half bars in 4/4) for a melody, best fit first */
   function chordPool(mel, colour) {
-    return cached('cp' + JSON.stringify(mel) + colour, () => {
-      const W = slotWeights(melodyNotes(mel), meterOf(mel));
-      const C = chordCands(mel.scale);
+    return cached('cp' + JSON.stringify(mel) + colour, () => chordPaths(slotWeights(melodyNotes(mel), meterOf(mel)), mel.scale, colour));
+  }
+  /** chord paths that fit the notes weighed into W (slotWeights), best first, each differing from the others in 2+ slots (1 when there are only 2) */
+  function chordPaths(W, scale, colour) {
+    {
+      const C = chordCands(scale);
       const S = W.map((ws) => C.map((c) => {
         let s = 0;
         ws.forEach((w, pc) => { if (w) s += c.pcs.includes(pc) ? w : -0.45 * w; });
@@ -386,10 +470,77 @@
           changes: x.p.filter((v, i) => i > 0 && v !== x.p[i - 1]).length, colour: chords.some((c) => c.colour),
         };
       });
-    });
+    }
   }
-  /** the chords other layers play against: the picked ones, or the melody's best fit */
-  function chordsFor(idea) { return idea.layers.chords ? idea.layers.chords.chords : chordPool(idea.melody, false)[0].chords; }
+  /**
+   * The chords other layers play against: the picked ones, a groove's bass
+   * line's, what's under a riff (its home chord until then), or the melody's
+   * best fit.
+   */
+  function chordsFor(idea) {
+    const L = idea.layers;
+    if (L.chords) return L.chords.chords;
+    if (L.gbass) return L.gbass.chords;
+    if (L.under && L.under.chords) return L.under.chords;
+    if (pathOf(idea) === 'riff') { const home = chordCands(scaleOf(idea))[0]; return slotsOf(ideaMeter(idea)).map(() => home); }
+    return chordPool(idea.melody, false)[0].chords;
+  }
+
+  // ---------------------------------------------------------------- three ways in: which path, and what an idea is made of
+
+  function pathOf(idea) { return idea && PATHS[idea.path] ? idea.path : 'melody'; }
+  function isOpening(idea, dir) { return PATHS[pathOf(idea)].open.indexOf(dir) >= 0; }
+  /** has this first-screen been picked */
+  function hasOpen(idea, d) {
+    if (d === 'seed1') return !!idea.melody;
+    if (d === 'seed2') return !!(idea.melody && idea.melody.shape);
+    if (d === 'rrhythm') return !!idea.riff;
+    if (d === 'rnotes') return !!(idea.riff && idea.riff.notes);
+    if (d === 'weight') return !!(idea.riff && idea.riff.weight);
+    return !!idea.layers[d];
+  }
+  /** the path's first screens are all picked: the idea exists */
+  function isDone(idea) { const o = PATHS[pathOf(idea)].open; return hasOpen(idea, o[o.length - 1]); }
+  function isStarted(idea) { return hasOpen(idea, PATHS[pathOf(idea)].open[0]); }
+  /** the idea's meter; in one of its first rounds, the auditioned option's (aud = { dir, spec }) */
+  function ideaMeter(idea, aud) {
+    const T = Odd.theory, sp = aud && aud.spec;
+    if (sp && sp.mel) return meterOf(sp.mel);
+    if (sp && aud.dir === 'rrhythm') return T.meter(sp.r.m);
+    if (sp && aud.dir === 'pocket') return T.meter(sp.m);
+    if (idea.riff) return T.meter(idea.riff.r.m);
+    if (idea.layers && idea.layers.pocket) return T.meter(idea.layers.pocket.m);
+    return meterOf(idea.melody);
+  }
+  function scaleOf(idea) {
+    const p = pathOf(idea);
+    if (p === 'riff') return (idea.riff && idea.riff.scale) || 'minor';
+    if (p === 'groove') return idea.layers.gbass ? idea.layers.gbass.scale : 'minor';
+    return idea.melody ? idea.melody.scale : 'major';
+  }
+  /** the hook a groove grew (a melody with its shape), or null */
+  function hookOf(idea) { return pathOf(idea) === 'groove' && idea.layers.hook ? idea.layers.hook.mel : null; }
+  /**
+   * What the later layers are made against: the melody, the riff, or a
+   * groove's bass line (its kick, before there is one). [{ s, d, w, m }]
+   */
+  function refNotes(idea) {
+    const p = pathOf(idea);
+    if (p === 'riff') return idea.riff ? riffNotes(idea.riff) : [];
+    if (p === 'groove') {
+      const L = idea.layers;
+      if (!L.pocket) return [];
+      const kick = {};
+      L.pocket.k.forEach((s) => { kick[s] = 1; });
+      if (L.gbass) return L.gbass.notes.map((n) => ({ s: n.s, d: n.d, w: kick[n.s] ? 2 : 1, m: n.m }));
+      const end = 2 * ideaMeter(idea).steps;
+      return L.pocket.k.map((s, i, a) => ({ s, d: Math.min(4, (i + 1 < a.length ? a[i + 1] : end) - s), w: 2, m: 36 }));
+    }
+    return idea.melody && idea.melody.shape ? melodyNotes(idea.melody) : [];
+  }
+  function dirSub(idea, d) { const s = SUBS[pathOf(idea)]; return (s && s[d]) || DIRS[d].sub; }
+  /** a round's own way out (the plain walk, no chords): its button, or '' */
+  function ownLabel(dir) { return OWN[dir] ? OWN[dir][0] : ''; }
 
   // ---------------------------------------------------------------- the other layers, each made against the melody
 
@@ -443,7 +594,7 @@
   const BASS_NOTES = [['root', ''], ['fifth', 'root and fifth'], ['oct', 'octaves'], ['tones', 'chord tones'], ['lead', 'leading in']];
 
   function bassStyles(idea) {
-    const m = meterOf(idea.melody), STEPS = 2 * m.steps, slots = slotsOf(m);
+    const m = ideaMeter(idea), STEPS = 2 * m.steps, slots = slotsOf(m);
     const notes = melodyNotes(idea.melody), chords = chordsFor(idea);
     const si = (s) => slotAt(slots, s);
     const ch = (s) => chords[si(s)];
@@ -510,8 +661,9 @@
   const PAD_INST = { pad: 'warm pad', strings: 'strings', glass: 'glass', voice: 'e-piano' };
 
   function padStyles(idea) {
-    const notes = melodyNotes(idea.melody), chords = chordsFor(idea), sc = idea.melody.scale;
-    const m = meterOf(idea.melody), slots = slotsOf(m), STEPS = stepsOf(idea.melody);
+    const notes = refNotes(idea), chords = chordsFor(idea), sc = scaleOf(idea);
+    const m = ideaMeter(idea), slots = slotsOf(m), STEPS = 2 * m.steps;
+    const tune = pathOf(idea) === 'melody' ? idea.melody : hookOf(idea), tuneNotes = tune ? melodyNotes(tune) : [];
     const ch = (s) => chords[slotAt(slots, s)];
     const voiced = (c, base) => c.pcs.map((pc) => base + mod(pc - base, 12));
     const VOICE = {
@@ -544,11 +696,16 @@
         }));
       }));
     });
-    // lines that move with the melody, and drones under it
+    // lines that move with the melody (when there is one), and drones under it
+    if (tuneNotes.length) {
+      const ts = tune.scale;
+      out.push(
+        { id: 'shadow', tag: 'Shadow voice', voice: 'voice', detail: 'a third below', notes: tuneNotes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(ts, n.deg - 2)] })) },
+        { id: 'above', tag: 'Harmony above', voice: 'voice', detail: 'a third above', notes: tuneNotes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(ts, n.deg + 2)] })) },
+        { id: 'sixth', tag: 'Harmony below', voice: 'voice', detail: 'a sixth below', notes: tuneNotes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(ts, n.deg - 5)] })) },
+      );
+    }
     out.push(
-      { id: 'shadow', tag: 'Shadow voice', voice: 'voice', detail: 'a third below', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 2)] })) },
-      { id: 'above', tag: 'Harmony above', voice: 'voice', detail: 'a third above', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg + 2)] })) },
-      { id: 'sixth', tag: 'Harmony below', voice: 'voice', detail: 'a sixth below', notes: notes.map((n) => ({ s: n.s, d: n.d, ms: [degMidi(sc, n.deg - 5)] })) },
       { id: 'drone', tag: 'One quiet drone', voice: 'pad', detail: 'the home note', notes: [{ s: 0, d: STEPS, ms: [60 + chords[0].root] }] },
       { id: 'fifths', tag: 'Open drone', voice: 'strings', detail: 'home and its fifth', notes: [{ s: 0, d: STEPS, ms: [48 + chords[0].root, 55 + chords[0].root] }] },
     );
@@ -579,8 +736,8 @@
   const PERC_LAYER = ['shaker', 'tamb', 'guiro', 'tri'];
 
   function percStyles(idea) {
-    const notes = melodyNotes(idea.melody);
-    const m = meterOf(idea.melody), STEPS = 2 * m.steps;
+    const notes = refNotes(idea), lead = { melody: 'the melody', groove: 'the bass', riff: 'the riff' }[pathOf(idea)];
+    const m = ideaMeter(idea), STEPS = 2 * m.steps;
     const evens = evensOf(STEPS), backs = bothBars(m, backsOf(m)), pulses = bothBars(m, m.pulses.map((p) => p.s));
     const strong = (s) => m.groupStarts.indexOf(mod(s, m.steps)) >= 0;
     const covered = coverage(notes, STEPS);
@@ -603,7 +760,7 @@
       fits.split(' ').forEach((iid) => {
         const inst = PERC_INST.find((x) => x[0] === iid);
         const hits = P[pat].map((h) => ({ s: h.s, k: inst[3] && strong(h.s) ? inst[3] : inst[2], v: h.v }));
-        const tag = inst[1] + ' ' + words;
+        const tag = inst[1] + ' ' + words.replace('the melody', lead);
         out.push({ id: iid + '-' + pat, fam: iid, tag, detail: '', hits });
         if (PERC_LAYER.indexOf(iid) >= 0 && /eighths|offs|sixteenths/.test(pat)) {
           const claps = pat === 'sixteenths' ? P.accents : P.backs;
@@ -688,6 +845,399 @@
     });
   }
 
+  // ---------------------------------------------------------------- a groove: the pocket, a bass line that sets the chords, chords on top
+  //
+  // A groove starts with no melody. The pocket is a beat at a tempo (the
+  // meter's beat deck, each at the speed its kick suits); the bass is made
+  // against its kick and picks the harmony as it goes; the chords on top
+  // play what the bass implies.
+
+  // where each kick tends to sit, in BPM (16th hats, a half-time snare, swing and Slower/Faster move it)
+  const POCKET_BPM = {
+    four: 122, rock: 112, rockpush: 108, back: 96, boombap: 88, broken: 132, half: 74, bounce: 100, tresillo: 104, pushing: 116, one: 92,
+    onethree: 96, drive: 128, lilt: 92, push: 100, skip: 104, float: 84, answer: 96, long: 80, hemiola: 108,
+    both: 108, lean: 96, gallop: 120, roll: 112, dotted: 104, shuffle: 92, tumble: 100,
+    groups: 116, twothree: 108, ends: 120, double: 128, rolling: 112, threetwo: 116,
+  };
+  function pocketStyles(m, st) {
+    const t = st.t || 0, swingIt = st.x === 'swing' && !m.compound;
+    const out = kitsFor(m).map((k) => {
+      let bpm = POCKET_BPM[k.fam] || 100;
+      if (/-half-/.test(k.id)) bpm *= 1.2; // half-time feels slow, so it can run faster
+      if (k.h.length >= 2 * m.steps) bpm *= 0.86; // 16th hats sit best a little slower
+      if (k.swing) bpm *= 0.92;
+      bpm = Math.max(56, Math.min(180, 2 * Math.round(bpm * Math.pow(1.12, t) / 2)));
+      const swung = swingIt && !k.swing;
+      return Object.assign({}, k, { id: k.id + (swung ? '-swung' : ''), m: m.id, bpm, swing: swung ? 0.6 : k.swing, off: k.off + (swung ? 0.3 : 0) });
+    });
+    return unique(out, (x) => JSON.stringify([x.k, x.s, x.h, x.hp, x.swing]));
+  }
+
+  const GROOVE_SCALES = ['phrygian', 'minor', 'mpenta', 'dorian', 'blues', 'mixolydian', 'major']; // dark to bright
+  // how the harmony moves over the two bars, a scale degree per half bar (meters with a chord a bar take every other one)
+  const MOVES = [
+    ['stay', [0, 0, 0, 0]], ['sway7', [0, 0, 6, 6]], ['sway4', [0, 0, 3, 3]], ['sway6', [0, 0, 5, 5]],
+    ['turn', [0, 0, 0, 6]], ['rock', [0, 3, 0, 3]], ['loop', [0, 6, 5, 6]], ['loop4', [0, 5, 3, 4]],
+  ];
+  // a groove bass's job: when it plays, against the kick
+  const GBASS_JOBS = [['lock', 'Locks to the kick'], ['short', 'Short, with the kick'], ['pump', 'Pumping eighths'], ['offs', 'Off-beat'], ['octpop', 'Octave pops'],
+    ['answer', 'Answers the kick'], ['fill', 'Plays between the kicks'], ['sync', 'Syncopated'], ['walk', 'Walking'], ['long', 'Long notes'], ['push', 'Pushes the changes']];
+  /** chord names along a path, each change once */
+  function chordLine(chords) { return chords.map(chordName).filter((x, i, a) => i === 0 || x !== a[i - 1]).join(' '); }
+
+  /**
+   * Bass lines for a groove, each also picking the harmony: a job (when it
+   * plays against the kick) x how the chords move x a scale. The scales take
+   * turns so the deck spans dark to bright; Darker and Brighter (steer.c)
+   * narrow them.
+   */
+  function grooveBass(idea, st) {
+    const pk = idea.layers.pocket, m = ideaMeter(idea), STEPS = 2 * m.steps, slots = slotsOf(m), K = slots.length;
+    const c = (st && st.c) || 0;
+    let scales = GROOVE_SCALES.slice();
+    if (c < 0) scales = scales.slice(0, c <= -2 ? 2 : 4);
+    if (c > 0) scales = scales.slice(c >= 2 ? 5 : 3);
+    const kicks = pk.k.slice().sort((a, b) => a - b), isKick = {};
+    kicks.forEach((s) => { isKick[s] = 1; });
+    const nextKick = (s) => { const n = kicks.find((x) => x > s); return n == null ? STEPS : n; };
+    const evens = evensOf(STEPS), beats = beatsOf(m), last = m.pulses.length - 1;
+    const near = (s) => isKick[s] || isKick[s - 1] || isKick[s + 1];
+    // each job's notes: [{ s, d, c (where its chord is read), up (an octave up), tone, lead (into the next chord) }]
+    const jobs = {
+      lock: kicks.map((s) => ({ s, d: Math.min(4, nextKick(s) - s) })),
+      short: kicks.map((s) => ({ s, d: 1 })),
+      pump: evens.map((s) => ({ s, d: 2 })),
+      offs: evens.filter((s) => !onPulse(m, s)).map((s) => ({ s, d: 2 })),
+      octpop: evens.map((s) => ({ s, d: 1, up: !onPulse(m, s) })),
+      answer: [].concat.apply([], kicks.map((s) => [{ s, d: 2 }].concat(s + 3 < Math.min(nextKick(s), STEPS) ? [{ s: s + 3, d: 1, up: true }] : []))),
+      fill: evens.filter((s) => !near(s)).map((s) => ({ s, d: 2 })),
+      sync: kicks.map((s) => ({ s, d: 2 })).concat(pk.s.filter((s) => s > 0 && !isKick[s - 1]).map((s) => ({ s: s - 1, d: 1 }))).sort((a, b) => a.s - b.s),
+      walk: beats.map((b) => ({ s: b.s, d: b.len, tone: b.k % 3, lead: b.k === last })),
+      long: slots.map((sl) => ({ s: sl.s, d: sl.len - 1 })),
+      push: slots.map((sl, i) => (i === 0 ? { s: 0, d: sl.len - 2 } : { s: sl.s - 2, d: sl.len, c: sl.s })),
+    };
+    const si = (s) => slotAt(slots, s);
+    const line = (list, chords, how) => list.map((x, i) => {
+      const at = x.c == null ? x.s : x.c, ch = chords[si(at)], r = 36 + ch.root;
+      let p = x.up ? r + 12 : r;
+      if (how === 'fifth' && list.filter((y, j) => j < i && si(y.c == null ? y.s : y.c) === si(at)).length % 2) p = r + 7;
+      if (x.tone != null) p = r + mod(ch.pcs[x.tone] - ch.root, 12);
+      if (x.lead) { const nr = 36 + chords[(si(at) + 1) % chords.length].root; p = nr === r ? r + 7 : nr > r ? nr - 1 : nr + 1; }
+      return { s: x.s, d: Math.max(1, Math.min(x.d, STEPS - x.s)), m: p };
+    });
+    const out = [];
+    GBASS_JOBS.forEach(([job, name], ji) => {
+      if (jobs[job].length < 2) return;
+      MOVES.forEach(([mv, degs], mi) => {
+        // the scales take turns; one whose chords there would be diminished passes to the next
+        for (let k = 0; k < scales.length; k++) {
+          const scale = scales[(ji * 3 + mi * 2 + k) % scales.length], cands = chordCands(scale);
+          const chords = slots.map((_, i) => cands[degs[Math.floor(i * 4 / K)]]);
+          if (chords.some((ch) => ch.q === '°' || ch.q === '+')) continue;
+          ['root', 'fifth'].forEach((how) => {
+            if (how === 'fifth' && !/^(lock|pump|long)$/.test(job)) return;
+            out.push({ id: job + '-' + mv + '-' + scale + (how === 'fifth' ? '-5' : ''), fam: job, twist: how === 'fifth' ? 1 : 0, tag: name, detail: chordLine(chords) + ' · ' + MODE[scale].name.toLowerCase(), notes: line(jobs[job], chords, how), chords, scale, move: mv, c: GROOVE_SCALES.indexOf(scale) });
+          });
+          break;
+        }
+      });
+    });
+    return unique(out, (x) => JSON.stringify([x.notes, x.chords.map((ch) => ch.root + ch.q)]))
+      .map((x) => Object.assign(x, { lock: Math.round(100 * x.notes.filter((n) => isKick[n.s]).length / x.notes.length) / 100, n: x.notes.length }));
+  }
+
+  // chords on top of a groove: when they play, how they're voiced, on what
+  const KEY_RHYTHMS = [['held', 'Held chords'], ['breath', 'Breathing'], ['stabs', 'Off-beat stabs'], ['chank', '16th chank'], ['skank', 'On the backbeat'],
+    ['kick', 'Stabs with the kick'], ['answer', 'Answers the kick'], ['push', 'Pushed ahead'], ['pulse', 'On every beat']];
+  const KEY_VOICINGS = [['three', 'triad'], ['seven', 'sevenths'], ['shell', 'two notes'], ['open', 'open fifths']];
+  const KEY_WORD = { epiano: 'e-piano', organ: 'organ', stab: 'synth stab', keys: 'soft keys', pluck: 'pluck' };
+  const KEY_FIT = { held: 'epiano organ keys', breath: 'epiano keys', stabs: 'stab organ epiano', chank: 'keys pluck', skank: 'organ epiano', kick: 'stab epiano', answer: 'epiano pluck', push: 'epiano stab', pulse: 'keys organ' };
+  const NO_CHORDS = { id: 'none', none: true, tag: 'No chords', detail: 'drums and bass are enough', voice: 'epiano', notes: [], n: 0, voices: 0 };
+
+  function keysStyles(idea) {
+    const pk = idea.layers.pocket, m = ideaMeter(idea), STEPS = 2 * m.steps, slots = slotsOf(m), chords = chordsFor(idea);
+    const sc = parentScale(scaleOf(idea)), ch = (s) => chords[slotAt(slots, s)];
+    const isKick = {};
+    pk.k.forEach((s) => { isKick[s] = 1; });
+    const voiced = (pcs, base) => pcs.map((pc) => base + mod(pc - base, 12));
+    // the scale's 7th above the chord (a minor 7th for chords from outside it)
+    const seventh = (c) => { const i = sc.indexOf(c.root); return i < 0 ? mod(c.root + 10, 12) : sc[(i + 6) % 7]; };
+    const VOICE = {
+      three: (c) => voiced(c.pcs, 57),
+      seven: (c) => voiced(c.pcs.concat([seventh(c)]), 57),
+      shell: (c) => voiced([c.pcs[1], seventh(c)], 60),
+      open: (c) => [48 + c.root, 55 + c.root, 60 + c.root],
+    };
+    const evens = evensOf(STEPS), all = Array.from({ length: STEPS }, (_, x) => x);
+    const RH = {
+      held: slots.map((sl) => ({ s: sl.s, d: sl.len })),
+      breath: slots.map((sl) => ({ s: sl.s, d: Math.ceil(sl.len / 2) })),
+      stabs: evens.filter((x) => !onPulse(m, x)).map((x) => ({ s: x, d: 1 })),
+      chank: all.filter((x) => !onPulse(m, x) && (x % 2 === 0 || x % 8 === 7)).map((x) => ({ s: x, d: 1 })),
+      skank: bothBars(m, backsOf(m)).map((x) => ({ s: x, d: 2 })),
+      kick: pk.k.map((x) => ({ s: x, d: 2 })),
+      answer: evens.filter((x) => !isKick[x] && !isKick[x - 1] && !onPulse(m, x)).map((x) => ({ s: x, d: 1 })),
+      push: slots.map((sl, i) => (i === 0 ? { s: 0, d: sl.len - 2 } : { s: sl.s - 2, d: Math.min(sl.len, STEPS - sl.s + 2), c: sl.s })),
+      pulse: beatsOf(m).map((b) => ({ s: b.s, d: Math.max(1, b.len - 2) })),
+    };
+    const out = [];
+    KEY_RHYTHMS.forEach(([rh, name]) => {
+      if (RH[rh].length < 2) return;
+      const insts = KEY_FIT[rh].split(' ');
+      KEY_VOICINGS.forEach(([v, words]) => {
+        if (v === 'open' && !/^(held|stabs|kick)$/.test(rh)) return;
+        (v === 'three' ? insts : insts.slice(0, 1)).forEach((inst, ii) => out.push({
+          id: rh + '-' + v + '-' + inst, fam: rh, twist: (v === 'three' ? 0 : 1) + (ii ? 1 : 0), tag: name, voice: inst, detail: words + ' · ' + KEY_WORD[inst],
+          notes: RH[rh].map((x) => ({ s: x.s, d: x.d, ms: VOICE[v](ch(x.c == null ? x.s : x.c)) })),
+        }));
+      });
+    });
+    return unique(out, (x) => x.voice + JSON.stringify(x.notes)).map((x) => Object.assign(x, { n: x.notes.length, voices: x.notes[0].ms.length }));
+  }
+
+  /** hook rhythms for a groove, in its scale; clash: how many land where the bass or kick already hits */
+  function hookStyles(idea) {
+    const m = ideaMeter(idea), scale = scaleOf(idea), busy = {};
+    refNotes(idea).forEach((n) => { busy[n.s] = 1; });
+    idea.layers.pocket.k.forEach((s) => { busy[s] = 1; });
+    return rhythmPool(m.id).map((r) => {
+      const clash = Math.round(100 * r.hits.filter((h) => busy[h[0]]).length / r.n) / 100;
+      return { a: r.n + 0.3 * r.off, b: clash, clash, mel: { r, scale, shape: null } };
+    });
+  }
+
+  // ---------------------------------------------------------------- a riff: a rhythm with accents, its notes, its weight
+  //
+  // A riff is rhythm first: hits on one note, some hard (accents), some
+  // muted, with rests that matter as much. Then the notes on that rhythm,
+  // then who plays it and how thick. It usually is the harmony.
+
+  // one beat of a riff: [start, length]; beats of three eighths (6/8, 7/8's long group) have their own
+  const RCELLS = { chug: [[0, 2], [2, 2]], gallop: [[0, 2], [2, 1], [3, 1]], rgallop: [[0, 1], [1, 1], [2, 2]], sixteen: [[0, 1], [1, 1], [2, 1], [3, 1]], stab: [[0, 1]], hold: [[0, 4]], push: [[3, 1]], off: [[2, 2]], dot: [[0, 3], [3, 1]], rest: [] };
+  const RCELLS6 = { chug: [[0, 2], [2, 2], [4, 2]], gallop: [[0, 2], [2, 1], [3, 1], [4, 2]], rgallop: [[0, 1], [1, 1], [2, 2], [4, 2]], sixteen: [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1]], stab: [[0, 1]], hold: [[0, 6]], push: [[5, 1]], off: [[2, 2], [4, 2]], dot: [[0, 4], [4, 2]], rest: [] };
+  const RIFF_TAG = { chug: 'Chug', gallop: 'Gallop', rgallop: 'Reverse gallop', sixteen: 'Hammering 16ths', stab: 'Stabs and space', hold: 'Hits and holds', push: 'Pushing', off: 'Off the beat', dot: 'Dotted', threes: 'Accents in threes', stop: 'Stop-start' };
+
+  /** where accents in threes fall across a bar: 3+3+2 in 16ths, or three against the beat in 3/4 and 6/8 */
+  function threesOf(m) {
+    if (m.id === '3/4') return [0, 3, 6, 9];
+    if (m.id === '6/8') return [0, 4, 8];
+    const out = [], pat = [3, 3, 2];
+    for (let x = 0, i = 0; x < m.steps && m.steps - x >= 2; x += pat[i++ % 3]) out.push(x);
+    return out;
+  }
+  /** a riff's accents, as [s, length, w]: w 2 hits hard, 1 a plain hit, 0 muted */
+  function accentRiff(m, hits, threes) {
+    const T3 = threes ? threesOf(m) : null;
+    hits.forEach((h, i) => {
+      const x = mod(h[0], m.steps), nx = hits[i + 1];
+      if (T3) { h[2] = T3.indexOf(x) >= 0 ? 2 : 0; return; }
+      // a lone 16th off the eighths pushes into what comes next
+      const push = x % 2 === 1 && (!nx || nx[0] > h[0] + 1);
+      h[2] = m.groupStarts.indexOf(x) >= 0 || push || h[1] >= 3 ? 2 : onPulse(m, x) ? 1 : 0;
+    });
+    return hits;
+  }
+  /** a 2-bar riff rhythm from density d, push y and rests (0..1); bar two repeats bar one, sometimes with a new ending */
+  function makeRiff(seed, d, y, rest, mid) {
+    const m = Odd.theory.meter(mid), R = rng(seed), beats = beatsOf(m), nb = m.pulses.length;
+    const W = { chug: 1.2, gallop: 0.3 + 0.9 * d, rgallop: 0.5 * d, sixteen: 1.3 * d * d, stab: 0.3 + 0.8 * rest, hold: 0.5 * (1 - d), push: 0.8 * y, off: 0.7 * y, dot: 0.5, rest: 1.3 * rest };
+    const first = { chug: 1, gallop: 0.4 + d, stab: 0.4 + rest, hold: 0.5 * (1 - d), sixteen: d * d, dot: 0.5 };
+    const bar = [weighted(R, first)];
+    for (let b = 1; b < nb; b++) bar.push(weighted(R, W));
+    const turn = nb > 1 && R() < 0.35;
+    const bar2 = bar.slice();
+    if (turn) { const W2 = Object.assign({}, W); W2[bar[nb - 1]] = 0; bar2[nb - 1] = weighted(R, W2); }
+    const hits = [];
+    bar.concat(bar2).forEach((c, i) => { const bt = beats[i]; (bt.len === 6 ? RCELLS6 : RCELLS)[c].forEach((x) => hits.push([bt.s + x[0], Math.min(x[1], bt.len - x[0])])); });
+    if (hits.length < 4) return null;
+    const count = {};
+    bar.forEach((c) => { if (c !== 'rest') count[c] = (count[c] || 0) + 1; });
+    const gaps = bar.filter((c) => c === 'rest' || c === 'stab' || c === 'push').length;
+    const fam = gaps * 2 >= nb && bar.indexOf('rest') >= 0 ? 'stop' : Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+    return { hits: accentRiff(m, hits, false), fam, turn: turn && bar2[nb - 1] !== bar[nb - 1] };
+  }
+  /** accents in threes across the beat, muted 16ths between them as density d allows */
+  function makeThrees(seed, d, mid) {
+    const m = Odd.theory.meter(mid), R = rng(seed), acc = threesOf(m), bar = [];
+    acc.forEach((a, j) => {
+      const end = j + 1 < acc.length ? acc[j + 1] : m.steps;
+      bar.push([a, d < 0.45 ? Math.min(2, end - a) : 1]);
+      if (d >= 0.45) for (let x = a + 1; x < end; x++) if (R() < d) bar.push([x, 1]);
+    });
+    return { hits: accentRiff(m, bar.concat(bar.map((h) => [h[0] + m.steps, h[1]])), true), fam: 'threes', turn: false };
+  }
+  /** every riff rhythm for a meter: { id, m, hits, n, off (share of accents off the beat), fam, turn } */
+  function riffPool(mid) {
+    const m = Odd.theory.meter(mid);
+    return cached('riffs' + m.id, () => {
+      const seen = {}, out = [];
+      const add = (x, i) => {
+        if (!x) return;
+        const key = JSON.stringify(x.hits);
+        if (seen[key]) return;
+        seen[key] = 1;
+        const acc = x.hits.filter((h) => h[2] === 2);
+        const off = acc.filter((h) => !onPulse(m, h[0])).length / Math.max(1, acc.length);
+        out.push({ id: 'rf' + i + '@' + m.id, m: m.id, hits: x.hits, n: x.hits.length, off: Math.round(off * 100) / 100, fam: x.fam, turn: x.turn });
+      };
+      const DS = [0.1, 0.4, 0.7, 1], YS = [0, 0.5, 1], RS = [0, 0.4, 0.8];
+      for (let i = 0; i < 72; i++) add(makeRiff(4001 + i * 6007, DS[i % 4], YS[Math.floor(i / 4) % 3], RS[Math.floor(i / 12) % 3], m.id), i);
+      for (let i = 0; i < 8; i++) add(makeThrees(9001 + i * 31, [0.2, 0.5, 0.75, 0.9][i % 4], m.id), 100 + i);
+      return out;
+    });
+  }
+  function riffTag(r) { return RIFF_TAG[r.fam] || 'Riff'; }
+  /**
+   * A riff's notes as played: accents ring for their length, plain hits for
+   * an eighth at most, muted ones a 16th. x: semitones above home; m: one
+   * voice's pitch, for the layers made against it.
+   */
+  function riffNotes(riff) {
+    const ms = riff.notes ? riff.notes.ms : null;
+    return riff.r.hits.map((h, i) => ({ s: h[0], d: h[2] === 2 ? h[1] : h[2] === 1 ? Math.min(h[1], 2) : 1, w: h[2], x: ms ? ms[i] : 0, m: 48 + (ms ? ms[i] : 0) }));
+  }
+
+  const RIFF_SCALES = ['phrygian', 'harmonic', 'minor', 'blues', 'mpenta', 'dorian', 'mixolydian', 'penta', 'major']; // dark to bright
+  // the notes on a riff's rhythm: [id, name, words, the scales it suits (the first keeps notes they share), outside the scale on purpose]
+  const RIFF_NOTES = [
+    ['pedal', 'Pedal', 'hammers the root and flicks up on the accents', 'minor phrygian mixolydian'],
+    ['fifth', 'Root and fifth', 'the fifth on the accents', 'minor'],
+    ['octaves', 'Octave jumps', 'the accents jump an octave', 'minor'],
+    ['box', 'Pentatonic box', 'up and down the box', 'mpenta blues penta'],
+    ['walk', 'Walks the scale', 'the accents step up the scale', 'minor phrygian harmonic dorian mixolydian major'],
+    ['drop', 'Drops to the ♭7', 'the root, then down to the ♭7 and the 5', 'minor mixolydian'],
+    ['newend', 'Same twice, new ending', 'bar two ends somewhere new', 'minor phrygian dorian mixolydian'],
+    ['blues', 'Blues turn', 'root, ♭3, 4, ♭5, 5', 'blues'],
+    ['crawl', 'Chromatic crawl', 'the accents climb a half step at a time', 'minor phrygian', 1],
+    ['sink', 'Sinks', 'the accents sink a half step at a time', 'harmonic minor', 1],
+    ['menace', 'Half step above', 'the accents rub against the ♭2', 'phrygian minor', 1],
+    ['tritone', 'Tritone', 'the accents hit the ♭5, the devil’s interval', 'minor phrygian', 1],
+  ];
+  /** semitones above home for each hit of a riff (`fam` from RIFF_NOTES); the first hit of each bar stays home */
+  function riffLine(fam, hits, scale, m) {
+    const sc = SCALES[scale];
+    const near = (want) => sc.reduce((b, x) => (Math.abs(x - want) < Math.abs(b - want) ? x : b), sc[0]);
+    const third = sc.indexOf(3) >= 0 ? 3 : near(4), fourth = near(5), fifth = near(7), sev = sc.indexOf(10) >= 0 ? 10 : near(11);
+    const out = hits.map(() => 0);
+    const at = (h) => mod(h[0], m.steps);
+    // the accents that move, counted from each bar's start (bar two says it again)
+    let j = 0;
+    const movers = [];
+    hits.forEach((h, i) => { if (at(h) === 0) j = 0; if (h[2] === 2 && at(h) !== 0) movers.push([i, j++]); });
+    const lastIn = (i) => !movers.some(([k]) => k > i && Math.floor(hits[k][0] / m.steps) === Math.floor(hits[i][0] / m.steps));
+    if (fam === 'pedal') { const fl = [third, fourth, third, fifth]; movers.forEach(([i, k]) => { out[i] = fl[k % 4]; }); }
+    else if (fam === 'fifth') movers.forEach(([i]) => { out[i] = fifth; });
+    else if (fam === 'octaves') movers.forEach(([i]) => { out[i] = 12; });
+    else if (fam === 'walk') movers.forEach(([i, k]) => { out[i] = sc[(k + 1) % sc.length]; });
+    else if (fam === 'crawl') movers.forEach(([i, k]) => { out[i] = (k % 3) + 1; });
+    else if (fam === 'sink') movers.forEach(([i, k]) => { out[i] = -((k % 3) + 1); });
+    else if (fam === 'menace') movers.forEach(([i]) => { out[i] = 1; });
+    else if (fam === 'tritone') movers.forEach(([i]) => { out[i] = hits[i][0] >= m.steps && lastIn(i) ? fifth : 6; });
+    else if (fam === 'drop') hits.forEach((h, i) => { const p = at(h) / m.steps; out[i] = p < 0.5 ? 0 : p < 0.75 ? sev - 12 : fifth - 12; });
+    else if (fam === 'box' || fam === 'blues') {
+      // a line through the box: muted hits stay on the note before them
+      const line = fam === 'blues' ? [0, 3, 5, 6, 7, 10, 7, 5] : [0, 1, 2, 1, 0, 2, 3, 1].map((k) => sc.concat([12])[k % (sc.length + 1)]);
+      let k = 0, cur = 0;
+      hits.forEach((h, i) => { if (at(h) === 0) k = 0; if (h[2] >= 1 || at(h) === 0) cur = line[k++ % line.length]; out[i] = cur; });
+    } else if (fam === 'newend') {
+      movers.forEach(([i]) => { out[i] = fifth; });
+      // bar two's last three hits run somewhere new
+      const end = hits.map((h, i) => i).filter((i) => hits[i][0] >= m.steps && hits[i][2] >= 1).slice(-3);
+      const run = SCALE_ORDER.indexOf(scale) % 2 ? [third, fourth, fifth] : [sev - 12, near(8) - 12, fifth - 12];
+      end.forEach((i, k) => { out[i] = run[k + 3 - end.length]; });
+    }
+    return out;
+  }
+  function riffNoteStyles(riff) {
+    const m = Odd.theory.meter(riff.r.m), hits = riff.r.hits, out = [];
+    RIFF_NOTES.forEach(([fam, tag, words, scales, odd]) => scales.split(' ').forEach((scale) => {
+      const ms = riffLine(fam, hits, scale, m);
+      out.push({ id: fam + '-' + scale, fam, tag, words, detail: MODE[scale].name.toLowerCase(), scale, ms, odd: !!odd, distinct: new Set(ms).size, span: maxOf(ms) - minOf(ms), dark: RIFF_SCALES.indexOf(scale) });
+    }));
+    // the same notes in another scale sound the same: the first keeps them
+    return unique(out, (o) => JSON.stringify(o.ms));
+  }
+
+  // who plays a riff, and doubled how: [id, name, words, voices: [part, offset]] (low: a bass; high: an octave up; 'third': a third up, in the scale)
+  const WEIGHTS = [
+    ['bass', 'Bass alone', 'just the low end', [['low', 0]]],
+    ['guitar', 'Guitar alone', 'no bass under it', [['high', 0]]],
+    ['octave', 'Bass and guitar', 'the two an octave apart', [['low', 0], ['high', 0]]],
+    ['fifths', 'Fifths', 'the guitar plays the root and its fifth', [['high', 0], ['high', 7]]],
+    ['power', 'Power chords', 'root, fifth and octave, over the bass', [['low', 0], ['high', 0], ['high', 7], ['high', 12]]],
+    ['thirds', 'In thirds', 'a second voice a third up, in the scale', [['low', 0], ['high', 0], ['high', 'third']]],
+    ['up', 'Up high', 'the guitar an octave up, over the bass', [['low', 0], ['high', 12]]],
+  ];
+  const LOW_PATCH = [['bass-pluck', 'picked bass'], ['bass-saw', 'saw bass'], ['bass-808', '808 bass']];
+  const HIGH_PATCH = [['grit', 'gritty guitar'], ['lead-saw', 'saw synth'], ['organ', 'organ']];
+  const RIFF_BASE = { low: 36, high: 48 };
+  function weightStyles() {
+    const out = [];
+    WEIGHTS.forEach(([id, tag, words, vs]) => {
+      const hasLo = vs.some((v) => v[0] === 'low'), hasHi = vs.some((v) => v[0] === 'high');
+      const lows = hasLo ? LOW_PATCH.slice(0, hasHi ? 2 : 3) : [null], highs = hasHi ? HIGH_PATCH : [null];
+      lows.forEach((lo, li) => highs.forEach((hi, hk) => out.push({
+        id: [id, lo && lo[0], hi && hi[0]].filter(Boolean).join('-'), fam: id, twist: li + hk, tag, words,
+        detail: [lo && lo[1], hi && hi[1]].filter(Boolean).join(' and '),
+        voices: vs.map(([part, off]) => ({ part, off, patch: part === 'low' ? lo[0] : hi[0] })),
+        heavy: vs.length + (hasLo ? 1 : 0) + (id === 'power' ? 1 : 0), bright: hasHi ? hk + (hasLo ? 0 : 1) : 0,
+      })));
+    });
+    return out;
+  }
+  /** the semitones a third up from x in the scale (a 4th in pentatonic boxes) */
+  function thirdUp(scale, x) {
+    const sc = SCALES[scale || 'minor'], n = sc.length, pc = mod(x, 12);
+    let i = n - 1;
+    while (i > 0 && sc[i] > pc) i--;
+    return sc[(i + 2) % n] + 12 * Math.floor((i + 2) / n) - sc[i];
+  }
+  function riffVoices(riff) { return riff.weight ? riff.weight.voices : [{ part: 'high', off: 0, patch: 'grit' }]; }
+  function riffPitch(v, x, scale) { return RIFF_BASE[v.part] + x + (v.off === 'third' ? thirdUp(scale, x) : v.off); }
+
+  /** drums for a riff: the meter's beats, and kicks made from the riff itself; follow: how many kicks land on its hits */
+  function riffKits(idea) {
+    const m = ideaMeter(idea), riff = idea.riff, B = (xs) => bothBars(m, xs);
+    const sn = SNARES[m.id] || SNARES['4/4'], bars = (a, b) => a.concat((b || a).map((x) => x + m.steps));
+    const back = bars(sn.back[1], sn.back[2]), half = bars(sn.half[1], sn.half[2]);
+    const acc = riff.r.hits.filter((h) => h[2] === 2).map((h) => h[0]), plain = riff.r.hits.filter((h) => h[2] >= 1).map((h) => h[0]);
+    const eighths = B(evensOf(m.steps)), beats = B(m.pulses.map((p) => p.s));
+    const mine = [
+      ['accents', 'Kick on its accents', acc, back, eighths, 42, '8ths'],
+      ['accents', 'Kick on its accents', acc, back, beats, 42, 'hats on the beat'],
+      ['accents', 'Kick on its accents', acc, half, eighths, 51, 'half-time · ride'],
+      ['double', 'Kick doubles the riff', plain, back, beats, 42, 'hats on the beat'],
+      ['double', 'Kick doubles the riff', plain, half, eighths, 51, 'half-time · ride'],
+      ['under', 'Half-time under it', [0, m.steps], half, beats, 51, 'ride'],
+    ].map(([fam, tag, k, s, h, hp, detail], i) => ({ id: 'riff-' + fam + '-' + i, fam: 'riff-' + fam, twist: i % 3 ? 1 : 0, tag, detail, k: k.filter((x) => s.indexOf(x) < 0), s, h, hp, swing: 0 }));
+    const onRiff = {};
+    riff.r.hits.forEach((h) => { onRiff[h[0]] = 1; });
+    return unique(kitsFor(m).concat(mine.filter((x) => x.k.length)), (x) => JSON.stringify([x.k, x.s, x.h, x.hp, x.swing])).map((x) => Object.assign({}, x, {
+      follow: Math.round(100 * x.k.filter((s) => onRiff[s]).length / Math.max(1, x.k.length)) / 100, n: x.k.length + x.s.length + x.h.length,
+    }));
+  }
+
+  const UNDER_INST = { 'pad-warm': 'warm pad', strings: 'strings', organ: 'organ' };
+  /** under a riff: drones, or chords that move (the paths that fit its notes, starting home) while it stays put */
+  function underStyles(idea) {
+    const riff = idea.riff, scale = riff.scale, m = ideaMeter(idea), slots = slotsOf(m), STEPS = 2 * m.steps;
+    const home = chordCands(scale)[0], out = [];
+    [['root', 'One low drone', 'the home note', [48]], ['fifth', 'Open drone', 'home and its fifth', [48, 55]], ['wide', 'Wide drone', 'home, fifth and octave', [36, 43, 48]]].forEach(([id, tag, words, ps]) =>
+      ['pad-warm', 'strings', 'organ'].forEach((inst, k) => out.push({
+        id: 'drone-' + id + '-' + inst, fam: 'drone-' + id, twist: k, tag, detail: words + ' · ' + UNDER_INST[inst], voice: inst,
+        chords: slots.map(() => home), changes: 0, notes: [{ s: 0, d: STEPS, ms: ps.map((p) => p + home.root) }],
+      })));
+    const voiced = (c) => c.pcs.map((pc) => 55 + mod(pc - 55, 12));
+    chordPaths(slotWeights(riffNotes(riff), m), scale, false)
+      .filter((p) => p.changes >= 1 && p.chords[0].root === home.root && p.chords.every((c) => !c.colour && c.q !== '°' && c.q !== '+')).slice(0, 8)
+      .forEach((p, pi) => [['held', 'strings'], ['held', 'pad-warm'], ['pulse', 'organ']].forEach(([rh, inst], k) => out.push({
+        id: 'move' + pi + '-' + rh + '-' + inst, fam: 'move' + pi, twist: k, tag: rh === 'held' ? 'Chords that move' : 'Moving chords, on the beat', detail: chordLine(p.chords) + ' · ' + UNDER_INST[inst], voice: inst,
+        chords: p.chords, changes: p.changes,
+        notes: rh === 'held' ? slots.map((sl, i) => ({ s: sl.s, d: sl.len, ms: voiced(p.chords[i]) })) : beatsOf(m).map((b) => ({ s: b.s, d: Math.max(1, b.len - 1), ms: voiced(p.chords[slotAt(slots, b.s)]) })),
+      })));
+    return out.map((x) => Object.assign(x, { voices: x.notes[0].ms.length }));
+  }
+
   // a genre is the last thing picked: a bundle of tempo, swing and instruments
   const GENRES = {
     lofi: { name: 'Lo-fi', bpm: 80, swing: 0.62, inst: 'electric piano', patches: { lead: 'epiano', chords: 'keys', bass: 'bass-sub', kit: 'kit-lofi' }, why: 'your notes leave gaps, and swing fills them with a lazy bounce' },
@@ -711,6 +1261,68 @@
     };
     return Object.keys(fit).sort((a, b) => fit[b] - fit[a]);
   }
+  // a riff's sounds: the high voice is `lead`, the low one `bass`
+  const RIFF_GENRES = {
+    stoner: { name: 'Stoner', bpm: 76, swing: 0, patches: { lead: 'grit', bass: 'bass-saw', chords: 'organ', kit: 'kit-acoustic' }, why: 'slow and heavy: every hit gets to ring' },
+    metal: { name: 'Metal', bpm: 150, swing: 0, patches: { lead: 'grit', bass: 'bass-pluck', chords: 'strings', kit: 'kit-acoustic' }, why: 'fast and tight, the riff right on the kick' },
+    postpunk: { name: 'Post-punk', bpm: 138, swing: 0, patches: { lead: 'pluck', bass: 'bass-pluck', chords: 'pad-glass', kit: 'kit-909' }, why: 'the bass carries it and the guitar gets out of the way' },
+    funk: { name: 'Funk', bpm: 102, swing: 0.56, patches: { lead: 'stab', bass: 'bass-pluck', chords: 'epiano', kit: 'kit-acoustic' }, why: 'short notes and rests leave room for the pocket' },
+    surf: { name: 'Surf', bpm: 168, swing: 0, patches: { lead: 'lead-square', bass: 'bass-pluck', chords: 'organ', kit: 'kit-acoustic' }, why: 'fast picking on a bright, twangy voice' },
+    industrial: { name: 'Industrial', bpm: 118, swing: 0, patches: { lead: 'lead-saw', bass: 'bass-saw', chords: 'stab', kit: 'kit-909' }, why: 'machines: hard and exact' },
+    desert: { name: 'Desert rock', bpm: 92, swing: 0.58, patches: { lead: 'grit', bass: 'bass-sub', chords: 'organ', kit: 'kit-lofi' }, why: 'a lazy lean under a heavy riff' },
+    darkwave: { name: 'Darkwave', bpm: 112, swing: 0, patches: { lead: 'lead-saw', bass: 'bass-808', chords: 'pad-warm', kit: 'kit-808' }, why: 'cold synths that let a minor riff brood' },
+  };
+  const VOICE_WORD = { grit: 'gritty guitar', 'lead-saw': 'saw synth', pluck: 'pluck', organ: 'organ', stab: 'synth stab', 'lead-square': 'square lead' };
+  const RIFF_LEADS = Object.keys(VOICE_WORD);
+  const BASS_WORD = { 'bass-sub': 'sub bass', 'bass-saw': 'saw bass', 'bass-808': '808 bass', 'bass-pluck': 'picked bass' };
+  const KIT_WORD = { 'kit-acoustic': 'live kit', 'kit-808': '808 kit', 'kit-909': '909 kit', 'kit-lofi': 'dusty kit' };
+  // what each genre's kit and bass do to a groove
+  const GROOVE_WHY = {
+    lofi: 'a dusty kit and a round sub, a little worn', ambient: 'a soft kit and a sub, so it floats', boombap: 'a crunchy kit that hits like a record',
+    pop: 'a clean live kit and a picked bass', synthwave: 'an 808 and a saw bass: neon', house: 'a 909 and a rubbery saw bass',
+    trap: 'an 808 kit and a long 808 bass', dnb: 'a live kit over a deep sub',
+  };
+  /** the riff sounds, best fit first: slow and sparse riffs lean heavy, busy and bright ones fast */
+  function riffFit(idea) {
+    const r = idea.riff.r, m = ideaMeter(idea), busy = r.n / (2 * m.steps), dark = 1 - Math.max(0, RIFF_SCALES.indexOf(idea.riff.scale)) / (RIFF_SCALES.length - 1);
+    const fit = {
+      stoner: 1.4 - 2 * busy + 0.6 * dark, metal: 2 * busy + 0.8 * dark, postpunk: 1.2 - 2 * Math.abs(busy - 0.4), funk: r.off + 0.8 * (1 - dark) + (busy > 0.3 ? 0.3 : 0),
+      surf: busy + (1 - dark), industrial: 1.1 - r.off + 0.3 * dark, desert: 0.9 + 0.5 * r.off, darkwave: 1.2 * dark + 0.2,
+    };
+    return Object.keys(fit).sort((a, b) => fit[b] - fit[a]);
+  }
+  /** a groove's sounds: every genre's kit and bass at the pocket's own tempo and swing, nearest tempo first; picked keys keep their instrument */
+  function grooveSounds(idea) {
+    const pk = idea.layers.pocket, keys = idea.layers.keys, out = [];
+    const order = Object.keys(GENRES).sort((a, b) => Math.abs(GENRES[a].bpm - pk.bpm) - Math.abs(GENRES[b].bpm - pk.bpm));
+    order.forEach((g, rank) => {
+      const G = GENRES[g];
+      const patches = Object.assign({}, G.patches, keys && !keys.none ? { chords: keys.voice } : {});
+      const base = { genre: g, name: G.name, bpm: pk.bpm, swing: pk.swing, up: 0, why: GROOVE_WHY[g], en: G.bpm };
+      const add = (id, tag, ch, rare) => out.push(Object.assign({}, base, { id, fam: g, twist: rare ? 1 : 0, tag, name: tag, rare: rank >= 5 || !!rare, patches: Object.assign({}, patches, ch) }));
+      add(g, G.name, {});
+      ['bass-sub', 'bass-saw', 'bass-808', 'bass-pluck'].filter((b) => b !== G.patches.bass).slice(0, 2).forEach((b) => add(g + '-' + b, G.name + ' with ' + BASS_WORD[b], { bass: b }, 1));
+      const kit = Object.keys(KIT_WORD).find((k) => k !== G.patches.kit && k !== 'kit-acoustic') || 'kit-acoustic';
+      add(g + '-' + kit, G.name + ', ' + KIT_WORD[kit], { kit }, 1);
+    });
+    return out.map((o) => Object.assign(o, { inst: KIT_WORD[o.patches.kit], detail: KIT_WORD[o.patches.kit] + ' · ' + BASS_WORD[o.patches.bass] }));
+  }
+  /** a riff's sounds: each genre as it is, slower, faster, and with two other high voices */
+  function riffSounds(idea) {
+    const m = ideaMeter(idea), out = [];
+    riffFit(idea).forEach((g, rank) => {
+      const G = RIFF_GENRES[g];
+      const base = { genre: g, name: G.name, bpm: G.bpm, swing: m.compound ? 0 : G.swing, up: 0, why: G.why, inst: VOICE_WORD[G.patches.lead] };
+      const add = (id, tag, ch, rare) => out.push(Object.assign({}, base, { id, fam: g, twist: rare ? 1 : 0, tag, name: tag, rare: rank >= 5 || !!rare }, ch, { patches: Object.assign({}, G.patches, ch.patches || {}) }));
+      add(g, G.name, {});
+      add(g + '-slow', G.name + ', slower', { bpm: Math.round(G.bpm * 0.82) }, 1);
+      add(g + '-fast', G.name + ', faster', { bpm: Math.round(G.bpm * 1.18) }, 1);
+      const own = RIFF_LEADS.indexOf(G.patches.lead);
+      [1, 3].forEach((k) => { const lead = RIFF_LEADS[(own + k) % RIFF_LEADS.length]; add(g + '-' + lead, G.name + ' with ' + VOICE_WORD[lead], { inst: VOICE_WORD[lead], patches: { lead } }, 1); });
+    });
+    return out.map((o) => Object.assign(o, { en: o.bpm }));
+  }
+
   /**
    * Sounds: each genre mix as it is (a reliable starting point), and the same
    * mix slower, faster, swung or straight, and with other lead instruments.
@@ -718,6 +1330,8 @@
    * suit the rhythm least, and the changed recipes, come later in the deck.
    */
   function soundStyles(idea) {
+    if (pathOf(idea) === 'groove') return grooveSounds(idea);
+    if (pathOf(idea) === 'riff') return riffSounds(idea);
     const order = genreFit(idea), out = [];
     order.forEach((g, rank) => {
       const G = GENRES[g];
@@ -735,7 +1349,7 @@
         add(g + '-' + lead, G.name + ' with ' + LEAD_WORD[lead], { inst: LEAD_WORD[lead], up: 0, patches: { lead } }, 1);
       });
     });
-    return out;
+    return out.map((o) => Object.assign(o, { en: o.bpm }));
   }
 
   // ---------------------------------------------------------------- the deck: every option, three at a time
@@ -842,6 +1456,7 @@
         return { batches, total: pool.length };
       }
       if (dir === 'seed2') return shapeDeck(idea.melody, st, deal);
+      const keep = (list, f) => { const x = list.filter(f); return x.length >= 3 ? x : list; };
       let cands;
       if (dir === 'chords') cands = chordPool(idea.melody, st.x === 'colour').map((c, i) => Object.assign({ a: c.bright, b: c.changes, rare: i >= 18 }, c));
       else if (dir === 'bass') cands = bassStyles(idea).map((c) => Object.assign(c, { a: c.lock, b: c.n }));
@@ -850,9 +1465,20 @@
         cands = percStyles(idea);
         if (st.x === 'follow') { const f = cands.filter((c) => c.follow >= 0.5); if (f.length >= 3) cands = f; }
         cands = cands.map((c) => Object.assign(c, { a: c.n, b: c.follow }));
-      } else if (dir === 'beat') cands = kitsFor(meterOf(idea.melody)).map((c) => Object.assign({}, c, { a: c.off, b: c.n }));
+      } else if (dir === 'beat') cands = kitsFor(ideaMeter(idea)).map((c) => Object.assign({}, c, { a: c.off, b: c.n }));
+      else if (dir === 'pocket') cands = pocketStyles(Odd.theory.meter(st.m), st).map((c) => Object.assign(c, { a: c.off, b: c.n }));
+      else if (dir === 'gbass') cands = grooveBass(idea, st).map((c) => Object.assign(c, { a: c.lock, b: c.n }));
+      else if (dir === 'keys') cands = keysStyles(idea).map((c) => Object.assign(c, { a: c.n, b: c.voices }));
+      else if (dir === 'hook') {
+        cands = hookStyles(idea);
+        if (st.x === 'gaps') { const by = cands.slice().sort((x, y) => x.clash - y.clash); cands = by.slice(0, Math.max(3, Math.ceil(by.length / 3))); }
+      } else if (dir === 'rrhythm') cands = riffPool(st.m).map((r) => ({ r, a: r.off + 0.002 * r.n, b: r.n }));
+      else if (dir === 'rnotes') cands = keep(riffNoteStyles(idea.riff), (c) => st.x !== 'odd' || c.odd).map((c) => Object.assign(c, { a: c.distinct + c.span / 12, b: c.dark }));
+      else if (dir === 'weight') cands = weightStyles().map((c) => Object.assign(c, { a: c.heavy, b: c.bright }));
+      else if (dir === 'drums') cands = riffKits(idea).map((c) => Object.assign(c, { a: 1 - c.follow, b: c.n }));
+      else if (dir === 'under') cands = underStyles(idea).map((c) => Object.assign(c, { a: c.changes + 0.1 * c.voices, b: c.voices }));
       // the sounds that fit the rhythm least come last; "Surprise me" deals them in from the start
-      else cands = soundStyles(idea).map((c) => Object.assign(c, { a: c.bpm, b: c.swing }));
+      else cands = soundStyles(idea).map((c) => Object.assign(c, { a: c.en, b: c.swing }));
       const pool = steerPool(cands, st);
       const shake = st.x === 'any' ? deal + 1 : deal;
       return { batches: dealBands(bandsOf(pool, shake, dir)), total: pool.length };
@@ -989,6 +1615,8 @@
   }
   function tagOf(dir, o) {
     if (dir === 'seed1') return rhythmTag(o.mel.r);
+    if (dir === 'hook') return o.tag || rhythmTag(o.mel.r);
+    if (dir === 'rrhythm') return riffTag(o.r);
     if (dir === 'seed2') return shapeTag(o.mel.shape.kind, o.range);
     if (dir === 'chords') return (o.bright <= -2 ? 'Dark' : o.bright >= 2 ? 'Bright' : 'In between') + (o.colour ? ' + colour' : '');
     return o.tag;
@@ -1000,7 +1628,12 @@
     if (dir === 'bass') return o.detail || o.n + (o.n === 1 ? ' note' : ' notes');
     if (dir === 'pads') return o.detail || o.voices + (o.voices === 1 ? ' voice' : ' voices');
     if (dir === 'perc') return o.detail || o.n + ' hits';
-    if (dir === 'beat') return (o.swing ? 'swung' + (o.detail ? ' · ' : '') : '') + (o.detail || (o.swing ? '' : Math.round(o.off * 100) + '% off grid'));
+    if (dir === 'pocket') return o.bpm + ' BPM · ' + (o.swing ? 'swung · ' : '') + o.detail + (o.m !== '4/4' ? ' · ' + o.m : '');
+    if (dir === 'hook') return Math.round(100 * (1 - o.clash)) + '% in the gaps';
+    if (dir === 'rrhythm') return o.r.n + ' hits' + (o.r.turn ? ' · new ending' : '') + (o.r.m !== '4/4' ? ' · ' + o.r.m : '');
+    if (/^(gbass|keys|rnotes|weight|under)$/.test(dir)) return o.detail;
+    if (o.detail && dir === 'sound') return o.bpm + ' BPM · ' + o.detail;
+    if (dir === 'beat' || dir === 'drums') return (o.swing ? 'swung' + (o.detail ? ' · ' : '') : '') + (o.detail || (o.swing ? '' : Math.round(o.off * 100) + '% off grid'));
     return o.bpm + ' BPM' + (o.swing && o.swing > 0.5 ? ' · swung' : '');
   }
   function rankOf(opts, i) {
@@ -1034,7 +1667,19 @@
     if (dir === 'bass') return rk === 'high' ? 'Locks onto the melody: they hit together, so it sounds heavier.' : rk === 'low' ? 'Waits for the melody to breathe, then answers in the gaps. Call and response.' : o.tag + '. Holds the floor without crowding the melody.';
     if (dir === 'perc') return rk === 'low' ? 'Barely there. The melody still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
     if (dir === 'beat') return rk === 'low' ? 'Right on the grid. Solid, dance-floor straight.' : rk === 'high' ? 'Leans against the grid: kicks land between the beats. More swagger.' : o.tag + '. Somewhere between steady and loose.';
-    if (dir === 'pads') return rk === 'low' ? 'Barely there. Gives the melody a shadow, nothing more.' : rk === 'high' ? 'Full and wide. The melody floats on top.' : o.tag + '. Fills in without taking over.';
+    if (dir === 'pads') return rk === 'low' ? 'Barely there. A shadow, nothing more.' : rk === 'high' ? 'Full and wide. Everything else floats on top.' : o.tag + '. Fills in without taking over.';
+    if (dir === 'pocket') return (rk === 'low' ? 'Right on the grid at ' + o.bpm + '. Solid, easy to trust.' : rk === 'high' ? 'Leans against the grid: hits land between the beats. ' + o.bpm + ' BPM of swagger.' : o.tag + ' at ' + o.bpm + '. Somewhere between steady and loose.') + (o.swing ? ' Swung, too.' : '');
+    if (dir === 'gbass') {
+      const how = o.move === 'stay' ? 'It stays on ' + chordName(o.chords[0]) + ', so the groove does the moving.' : o.move.indexOf('loop') === 0 ? 'It walks a loop: ' + chordLine(o.chords) + '.' : 'It sways between ' + chordLine(o.chords).split(' ').slice(0, 2).join(' and ') + '.';
+      return (rk === 'high' ? 'Locks to the kick: they land together, so the low end hits as one. ' : rk === 'low' ? 'Plays between the kicks, so kick and bass take turns. ' : o.tag + '. ') + how;
+    }
+    if (dir === 'keys') return rk === 'low' ? 'Held chords: a floor under the groove.' : rk === 'high' ? 'Chopped short, so the chords join the rhythm.' : o.tag + ', on ' + KEY_WORD[o.voice] + '.';
+    if (dir === 'hook') return (rk === 'low' ? 'Just a few notes, ' : rk === 'high' ? 'Busy: ' + o.mel.r.n + ' notes, ' : o.mel.r.n + ' notes, ') + Math.round(100 * (1 - o.clash)) + '% of them in the groove’s gaps. It walks the scale for now; the shape comes next.';
+    if (dir === 'rrhythm') return rk === 'low' ? 'Right on the grid. Every hard hit lands where you’d tap your foot.' : rk === 'high' ? 'The accents land against the beat. That pull is what makes a riff stick.' : riffTag(o.r) + '. ' + o.r.n + ' hits, some of them hard.';
+    if (dir === 'rnotes') return (rk === 'low' ? 'Barely moves: one note doing the work, so the rhythm carries it.' : rk === 'high' ? 'Travels: ' + o.distinct + ' different notes.' : o.tag + ': ' + o.words + '.') + (o.odd ? ' Some of those notes are outside the scale. That’s the point.' : '');
+    if (dir === 'weight') return (rk === 'low' ? 'Lean: ' : rk === 'high' ? 'Heavy: ' : o.tag + ': ') + o.words + '.';
+    if (dir === 'drums') return rk === 'low' ? 'The kick follows the riff, so they hit as one.' : rk === 'high' ? 'The drums push against the riff: two rhythms at once.' : o.tag + '. Some with the riff, some against it.';
+    if (dir === 'under') return rk === 'low' ? 'Hardly moves: a drone the riff can grind against.' : rk === 'high' ? 'The chords move while the riff stays put: ' + chordLine(o.chords) + '. Same riff, new colour.' : o.tag + ': ' + o.detail.split(' · ')[0] + ', on ' + UNDER_INST[o.voice] + '.';
     const t = o.name + ' at ' + o.bpm + '. ' + cap(o.why) + '.';
     return rk === 'low' ? t + ' Calmest of the three.' : rk === 'high' ? t + ' Most energy of the three.' : t;
   }
@@ -1050,24 +1695,20 @@
     if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
     if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight the melody. ' + (o.voices <= 1.2 ? 'One quiet voice adds depth without crowding.' : 'More voices fill the space around the melody, so it floats on top.');
     if (dir === 'perc') return 'Claps on the melody’s accents make those notes jump out. A steady shaker gives a pulse the melody can lean against.';
+    if (dir === 'pocket') return 'A groove is mostly where the hits sit and how fast they come. The same kick and snare at 72 and at 120 are different grooves, so the speed is picked with the beat.' + (o.swing ? ' Swing plays each off-beat a little late, which gives the bounce.' : '');
+    if (dir === 'gbass') return 'In a groove the bass decides the harmony. ' + (o.move === 'stay' ? 'Staying on one chord keeps all the attention on the rhythm.' : 'Moving between ' + chordLine(o.chords) + ' gives it somewhere to go without a tune.') + ' ' + (o.lock > 0.6 ? 'Hitting with the kick makes them one big low sound.' : o.lock < 0.3 ? 'Playing between the kicks keeps the low end busy without crowding.' : '');
+    if (dir === 'keys') return o.none ? 'No chords leaves room. The bass already says where the harmony is.' : 'These play the chords the bass implies, so they can’t clash with it. ' + (o.n > 8 ? 'Short, choppy chords become part of the rhythm.' : 'Long chords give the groove a floor to sit on.');
+    if (dir === 'hook') return 'A hook in a groove works best where the bass and kick leave space. Notes that land in the gaps get heard; notes on top of the kick get swallowed.';
+    if (dir === 'rrhythm') return 'A riff is a rhythm first. The accents, the hard hits, decide how it feels: on the beat it sounds solid; off the beat it pulls.' + (o.r.fam === 'threes' ? ' Accents in threes cross the beat, so the riff seems to turn over itself.' : '') + ' The rests do as much as the notes.';
+    if (dir === 'rnotes') return (o.odd ? 'Some of these notes aren’t in the scale. A riff can rub on purpose; the rhythm holds it together. ' : '') + MODE[o.scale].why + (o.distinct <= 2 ? ' With one or two notes, the rhythm is the riff.' : '');
+    if (dir === 'weight') return 'The same notes get heavier the more voices play them and the lower they go. Power chords are just the root and its fifth; with no third they aren’t major or minor, so they sound hard.';
+    if (dir === 'drums') return o.follow > 0.6 ? 'When the kick doubles the riff, the two become one big sound. That’s how heavy riffs get heavy.' : o.follow < 0.3 ? 'Drums against the riff make two rhythms at once. The riff pulls, the beat holds.' : 'Some kicks with the riff, some against it: it locks in places and leans in others.';
+    if (dir === 'under') return o.changes ? 'The riff stays the same while the chords under it change, so the same notes take on a new colour each time. That’s how one riff can carry a whole song.' : 'A drone holds still, so every note in the riff rubs against it a little differently.';
     if (dir === 'beat') return o.off > 0.3 ? 'Kicks and snares between the beats are syncopation: the beat leans, and that leaning is swagger.' : 'Kick and snare right on the beat give a grid you can trust. That’s why dance music lives there.';
-    return 'A genre is a bundle of habits: tempo, drums, sounds. It comes last, so the same idea can live in many of them. This one, because ' + o.why + '.';
+    return 'A genre is a bundle of habits: tempo, drums, sounds. It comes last, so the same idea can live in many of them. This one: ' + o.why + '.';
   }
-  /** the layer Bobby would add next (shown as a highlighted card, not said) */
-  function suggestion(idea) {
-    const has = (d) => !!idea.layers[d];
-    const notes = melodyNotes(idea.melody), r = idea.melody.r;
-    const gaps = coverage(notes, stepsOf(idea.melody)).filter((c) => !c).length;
-    if (!has('chords') && notes.some((n) => n.d >= 6)) return 'chords';
-    if (!has('bass') && gaps >= 8) return 'bass';
-    if (!has('perc') && r.off / r.n > 0.3) return 'perc';
-    if (has('perc') && !has('beat')) return 'beat';
-    if (has('chords') && !has('pads')) return 'pads';
-    for (const d of NEXT_ORDER) if (!has(d) && (d !== 'beat' || has('perc'))) return d;
-    return '';
-  }
-  /** directions open from here: Grow the beat needs percussion first */
-  function directions(idea) { return NEXT_ORDER.filter((d) => d !== 'beat' || !!idea.layers.perc); }
+  /** directions open from here: the path's own, and Grow the beat needs percussion first */
+  function directions(idea) { return PATHS[pathOf(idea)].next.filter((d) => d !== 'beat' || !!idea.layers.perc); }
 
   // ---------------------------------------------------------------- sound
 
@@ -1079,33 +1720,43 @@
   };
   /** a hat's loudness: 16ths lean on the eighths, open and ride hats sit back a little */
   function hatVel(o, s) { return o.hp === 46 ? 58 : o.hp === 51 ? (s % 4 ? 52 : 66) : s % 2 ? 50 : 78; }
-  const MIX = { mel: 0.9, chd: 0.5, bas: 0.8, pad: 0.45, prc: 0.75, bt: 0.75 };
-  const TRACK = { mel: 'b2g-mel', chd: 'b2g-chd', bas: 'b2g-bas', pad: 'b2g-pad', prc: 'b2g-prc', bt: 'b2g-bt' };
+  const MIX = { mel: 0.9, chd: 0.5, bas: 0.8, pad: 0.45, prc: 0.75, bt: 0.75, kys: 0.5, und: 0.42, rlo: 0.8, rhi: 0.62, tik: 0.5 };
+  const TRACK = { mel: 'b2g-mel', chd: 'b2g-chd', bas: 'b2g-bas', pad: 'b2g-pad', prc: 'b2g-prc', bt: 'b2g-bt', kys: 'b2g-kys', und: 'b2g-und', rlo: 'b2g-rlo', rhi: 'b2g-rhi', tik: 'b2g-tik' };
+  const RIFF_VEL = [62, 88, 116];
 
-  function emptyIdea() { return { melody: null, layers: {}, order: [] }; }
+  function emptyIdea(path) { return { path: PATHS[path] ? path : 'melody', melody: null, riff: null, layers: {}, order: [] }; }
   /** the idea with only its first `count` layers */
   function upTo(idea, count) {
     const layers = {};
     idea.order.slice(0, count).forEach((d) => { layers[d] = idea.layers[d]; });
-    return { melody: idea.melody, layers, order: idea.order.slice(0, count) };
+    return { path: pathOf(idea), melody: idea.melody, riff: idea.riff || null, layers, order: idea.order.slice(0, count) };
   }
 
   /**
    * A looping transport sequence for the idea, or for the idea with one
    * option auditioned in place: aud = { dir, spec }. While a layer is
    * auditioned the layers already in sit back a little, so the new one is
-   * heard. Rhythm-and-scale options play as the plain walk.
+   * heard. Rhythm-and-scale options play as the plain walk; a riff's rhythm
+   * plays on one note, with a quiet hat counting the beats until it has drums.
    */
   function seq(idea, aud) {
+    const path = pathOf(idea);
     const pick = (d) => (aud && aud.dir === d ? aud.spec : idea.layers[d]);
-    const sound = pick('sound'), beat = pick('beat');
+    const sound = pick('sound'), pocket = pick('pocket'), kit = pocket || pick('beat') || pick('drums');
     const G = sound ? GENRES[sound.genre || sound.id] : null;
     const P = (sound && sound.patches) || (G ? G.patches : NEUTRAL);
-    const seeding = aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
-    const mel = seeding ? aud.spec.mel : idea.melody;
-    const m = meterOf(mel), STEPS = 2 * m.steps, LENGTH = STEPS * STEP_TICKS, slots = slotsOf(m);
+    const seeding = path === 'melody' && aud && (aud.dir === 'seed1' || aud.dir === 'seed2');
+    // what's auditioned is the idea itself (a tune, or the riff), not a layer under it
+    const auMel = aud && aud.spec && aud.spec.mel && /^(seed1|seed2|hook)$/.test(aud.dir) ? aud.spec.mel : null;
+    const itself = !!auMel || !!(aud && /^(rrhythm|rnotes|weight)$/.test(aud.dir));
+    const mel = auMel || (path === 'melody' ? idea.melody : hookOf(idea));
+    let riff = path === 'riff' ? idea.riff : null;
+    if (aud && aud.dir === 'rrhythm') riff = { r: aud.spec.r, scale: null, notes: null, weight: null };
+    else if (aud && aud.dir === 'rnotes') riff = Object.assign({}, riff, { scale: aud.spec.scale, notes: aud.spec, weight: null });
+    else if (aud && aud.dir === 'weight') riff = Object.assign({}, riff, { weight: aud.spec });
+    const m = ideaMeter(idea, aud), STEPS = 2 * m.steps, LENGTH = STEPS * STEP_TICKS, slots = slotsOf(m);
     // swing delays the off-beat eighths; meters that move in threes (6/8, 7/8) don't swing
-    const swing = m.compound ? 0 : sound ? sound.swing : beat ? beat.swing : 0;
+    const swing = m.compound ? 0 : sound ? sound.swing : kit ? kit.swing : 0;
     const shift = swing > 0.5 ? Math.round((swing * 4 - 2) * STEP_TICKS) : 0;
     const tick = (s) => s * STEP_TICKS + (mod(s, 4) === 2 ? shift : 0);
     const events = [];
@@ -1116,13 +1767,23 @@
     };
     const hit = (track, s, p, v) => events.push({ t: tick(s), d: 60, p, v: Math.max(1, Math.min(127, Math.round(v))), track });
     const g = (d) => (!aud || aud.dir === d || aud.dir === 'sound' ? 1 : 0.6);
+    const lead = aud && !itself && aud.dir !== 'sound' ? 0.75 : 1;
     const tracks = {};
-    const track = (key, patch, vol) => { tracks[TRACK[key]] = { patch, volume: vol, mute: false, solo: false, channel: key === 'prc' || key === 'bt' ? 9 : 0 }; };
+    const track = (key, patch, vol) => { tracks[TRACK[key]] = { patch, volume: vol, mute: false, solo: false, channel: key === 'prc' || key === 'bt' || key === 'tik' ? 9 : 0 }; };
 
     if (mel) {
       const up = (sound && sound.up) || 0;
-      track('mel', P.lead, MIX.mel * (aud && !seeding && aud.dir !== 'sound' ? 0.75 : 1));
+      track('mel', P.lead, MIX.mel * lead);
       melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, [64, 90, 115][n.w], 14));
+    }
+    if (riff) {
+      const vs = riffVoices(riff);
+      vs.forEach((v) => { const k = v.part === 'low' ? 'rlo' : 'rhi'; track(k, sound ? (v.part === 'low' ? P.bass : P.lead) : v.patch, MIX[k] * lead); });
+      riffNotes(riff).forEach((n) => vs.forEach((v) => note(TRACK[v.part === 'low' ? 'rlo' : 'rhi'], n.s, n.d, riffPitch(v, n.x, riff.scale), RIFF_VEL[n.w], 12)));
+      if (!kit && (!riff.weight || itself)) {
+        track('tik', P.kit, MIX.tik);
+        beatsOf(m).forEach((b) => hit(TRACK.tik, b.s, DRUM.hat, b.k === 0 ? 50 : 34));
+      }
     }
     if (!seeding) {
       LAYER_ORDER.forEach((d) => {
@@ -1131,16 +1792,23 @@
         if (d === 'chords') {
           track('chd', P.chords, MIX.chd * g(d));
           o.chords.forEach((c, i) => c.pcs.forEach((pc) => note(TRACK.chd, slots[i].s, slots[i].len, 48 + c.root + mod(pc - c.root, 12), 80, 20)));
-        } else if (d === 'bass') {
+        } else if (d === 'bass' || d === 'gbass') {
           track('bas', P.bass, MIX.bas * g(d));
           o.notes.forEach((n) => note(TRACK.bas, n.s, n.d, n.m, 100, 16));
         } else if (d === 'pads') {
           track('pad', PAD_PATCH[o.voice] || 'pad-warm', MIX.pad * g(d));
-          o.notes.forEach((n) => n.ms.forEach((m) => note(TRACK.pad, n.s, n.d, m, 80, 6)));
+          o.notes.forEach((n) => n.ms.forEach((p) => note(TRACK.pad, n.s, n.d, p, 80, 6)));
+        } else if (d === 'keys') {
+          if (!o.notes.length) return;
+          track('kys', o.voice, MIX.kys * g(d));
+          o.notes.forEach((n) => n.ms.forEach((p) => note(TRACK.kys, n.s, n.d, p, 84, 8)));
+        } else if (d === 'under') {
+          track('und', o.voice, MIX.und * g(d));
+          o.notes.forEach((n) => n.ms.forEach((p) => note(TRACK.und, n.s, n.d, p, 76, 6)));
         } else if (d === 'perc') {
           track('prc', 'kit-perc', MIX.prc * g(d));
           o.hits.forEach((h) => hit(TRACK.prc, h.s, DRUM[h.k] || DRUM.tap, 40 + 80 * (h.v || 1)));
-        } else if (d === 'beat') {
+        } else if (d === 'beat' || d === 'pocket' || d === 'drums') {
           track('bt', P.kit, MIX.bt * g(d));
           o.k.forEach((s) => hit(TRACK.bt, s, DRUM.kick, 112));
           o.s.forEach((s) => hit(TRACK.bt, s, o.sn || DRUM.snare, 105));
@@ -1149,13 +1817,31 @@
       });
     }
     events.sort((a, b) => a.t - b.t);
-    return { bpm: sound ? sound.bpm : 100, length: LENGTH, loop: true, tracks, events, steps: STEPS, meter: m.id };
+    return { bpm: sound ? sound.bpm : pocket ? pocket.bpm : 100, length: LENGTH, loop: true, tracks, events, steps: STEPS, meter: m.id };
   }
 
-  /** the climb: the bones (walk), the melody, then each layer added in the order it was picked */
+  /** the climb, a pass at a time: what the idea was made from, then each layer added in the order it was picked */
   function climb(idea) {
-    const out = [seq(emptyIdea(), { dir: 'seed1', spec: { mel: idea.melody } })];
-    for (let i = 0; i <= idea.order.length; i++) out.push(seq(upTo(idea, i), null));
+    const p = pathOf(idea), out = [];
+    if (p === 'melody') out.push(seq(emptyIdea(), { dir: 'seed1', spec: { mel: idea.melody } }));
+    if (p === 'riff') {
+      const r = idea.riff, bare = emptyIdea('riff');
+      out.push(seq(Object.assign({}, bare, { riff: { r: r.r, scale: null, notes: null, weight: null } }), null));
+      out.push(seq(Object.assign({}, bare, { riff: Object.assign({}, r, { weight: null }) }), null));
+    }
+    // a groove's first pass is its pocket, already a layer
+    for (let i = p === 'groove' ? 1 : 0; i <= idea.order.length; i++) out.push(seq(upTo(idea, i), null));
+    return out;
+  }
+  /** what Bobby says over each pass of the climb */
+  function climbLines(idea) {
+    const p = pathOf(idea), out = p === 'melody' ? [LINES.climbFirst, LINES.climbMelody] : LINES.climbBy[p].slice();
+    idea.order.forEach((d, i) => {
+      if (p === 'groove' && i === 0) return;
+      const o = idea.layers[d];
+      out.push(d === 'keys' && o && o.none ? '+ No chords: just drums and bass.' : '+ ' + (d === 'hook' ? 'The hook' : DIRS[d].label) + '.');
+    });
+    out[out.length - 1] += ' That’s gold.';
     return out;
   }
 
@@ -1186,25 +1872,37 @@
     return { bpm, length: at, loop: false, tracks, events, passes, steps: parts[0].steps, meter: parts[0].meter };
   }
 
-  /** each step of how the idea got here: [{ dir, spec, stage }] */
+  /** each step of how the idea got here, one per pass of the climb: [{ dir, spec, stage }] */
   function lineage(idea) {
-    const ns = melodyNotes(idea.melody);
-    const steps = [
-      { dir: 'seed1', spec: { mel: idea.melody }, stage: 'Rhythm and scale' },
-      { dir: 'seed2', spec: { mel: idea.melody, land: mod(ns[ns.length - 1].m, 12), end: 0, leap: 0 }, stage: 'Melody' },
-    ];
-    idea.order.forEach((d) => steps.push({ dir: d, spec: idea.layers[d], stage: DIRS[d].label }));
+    const p = pathOf(idea), steps = [];
+    const tune = (mel, stage) => { const ns = melodyNotes(mel); return { dir: 'seed2', spec: { mel, land: mod(ns[ns.length - 1].m, 12), end: 0, leap: 0 }, stage }; };
+    if (p === 'melody') steps.push({ dir: 'seed1', spec: { mel: idea.melody }, stage: 'Rhythm and scale' }, tune(idea.melody, 'Melody'));
+    if (p === 'riff') steps.push({ dir: 'rrhythm', spec: { r: idea.riff.r }, stage: 'Riff rhythm' }, { dir: 'rnotes', spec: idea.riff.notes, stage: 'Riff notes' }, { dir: 'weight', spec: idea.riff.weight, stage: 'Weight' });
+    idea.order.forEach((d) => steps.push(d === 'hook' ? tune(idea.layers.hook.mel, 'Hook') : { dir: d, spec: idea.layers[d], stage: DIRS[d].label }));
     return steps;
   }
 
   // ---------------------------------------------------------------- into the studio's ideas
 
   function ideaName(idea) {
+    const p = pathOf(idea), s = idea.layers.sound, tail = s ? ' (' + s.name + ')' : '';
+    if (p === 'groove') { const pk = idea.layers.pocket; return pk ? pk.tag + ' groove, ' + pk.bpm + tail : 'Groove'; }
+    if (p === 'riff') {
+      const r = idea.riff;
+      if (!r) return 'Riff';
+      const what = (r.notes ? r.notes.tag : riffTag(r.r)).toLowerCase(), sc = r.scale ? MODE[r.scale].name : '';
+      return cap((sc && what.indexOf(sc.toLowerCase()) < 0 ? sc + ' ' : '') + what) + ' riff' + tail;
+    }
     const m = idea.melody;
     if (!m) return 'Bones';
     const shape = m.shape ? SHAPE_TAG[m.shape.kind].toLowerCase() : rhythmTag(m.r).toLowerCase();
-    const s = idea.layers.sound;
-    return MODE[m.scale].name + ' ' + shape + (s ? ' (' + s.name + ')' : '');
+    return MODE[m.scale].name + ' ' + shape + tail;
+  }
+  /** the screen's top line: what it is, its tempo, its meter when not 4/4 */
+  function metaOf(idea) {
+    const s = idea.layers.sound, pk = idea.layers.pocket, p = pathOf(idea);
+    const bpm = s ? s.bpm : pk ? pk.bpm : 100, mt = isStarted(idea) ? ideaMeter(idea).id : '4/4';
+    return (s ? s.name : PATHS[p].label) + ' · 2 bars · ' + bpm + ' BPM' + (mt !== '4/4' ? ' · ' + mt : '');
   }
 
   /**
@@ -1214,13 +1912,14 @@
   function toParts(idea) {
     const T = Odd.theory;
     const M = Odd.model;
-    if (!T || !idea.melody) return [];
-    const scale = STUDIO_SCALE[idea.melody.scale] || 'major';
+    if (!T || !isDone(idea)) return [];
+    const path = pathOf(idea);
+    const scale = STUDIO_SCALE[scaleOf(idea)] || 'major';
     const sound = idea.layers.sound;
     const uid = (p) => (M && M.uid ? M.uid(p) : p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
     const QUAL = { '': 'maj', m: 'min', '°': 'dim', '+': 'aug' };
     const chords = chordsFor(idea);
-    const m = meterOf(idea.melody), slots = slotsOf(m);
+    const m = ideaMeter(idea), slots = slotsOf(m);
     const prog = chords.map((c, i) => {
       const at = T.degreeOf(60 + c.root, 0, scale, 60);
       const ch = T.resolveChord ? T.resolveChord(scale, at.deg, at.acc, QUAL[c.q] || 'maj') : { deg: at.deg };
@@ -1238,33 +1937,75 @@
       id: uid('p'), role, name, style: null, bars: 2, base: null, ctx: clone(ctx), tags: ['bones'], created: Date.now(), starred: false,
       notes: hits.map((h) => ({ t: tk(h.s), d: 60, p: h.p, v: h.v })).sort((a, b) => a.t - b.t),
     }, meta);
+    const chordNotes = (o, v) => [].concat.apply([], o.notes.map((n) => n.ms.map((p) => ({ s: n.s, d: n.d, m: p, v }))));
     const out = [];
     const up = (sound && sound.up) || 0;
-    out.push({ label: 'Melody', part: pitched('lead', 'Melody: ' + ideaName(idea), 60 + up, melodyNotes(idea.melody).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
+    const tune = path === 'melody' ? idea.melody : hookOf(idea);
+    if (tune) out.push({ label: path === 'melody' ? 'Melody' : 'Hook', part: pitched('lead', (path === 'melody' ? 'Melody: ' : 'Hook: ') + ideaName(idea), 60 + up, melodyNotes(tune).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
+    if (path === 'riff') {
+      const r = idea.riff, vs = riffVoices(r), ns = riffNotes(r);
+      const of = (part) => [].concat.apply([], ns.map((n) => vs.filter((v) => v.part === part).map((v) => ({ s: n.s, d: n.d, m: riffPitch(v, n.x, r.scale), v: RIFF_VEL[n.w] }))));
+      if (vs.some((v) => v.part === 'high')) out.push({ label: 'Riff', part: pitched('lead', 'Riff: ' + ideaName(idea), 48, of('high')) });
+      if (vs.some((v) => v.part === 'low')) out.push({ label: 'Riff, low', part: pitched('bass', 'Riff (low): ' + ideaName(idea), 36, of('low')) });
+    }
+    const kitOf = (o) => o.k.map((s) => ({ s, p: DRUM.kick, v: 112 })).concat(o.s.map((s) => ({ s, p: o.sn || DRUM.snare, v: 105 })), o.h.map((s) => ({ s, p: o.hp || DRUM.hat, v: hatVel(o, s) })));
     for (const d of idea.order) {
       const o = idea.layers[d];
       if (d === 'chords') out.push({ label: 'Chords', part: pitched('chords', 'Chords: ' + o.chords.map(chordName).join(' '), 48, [].concat.apply([], o.chords.map((c, i) => c.pcs.map((pc) => ({ s: slots[i].s, d: slots[i].len, m: 48 + c.root + mod(pc - c.root, 12), v: 80 }))))) });
-      if (d === 'bass') out.push({ label: 'Bass', part: pitched('bass', 'Bass: ' + o.tag, 36, o.notes.map((n) => ({ s: n.s, d: n.d, m: n.m, v: 100 }))) });
-      if (d === 'pads') out.push({ label: 'Pads', part: pitched('pad', 'Pad: ' + o.tag, 48, [].concat.apply([], o.notes.map((n) => n.ms.map((m) => ({ s: n.s, d: n.d, m, v: 80 }))))) });
+      if (d === 'bass' || d === 'gbass') out.push({ label: 'Bass', part: pitched('bass', 'Bass: ' + o.tag, 36, o.notes.map((n) => ({ s: n.s, d: n.d, m: n.m, v: 100 }))) });
+      if (d === 'pads') out.push({ label: 'Pads', part: pitched('pad', 'Pad: ' + o.tag, 48, chordNotes(o, 80)) });
+      if (d === 'keys' && o.notes.length) out.push({ label: 'Chords', part: pitched('chords', 'Chords: ' + o.tag, 48, chordNotes(o, 84)) });
+      if (d === 'under') out.push({ label: 'Under it', part: pitched('pad', 'Under: ' + o.tag, 48, chordNotes(o, 76)) });
       if (d === 'perc') out.push({ label: 'Percussion', part: drums('perc', 'Percussion: ' + o.tag, o.hits.map((h) => ({ s: h.s, p: DRUM[h.k] || DRUM.tap, v: Math.round(40 + 80 * (h.v || 1)) }))) });
-      if (d === 'beat') out.push({ label: 'Beat', part: drums('drums', 'Beat: ' + o.tag, o.k.map((s) => ({ s, p: DRUM.kick, v: 112 })).concat(o.s.map((s) => ({ s, p: o.sn || DRUM.snare, v: 105 })), o.h.map((s) => ({ s, p: o.hp || DRUM.hat, v: hatVel(o, s) })))) });
+      if (d === 'beat' || d === 'pocket' || d === 'drums') out.push({ label: 'Beat', part: drums('drums', 'Beat: ' + o.tag, kitOf(o)) });
     }
     return out;
+  }
+
+  /** a short example of a path for the opening cards: a random walk through its first screens, picked as a deck would deal them */
+  function example(path, n) {
+    return cached('ex' + path + ':' + n, () => {
+      const R = rng(seedOf('ex:' + path + ':' + n));
+      let S = flow.begin(flow.fresh(), path);
+      const take = () => { const inf = flow.info(S); S = flow.to(S, Math.floor(R() * inf.batches)); S = flow.pick(S, Math.floor(R() * flow.options(S).length)); };
+      PATHS[S.idea.path].open.forEach(take);
+      ({ melody: ['chords', 'bass'], groove: [], riff: ['drums'] }[S.idea.path]).forEach((d) => { S = flow.enter(S, d); take(); });
+      return seq(S.idea, null);
+    });
+  }
+  /** Bobby, when a pick finishes a round and the idea plays */
+  function pickedLine(idea, dir, own, n) {
+    const p = pathOf(idea);
+    if (dir === 'seed2') return p === 'melody' ? (own ? LINES.walk : line(LINES.melody, n)) : own ? LINES.hookWalk : LINES.hook;
+    if (dir === 'keys') return own ? LINES.noChords : LINES.grooveDone;
+    if (dir === 'weight') return LINES.riffDone;
+    return line(LINES.added, n).replace('{x}', DIRS[dir].label.toLowerCase());
   }
 
   // ---------------------------------------------------------------- flow: pure steps for the screen
 
   /*
    * state = { phase: 'start' | 'round' | 'next' | 'gold', idea, round, hist, hid,
-   *           sel, seq, anim, kind, added, line, msg, saved }
+   *           sel, seq, anim, kind, added, line, msg, saved, peek }
+   *   start  the opening choice (Groove, Melody, Riff); peek: the card lifted there
    *   seq   bumps whenever the cards on screen change (new round, more, request)
    *   anim  bumps whenever the screen should animate in
    *   hist  newest first: { id, dir, opts, chosen, note, idea, round, marker }
    */
   const MAX_HIST = 80;
+  /** a groove that left its hook's shape round without one keeps no half-made tune */
+  function settled(idea) {
+    if (pathOf(idea) === 'melody' || !idea.melody || hookOf(idea) === idea.melody) return idea;
+    return Object.assign({}, idea, { melody: hookOf(idea) });
+  }
   const flow = {
     fresh() {
-      return { phase: 'start', idea: emptyIdea(), round: null, hist: [], hid: 0, sel: -1, seq: 0, anim: 0, kind: 'pop', added: null, line: null, msg: null, saved: null };
+      return { phase: 'start', idea: emptyIdea(), round: null, hist: [], hid: 0, sel: -1, seq: 0, anim: 0, kind: 'pop', added: null, line: null, msg: null, saved: null, peek: null };
+    },
+    /** start down a path: a new idea, and its first round */
+    begin(S, path) {
+      const p = PATHS[path] ? path : 'melody';
+      return flow.enter(Object.assign({}, S, { idea: emptyIdea(p), peek: null, saved: null }), PATHS[p].open[0]);
     },
     enter(S, dir) {
       return Object.assign({}, S, { phase: 'round', round: { dir, batch: 0, steer: { p: 0, s: 0, x: null } }, sel: -1, msg: null, line: null, seq: S.seq + 1, anim: S.anim + 1, kind: 'pop', added: null });
@@ -1274,23 +2015,55 @@
       const row = Object.assign({ id: S.hid + 1, dir: S.round.dir, opts: flow.options(S), chosen: -1, note: '', idea: S.idea, round: S.round }, extra);
       return { hist: [row].concat(S.hist).slice(0, MAX_HIST), hid: S.hid + 1 };
     },
-    /** promote option i (or `own`, an option of the screen's own such as the plain walk) */
+    /**
+     * Promote option i (or `own`, an option of the screen's own such as the
+     * plain walk). A path's first screens lead into each other; a new pick
+     * there starts over what was built on it (it stays in the history).
+     */
     pick(S, i, own) {
       const r = S.round, o = own || flow.options(S)[i];
       if (!r || !o) return S;
-      const idea = { melody: S.idea.melody, layers: Object.assign({}, S.idea.layers), order: S.idea.order.slice() };
-      const ns = Object.assign({}, S, flow.row(S, { chosen: own ? -1 : i, note: own ? 'Kept the plain walk' : 'Picked ' + ABC.charAt(i) + ': ' + tagOf(r.dir, o) }), { anim: S.anim + 1, msg: null, line: null, seq: S.seq + 1, idea, saved: null });
-      if (r.dir === 'seed1') {
-        idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null };
-        return Object.assign(ns, { phase: 'round', round: { dir: 'seed2', batch: 0, steer: { p: 0, s: 0, x: null } }, sel: 1, kind: 'rise', added: null });
+      const path = pathOf(S.idea), open = PATHS[path].open, d = r.dir;
+      const idea = { path, melody: S.idea.melody, riff: S.idea.riff || null, layers: Object.assign({}, S.idea.layers), order: S.idea.order.slice() };
+      const note = own ? (OWN[d] ? OWN[d][1] : 'Kept it') : 'Picked ' + ABC.charAt(i) + ': ' + tagOf(d, o);
+      const ns = Object.assign({}, S, flow.row(S, { chosen: own ? -1 : i, note }), { anim: S.anim + 1, msg: null, line: null, seq: S.seq + 1, idea, saved: null });
+      const onward = (dir) => Object.assign(ns, { phase: 'round', round: { dir, batch: 0, steer: { p: 0, s: 0, x: null } }, sel: 1, kind: 'rise', added: null });
+      const done = (added) => Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added });
+      const clear = () => { idea.layers = {}; idea.order = []; };
+      if (d === 'seed1') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'seed2') {
+        idea.melody = o.mel;
+        if (path === 'melody') { clear(); return done('seed2'); }
+        // a groove's hook
+        idea.layers.hook = { tag: o.walk ? 'Plain walk' : shapeTag(o.mel.shape.kind, o.range), mel: o.mel };
+        if (idea.order.indexOf('hook') < 0) idea.order.push('hook');
+        return done('hook');
       }
-      if (r.dir === 'seed2') idea.melody = o.mel;
-      else { idea.layers[r.dir] = o; if (idea.order.indexOf(r.dir) < 0) idea.order.push(r.dir); }
-      // a new shape changes everything built on the melody, so its layers go (they stay in the history)
-      if (r.dir === 'seed2') { idea.layers = {}; idea.order = []; }
-      return Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added: r.dir });
+      if (d === 'hook') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'rrhythm') { idea.riff = { r: o.r, scale: null, notes: null, weight: null }; clear(); return onward('rnotes'); }
+      if (d === 'rnotes') { idea.riff = Object.assign({}, idea.riff, { scale: o.scale, notes: o, weight: null }); clear(); return onward('weight'); }
+      if (d === 'weight') { idea.riff = Object.assign({}, idea.riff, { weight: o }); return done('weight'); }
+      const k = open.indexOf(d);
+      if (k >= 0) {
+        // a groove's pocket, bass and chords: each is built on the ones before
+        const layers = {};
+        open.slice(0, k).forEach((x) => { if (idea.layers[x]) layers[x] = idea.layers[x]; });
+        layers[d] = o;
+        Object.assign(idea, { layers, order: open.slice(0, k + 1), melody: null });
+        return k + 1 < open.length ? onward(open[k + 1]) : done(d);
+      }
+      idea.layers[d] = o;
+      if (idea.order.indexOf(d) < 0) idea.order.push(d);
+      return done(d);
     },
-    keepWalk(S) { return flow.pick(S, -1, walkOption(S.idea.melody)); },
+    /** the round's own way out: the plain walk for a shape, no chords for a groove */
+    own(S) {
+      const d = S.round && S.round.dir;
+      if (d === 'seed2') return flow.pick(S, -1, walkOption(S.idea.melody));
+      if (d === 'keys') return flow.pick(S, -1, NO_CHORDS);
+      return S;
+    },
+    keepWalk(S) { return flow.own(S); },
     info(S) { return S.round ? deckInfo(S.round.dir, S.round, S.idea) : null; },
     /** the next three of the deck; past the last, the deck is shuffled and dealt again from the top */
     next(S) {
@@ -1323,9 +2096,13 @@
       // shapes can get flatter one step further than the other rounds' -2
       const sLo = S.round.dir === 'seed2' ? -3 : -2;
       if (rq.s) steer.s = Math.max(sLo, Math.min(2, (steer.s || 0) + rq.s));
-      const stuck = rq.s && steer.s === (S.round.steer.s || 0);
+      if (rq.t) steer.t = Math.max(-3, Math.min(3, (steer.t || 0) + rq.t));
+      if (rq.c) steer.c = Math.max(-2, Math.min(2, (steer.c || 0) + rq.c));
+      const was = S.round.steer;
+      const stuck = (rq.s && steer.s === (was.s || 0)) || (rq.t && steer.t === (was.t || 0)) || (rq.c && steer.c === (was.c || 0));
       if (rq.x) steer.x = steer.x === rq.x ? null : rq.x;
       let reply = rq.reply;
+      if (rq.x === 'swing' && Odd.theory.meter(steer.m).compound) reply = LINES.swingCompound;
       if (rq.m) {
         // the next meter round the list; 4/4 drops the key so the steer reads as before
         const next = METER_ORDER[(METER_ORDER.indexOf(Odd.theory.meter(steer.m).id) + 1) % METER_ORDER.length];
@@ -1344,10 +2121,10 @@
         hist: [mark].concat(S.hist).slice(0, MAX_HIST), hid: S.hid + 1,
       });
     },
-    skip(S) { return Object.assign({}, S, { phase: 'next', round: null, sel: -1, line: line(LINES.skipped, S.seq), added: null, anim: S.anim + 1 }); },
-    finish(S) { return Object.assign({}, S, { phase: 'gold', round: null, sel: -1, line: null, anim: S.anim + 1 }); },
+    skip(S) { return Object.assign({}, S, { phase: 'next', round: null, sel: -1, line: line(LINES.skipped, S.seq), added: null, anim: S.anim + 1, idea: settled(S.idea) }); },
+    finish(S) { return Object.assign({}, S, { phase: 'gold', round: null, sel: -1, line: null, anim: S.anim + 1, idea: settled(S.idea) }); },
     keepBuilding(S) { return Object.assign({}, S, { phase: 'next', round: null, sel: -1, line: null, anim: S.anim + 1 }); },
-    canFinish(S) { return !!(S.idea.melody && S.idea.melody.shape) && S.phase !== 'gold'; },
+    canFinish(S) { return isDone(S.idea) && S.phase !== 'gold'; },
     /** a loaded state, or a fresh one when it doesn't hold together */
     repair(raw) {
       const S = flow.fresh();
@@ -1358,8 +2135,8 @@
         if (!out.idea.layers) out.idea.layers = {};
         if (!Array.isArray(out.idea.order)) out.idea.order = [];
         if (out.phase === 'round' && (!out.round || !DIRS[out.round.dir])) return flow.fresh();
-        if (out.phase === 'round' && out.round.dir !== 'seed1' && !out.idea.melody) return flow.fresh();
-        if ((out.phase === 'next' || out.phase === 'gold') && !(out.idea.melody && out.idea.melody.shape)) return flow.fresh();
+        if (out.phase === 'round' && out.round.dir !== PATHS[pathOf(out.idea)].open[0] && !isStarted(out.idea)) return flow.fresh();
+        if ((out.phase === 'next' || out.phase === 'gold') && !isDone(out.idea)) return flow.fresh();
         if (out.phase === 'round') flow.options(out); // throws on a broken idea
         out.line = null;
         return out;
@@ -1369,11 +2146,14 @@
 
   Odd.audition = {
     STEPS, STEP_TICKS, LENGTH, ABC, NAMES, IV, DIRS, NEXT_ORDER, LAYER_ORDER, REQS, LINES, line,
-    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, GENRES, LEAD_WORD, TRACK, METER_ORDER,
+    SCALES, SCALE_ORDER, MODE, SHAPES, SHAPE_TAG, GENRES, RIFF_GENRES, LEAD_WORD, TRACK, METER_ORDER,
+    PATHS, PATH_ORDER, SKIP_LABEL, pathOf, isOpening, hasOpen, isDone, isStarted, ideaMeter, scaleOf, refNotes, dirSub, ownLabel,
+    pocketStyles, grooveBass, keysStyles, hookStyles, riffPool, riffTag, threesOf, riffNotes, riffNoteStyles, weightStyles, riffKits, underStyles,
+    riffVoices, riffPitch, chordLine, climbLines, metaOf, example, pickedLine, NO_CHORDS,
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, comment, whyText, suggestion, directions,
+    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
   };
 })(globalThis.Odd = globalThis.Odd || {});

@@ -41,6 +41,7 @@
     'lead-square': { label: 'Square Lead', role: 'lead', gm: 80 },
     'lead-saw': { label: 'Saw Lead', role: 'lead', gm: 81 },
     'lead-soft': { label: 'Soft Lead', role: 'lead', gm: 73 },
+    grit: { label: 'Gritty Guitar', role: 'lead', gm: 30 },
     bell: { label: 'Bell', role: 'lead', gm: 11 },
     pluck: { label: 'Pluck', role: 'arp', gm: 45 },
   };
@@ -51,7 +52,7 @@
     'bass-sub': [0, 0], 'bass-saw': [0.03, 0], 'bass-808': [0, 0], 'bass-pluck': [0.05, 0],
     epiano: [0.25, 0.07], keys: [0.22, 0.04], organ: [0.16, 0], stab: [0.22, 0.12],
     'pad-warm': [0.42, 0.05], 'pad-glass': [0.5, 0.14], strings: [0.36, 0],
-    'lead-square': [0.2, 0.16], 'lead-saw': [0.18, 0.14], 'lead-soft': [0.3, 0.18], bell: [0.4, 0.22],
+    'lead-square': [0.2, 0.16], 'lead-saw': [0.18, 0.14], 'lead-soft': [0.3, 0.18], bell: [0.4, 0.22], grit: [0.12, 0.03],
     pluck: [0.26, 0.2],
   };
 
@@ -819,6 +820,23 @@
       k.lfo(5.5, 12, [o1.detune, o2.detune], w, 0.25, 0.35);
       lp.connect(vca).connect(v.kill);
       return adsr(vca.gain, w, dur, 0.62 * amp, 0.005, 0.3, 0.8, relT(0.14, dur));
+    },
+    // a driven guitar for riffs: detuned saws into a hard clip, then a speaker-shaped band
+    grit(k, v, f, amp, vel, w, dur) {
+      const vca = k.gain(0);
+      const pre = k.gain(k.light ? 0.9 : 0.7);
+      const drv = k.shaper(driveCurve(6));
+      const cab = k.filter('lowpass', 2600 + 1400 * vel, 1.1);
+      const lo = k.filter('highpass', 90, 0.7);
+      k.osc('sawtooth', f, w).connect(pre);
+      if (!k.light) {
+        const o2 = k.osc('sawtooth', f, w);
+        o2.detune.value = 9;
+        o2.connect(pre);
+      }
+      k.osc('square', f / 2, w).connect(k.gain(0.35)).connect(pre);
+      pre.connect(drv).connect(cab).connect(lo).connect(vca).connect(v.kill);
+      return adsr(vca.gain, w, dur, 0.34 * amp, 0.002, 0.5, 0.7, relT(0.06, dur));
     },
     'lead-soft'(k, v, f, amp, vel, w, dur) {
       const vca = k.gain(0);

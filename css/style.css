@@ -1467,6 +1467,35 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-go:hover { filter: brightness(1.06); }
 .b-start p { margin: 0; color: var(--muted); font-size: 15px; }
 
+/* the opening choice: three big cards with drop shadows */
+.b-open { display: grid; grid-template-columns: repeat(3, minmax(0, 300px)); gap: 28px; justify-content: center; width: 100%; padding: 36px 0 8px; }
+.b-big {
+  position: relative; box-sizing: border-box; min-height: 260px; display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.42), 0 2px 6px rgba(0,0,0,.25);
+  transition: transform 0.28s cubic-bezier(.2,.8,.2,1), box-shadow 0.28s, border-color 0.28s;
+  animation: b-pop 0.5s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.b-big:hover { border-color: color-mix(in srgb, var(--line) 60%, var(--ink)); }
+.b-big.lifted { transform: translateY(-14px); border-color: var(--b-gold); box-shadow: 0 26px 52px rgba(0,0,0,.5), 0 0 0 1px color-mix(in srgb, var(--b-gold) 40%, transparent); }
+.b-big.is-wait { border-style: dashed; border-color: color-mix(in srgb, var(--b-gold) 55%, transparent); }
+.b-big .b-hit { border-radius: 20px; }
+.b-big-name { font-family: var(--font-display); font-weight: 800; font-stretch: 115%; font-size: 34px; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; }
+.b-big-line { color: var(--muted); font-size: 15.5px; line-height: 1.5; flex: 1; }
+.b-big-go { position: relative; z-index: 2; justify-content: center; visibility: hidden; }
+.b-big.lifted .b-big-go { visibility: visible; }
+.b-open-hint { margin-top: 26px; text-align: center; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .b-big { box-shadow: 0 14px 30px rgba(20,24,40,.16), 0 2px 6px rgba(20,24,40,.1); }
+  :root:not([data-theme="dark"]) .b-big.lifted { box-shadow: 0 24px 46px rgba(20,24,40,.22), 0 0 0 1px color-mix(in srgb, var(--b-gold) 40%, transparent); }
+}
+:root[data-theme="light"] .b-big { box-shadow: 0 14px 30px rgba(20,24,40,.16), 0 2px 6px rgba(20,24,40,.1); }
+@media (max-width: 760px) {
+  .b-open { grid-template-columns: minmax(0, 420px); gap: 18px; padding-top: 18px; }
+  .b-big { min-height: 0; }
+  .b-big-name { font-size: 28px; }
+}
+
 .b-callouts { display: grid; column-gap: 28px; align-items: end; min-height: 176px; margin-top: 4px; }
 .b-reqs { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 24px; position: relative; animation: b-fadeup 0.3s ease-out backwards; }
 .b-reqs::after { content: ''; position: absolute; left: 50%; bottom: -14px; width: 2px; height: 12px; margin-left: -1px; background: var(--line); }
@@ -1551,13 +1580,11 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-dir { position: relative; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 18px; color: var(--ink); display: flex; flex-direction: column; gap: 6px; min-height: 92px; }
 .b-animate .b-dir { animation: b-pop 0.45s cubic-bezier(.2,.8,.2,1) backwards; }
 .b-dir:hover { border-color: color-mix(in srgb, var(--line) 60%, var(--ink)); background: var(--raised); }
-.b-dir.tip { border-color: var(--b-gold); box-shadow: 0 0 0 1px color-mix(in srgb, var(--b-gold) 35%, transparent); }
 .b-dir.done { background: var(--screen); }
 .b-dir-top { display: flex; align-items: center; gap: 9px; }
 .b-dir-top b { font-size: 16px; font-weight: 600; }
 .b-dot-c { width: 11px; height: 11px; border-radius: 50%; display: block; flex: none; }
 .b-dir-sub { color: var(--muted); font-size: 13.5px; line-height: 1.4; }
-.b-pickb { margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 600; background: var(--b-gold); color: var(--b-on-gold); padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .b-doneb { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .b-history { width: 100%; margin-top: 46px; border-top: 1px solid var(--line); padding-top: 18px; }
