@@ -7,6 +7,13 @@
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
+ * The booth: the card playing lifts, and under it are three answers: ✗ not
+ * it (Bobby asks why, says what the card has on each reason, and offers it
+ * changed or the deck filtered), ? (he explains it) and ✓ (keep it and build
+ * on it). Bobby's bubble holds the questions a card raises (Odd.booth).
+ * A dev menu on the left edge hides what the cards show, one kind at a
+ * time; with the piano roll hidden a card shows the sound's EQ instead.
+ *
  * Watch Bobby: from the opener he can build one himself (Odd.watch plans
  * the run), playing each card and saying why he takes the one he takes.
  * While he works, the screen only listens: Pause, Back, Next and Take over.
@@ -23,6 +30,13 @@
 
   const PAUSE_MS = 2000;
   const STORE_KEY = 'oddition.bones.v1';
+  const DEV_KEY = 'oddition.dev.v1';
+  const B = Odd.booth;
+  // what the dev menu can hide on the cards: [key, label]
+  const HIDES = [
+    ['words', 'Descriptive words'], ['bpm', 'BPM'], ['key', 'Key (note names)'], ['scale', 'Scale'], ['chords', 'Chords'], ['roll', 'Piano roll'],
+    ['inst', 'Instrument names'], ['meter', 'Meter (3/4, 6/8…)'], ['num', 'Numbers (counts, %, intervals)'], ['letter', 'Letters A B C'], ['deck', 'Deck counter'],
+  ];
   const VW = 272, VH = 92;
   const r1 = (v) => Math.round(v * 10) / 10;
   // cards are drawn across their idea's two bars: NS steps (32 in 4/4, 24 in 3/4, ...), set per card by vis()
@@ -58,11 +72,19 @@
   // what is sounding: src is the key of what plays (or played last), pending the one waiting out its pause
   const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH, ex: {} };
   let built = '';
-  let lastAnim = -1, lastHid = -1, reqKey = '';
+  let lastAnim = -1, lastHid = -1;
   let raf = 0, saveTimer = 0, sliding = false;
   // Bobby building one himself: the planned steps, where he is, and the timer to the next
   let W = null;
   const WATCH_ACTS = { wpause: 1, wnext: 1, wprev: 1, wtake: 1, wcopy: 1, home: 1, studio: 1 };
+  // talking about the lifted card: ready, answer, explain, why (the reasons for a no), facts (what it has)
+  let T = { key: '', mode: 'ready' };
+  let talkKey = '';
+  // a line that stays with the card it came with (a request's reply, what changed)
+  let held = { key: '', text: '' };
+  let dev = { open: false, hide: {} };
+  let devEl = null;
+  const EQ = { buf: null, lv: [], pk: [], colors: null };
 
   // ---------------------------------------------------------------- state
 
@@ -204,9 +226,59 @@
       }
       const left = r1(xOf(Math.max(0, Math.min(P.steps, step)), P.steps)) + 'px';
       root.querySelectorAll('.is-playing .b-ph').forEach((el) => { el.style.left = left; });
+      if (root.classList.contains('hx-roll')) drawEq();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+  }
+
+  /**
+   * The booth's view of the sound with the piano roll hidden: what's
+   * playing, as energy across the range, lows on the left. Bands are spaced
+   * like the ear hears them (each a step up in pitch, not in Hz).
+   */
+  const EQ_BANDS = 30, EQ_LO = 35, EQ_HI = 14000;
+  function drawEq() {
+    const an = Odd.audio && Odd.audio.analyser;
+    const cs = Array.from(new Set(root.querySelectorAll('.is-playing .b-eq')));
+    if (!an || !cs.length) return;
+    if (!EQ.buf || EQ.buf.length !== an.frequencyBinCount) EQ.buf = new Uint8Array(an.frequencyBinCount);
+    an.getByteFrequencyData(EQ.buf);
+    const hz = an.context.sampleRate / an.fftSize;
+    if (!EQ.colors) {
+      const st = getComputedStyle(root);
+      EQ.colors = ['--r-bass', '--r-chords', '--r-lead', '--faint'].map((v) => st.getPropertyValue(v).trim() || '#999');
+    }
+    for (let k = 0; k < EQ_BANDS; k++) {
+      const f0 = EQ_LO * Math.pow(EQ_HI / EQ_LO, k / EQ_BANDS), f1 = EQ_LO * Math.pow(EQ_HI / EQ_LO, (k + 1) / EQ_BANDS);
+      let v = 0;
+      for (let b = Math.floor(f0 / hz); b <= Math.max(Math.floor(f0 / hz), Math.ceil(f1 / hz) - 1) && b < EQ.buf.length; b++) v = Math.max(v, EQ.buf[b]);
+      v /= 255;
+      EQ.lv[k] = Math.max(v, (EQ.lv[k] || 0) * 0.86);
+      EQ.pk[k] = Math.max(EQ.lv[k], (EQ.pk[k] || 0) - 0.008);
+    }
+    cs.forEach((c) => {
+      const g = c.getContext('2d'), W0 = c.width, H0 = c.height, base = H0 - 30, bw = W0 / EQ_BANDS;
+      c.dataset.on = '1';
+      g.clearRect(0, 0, W0, H0);
+      for (let k = 0; k < EQ_BANDS; k++) {
+        const f = EQ_LO * Math.pow(EQ_HI / EQ_LO, (k + 0.5) / EQ_BANDS);
+        g.fillStyle = f < 250 ? EQ.colors[0] : f < 2500 ? EQ.colors[1] : EQ.colors[2];
+        const h = Math.max(2, EQ.lv[k] * (base - 8));
+        g.globalAlpha = 0.85;
+        g.fillRect(k * bw + 2, base - h, bw - 4, h);
+        g.globalAlpha = 1;
+        g.fillRect(k * bw + 2, base - EQ.pk[k] * (base - 8) - 3, bw - 4, 3);
+      }
+      g.fillStyle = EQ.colors[3];
+      g.font = '600 18px ui-monospace, monospace';
+      const xAt = (f) => Math.log(f / EQ_LO) / Math.log(EQ_HI / EQ_LO) * W0;
+      g.fillText('LOWS', 8, H0 - 8);
+      g.fillText('MIDS', xAt(250) + 8, H0 - 8);
+      g.fillText('HIGHS', xAt(2500) + 8, H0 - 8);
+      g.fillRect(xAt(250), base + 4, 2, 24);
+      g.fillRect(xAt(2500), base + 4, 2, 24);
+    });
   }
 
   // ---------------------------------------------------------------- actions
@@ -231,7 +303,74 @@
     halt();
     const ns = F.request(S, rq);
     set(ns);
+    held = { key: curKey(1), text: ns.line || rq.reply };
     hear(curKey(1), ns.line || rq.reply, busy);
+  }
+
+  // ---------------------------------------------------------------- the booth: keep, pass, ask
+
+  /** the talk about the lifted card, fresh whenever another card lifts */
+  function talk() {
+    const k = S.phase === 'round' && S.sel >= 0 ? curKey(S.sel) : '';
+    if (T.key !== k) T = { key: k, mode: 'ready', why: [] };
+    return T;
+  }
+  function talking() { return S.phase === 'round' && S.sel >= 0 && !P.pending && P.heard === curKey(S.sel) && !!F.options(S)[S.sel]; }
+  function nope(i) {
+    if (!talking() || S.sel !== i) return;
+    Object.assign(talk(), { mode: 'why', why: [] });
+    render();
+  }
+  function toggleWhy(id) {
+    const t = talk();
+    t.why = t.why.indexOf(id) >= 0 ? t.why.filter((x) => x !== id) : t.why.concat([id]);
+    render();
+  }
+  function whyDone() {
+    const t = talk();
+    if (!t.why.length) return;
+    const ids = B.FACTORS.map((f) => f.id).filter((id) => t.why.indexOf(id) >= 0);
+    const ns = B.flow.reject(S, S.sel, ids);
+    Object.assign(t, { mode: 'facts', why: ids, facts: B.facts(ns, S.sel, ids), canChange: !!B.changed(ns, S.sel, ids), canCut: !!B.cutsFor(ns, S.sel, ids), note: '' });
+    set(Object.assign({}, ns, { line: null }));
+  }
+  function changeIt() {
+    const t = talk(), busy = P.playing || !!P.pending;
+    const r = B.flow.change(S, S.sel, t.why);
+    if (!r) { t.canChange = false; t.note = 'Nothing else in this deck goes the other way on that.'; render(); return; }
+    halt();
+    set(r.S);
+    const line = 'Here it is changed. ' + r.text;
+    held = { key: curKey(r.S.sel), text: line };
+    hear(curKey(r.S.sel), line, busy);
+  }
+  function cutIt() {
+    const t = talk(), busy = P.playing || !!P.pending;
+    const r = B.flow.cut(S, S.sel, t.why);
+    if (!r) { t.canCut = false; render(); return; }
+    halt();
+    P.src = '';
+    set(r.S);
+    const line = 'Filtered out ' + r.text + ': ' + (r.gone === 1 ? 'one card' : r.gone + ' cards') + ' gone, ' + r.left + ' left. Here’s one of them.';
+    held = { key: curKey(1), text: line };
+    hear(curKey(1), line, busy);
+  }
+  function passIt() {
+    halt();
+    T = { key: '', mode: 'ready', why: [] };
+    set(Object.assign({}, S, { sel: -1, line: 'Noted. It stays where it is, marked, in case you change your mind. Try another.' }));
+  }
+  function explain(i) {
+    if (!talking() || S.sel !== i) return;
+    const ex = B.explain(S, i);
+    Object.assign(talk(), { mode: 'explain', said: ex.text, acts: ex.acts, topic: '' });
+    render();
+  }
+  function ask(id) {
+    if (!talking()) return;
+    const an = B.answer(S, S.sel, id);
+    Object.assign(talk(), { mode: 'answer', said: an.text, acts: an.acts, topic: id });
+    render();
   }
 
   function step(fn) {
@@ -360,6 +499,16 @@
     begin: (el) => begin(el.dataset.path),
     hear: (el) => hear(el.dataset.key),
     promote: (el) => promote(Number(el.dataset.i)),
+    nope: (el) => nope(Number(el.dataset.i)),
+    explain: (el) => explain(Number(el.dataset.i)),
+    ask: (el) => ask(el.dataset.t),
+    why: (el) => toggleWhy(el.dataset.f),
+    whydone: () => whyDone(),
+    whycancel: () => { talk().mode = 'ready'; render(); },
+    change: () => changeIt(),
+    cutit: () => cutIt(),
+    pass: () => passIt(),
+    uncut: () => { halt(); P.src = ''; set(B.flow.uncut(S)); },
     own: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
     next: () => slide(F.next),
@@ -412,6 +561,12 @@
       if (F.options(S)[i]) hear(curKey(i));
       return true;
     }
+    // the booth: x pass, ? ask, Enter keep, on the card that's lifted
+    if (S.phase === 'round' && talking() && !(e.target && e.target.closest && e.target.closest('button, input, textarea, select'))) {
+      if (k === 'x' || k === 'X' || k === 'Delete' || k === 'Backspace') { e.preventDefault(); nope(S.sel); return true; }
+      if (k === '?' || k === '/') { e.preventDefault(); explain(S.sel); return true; }
+      if (k === 'Enter') { e.preventDefault(); promote(S.sel); return true; }
+    }
     if ((k === 'ArrowRight' || k === 'ArrowLeft') && S.phase === 'round') {
       if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return false;
       e.preventDefault();
@@ -450,7 +605,7 @@
   }
   function chordRow(chords, m, top) {
     const slots = A.slotsOf(m);
-    return chords.map((c, i) => '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
+    return chords.map((c, i) => '<span data-x="chords" class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
   }
 
   /** what makes the option special, drawn on a 272 x 92 screen */
@@ -465,7 +620,7 @@
     if (dir === 'seed1') {
       o.mel.r.hits.forEach((x) => { const hh = [12, 20, 30][x[2]]; h += blk(xOf(x[0]), VH - 24 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
       const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
-      for (let pc = 0; pc < 12; pc++) h += '<i class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
+      for (let pc = 0; pc < 12; pc++) h += '<i data-x="scale" class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
     } else if (dir === 'seed2') {
       // one scale for every card (at least an octave tall), so a small shape looks small
       const ns = A.melodyNotes(o.mel), ds = ns.map((n) => n.deg), lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds), span = Math.max(7, hi - lo);
@@ -481,11 +636,11 @@
       });
       pts.forEach((p, i) => { h += '<i class="b-dot' + (i === pts.length - 1 ? ' land' : '') + '" style="left:' + r1(p.x) + 'px;top:' + r1(p.y) + 'px"></i>'; });
       const last = pts[pts.length - 1];
-      h += '<span class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
+      h += '<span data-x="key" class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
     } else if (dir === 'chords') {
       ghost(6, 50);
       const slots = A.slotsOf(m);
-      o.chords.forEach((c, i) => { h += '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:62px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
+      o.chords.forEach((c, i) => { h += '<span data-x="chords" class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:62px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
     } else if (dir === 'bass') {
       ghost(6, 30);
       const ms = o.notes.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
@@ -504,7 +659,7 @@
       h += kitVis(o);
     } else if (dir === 'pocket') {
       h += kitVis(o);
-      h += '<span class="b-nlab" style="left:8px;top:8px">' + esc(o.bpm + ' BPM' + (o.swing ? ' · swung' : '')) + '</span>';
+      h += '<span data-x="bpm" class="b-nlab" style="left:8px;top:8px">' + esc(o.bpm + ' BPM') + '</span>' + (o.swing ? '<span data-x="words" class="b-nlab" style="left:62px;top:8px">swung</span>' : '');
     } else if (dir === 'gbass') {
       // the kick it plays against, the bass, and the chords it implies
       idea.layers.pocket.k.forEach((s) => { h += blk(xOf(s), 82, 5, 6, '', 'ghost'); });
@@ -512,7 +667,7 @@
       h += chordRow(o.chords, m, 4);
     } else if (dir === 'keys') {
       ghost(70, 18);
-      if (o.none) h += '<span class="b-nlab" style="left:10px;top:24px">no chords: just drums and bass</span>';
+      if (o.none) h += '<span data-x="words" class="b-nlab" style="left:10px;top:24px">no chords: just drums and bass</span>';
       else o.notes.forEach((n) => n.ms.forEach((p, k) => { h += blk(xOf(n.s), 52 - k * 9, Math.max(3, sw(n.d) - 2), 6, col('keys'), 'half'); }));
       h += chordRow(idea.layers.gbass ? idea.layers.gbass.chords : [], m, 4);
     } else if (dir === 'hook') {
@@ -537,23 +692,61 @@
       if (o.changes) h += chordRow(o.chords, m, 36);
     } else {
       ghost(8, 70);
-      h += '<span class="b-nlab" style="left:10px;top:74px">' + esc(o.inst + (o.swing ? ' · swung' : '')) + '</span>';
+      h += '<span data-x="inst" class="b-nlab" style="left:10px;top:74px">' + esc(o.inst) + '</span>' + (o.swing ? '<span data-x="words" class="b-nlab" style="left:10px;top:60px">swung</span>' : '');
     }
-    return h + '<i class="b-ph"></i>';
+    return h + '<i class="b-ph"></i><canvas class="b-eq" width="544" height="184"></canvas>';
   }
+
+  /**
+   * What a card says in words, each piece tagged with what it is so the dev
+   * menu can hide it: [kind, text]. alt: shown only when the piano roll
+   * (which already draws it) is hidden.
+   */
+  function headFacts(dir, o, idea) {
+    const f = [], add = (x, t) => { if (t != null && t !== '') f.push([x, String(t)]); };
+    const parts = (d) => String(d || '').split(' · ');
+    const meter = (id) => add('meter', id && id !== '4/4' ? id : '');
+    const swung = (x) => add('words', x ? 'swung' : '');
+    if (dir === 'seed1') { add('scale', A.MODE[o.mel.scale].name.toLowerCase()); meter(A.meterOf(o.mel).id); } else if (dir === 'seed2') {
+      add('num', 'lands on ' + A.IV[o.land]);
+      const ns = A.melodyNotes(o.mel);
+      add('key alt', 'ends on ' + A.NAMES[mod(ns[ns.length - 1].m, 12)]);
+    } else if (dir === 'chords') { add('chords alt', A.chordLine(o.chords)); add('num', o.fit + '% fit'); } else if (dir === 'bass') add(o.detail ? 'words' : 'num', o.detail || o.n + (o.n === 1 ? ' note' : ' notes'));
+    else if (dir === 'pads') { if (o.detail) { add('words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); } else add('num', o.voices + (o.voices === 1 ? ' voice' : ' voices')); } else if (dir === 'perc') add(o.detail ? 'words' : 'num', o.detail || o.n + ' hits');
+    else if (dir === 'pocket') { add('bpm', o.bpm + ' BPM'); swung(o.swing); parts(o.detail).forEach((x) => add('words', x)); meter(o.m); } else if (dir === 'hook') add('num', Math.round(100 * (1 - o.clash)) + '% in the gaps');
+    else if (dir === 'rrhythm') { add('num', o.r.n + ' hits'); add('words', o.r.turn ? 'new ending' : ''); meter(o.r.m); } else if (dir === 'gbass') { add('chords', A.chordLine(o.chords)); add('scale', A.MODE[o.scale].name.toLowerCase()); } else if (dir === 'keys') {
+      if (o.none) add('words', o.detail);
+      else { add('words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); }
+      if (idea && idea.layers.gbass) add('chords alt', A.chordLine(idea.layers.gbass.chords));
+    } else if (dir === 'rnotes') add('scale', o.detail);
+    else if (dir === 'weight') add('inst', o.detail);
+    else if (dir === 'under') { add(o.changes ? 'chords' : 'words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); } else if (dir === 'beat' || dir === 'drums') { swung(o.swing); add(o.detail ? 'words' : 'num', o.detail || Math.round(o.off * 100) + '% off grid'); } else if (dir === 'sound') {
+      add('bpm', o.bpm + ' BPM');
+      if (o.detail) parts(o.detail).forEach((x) => add('inst', x));
+      else { add('inst', o.inst); swung(o.swing && o.swing > 0.5); }
+    }
+    return f;
+  }
+
+  const X_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M6.5 6.5l13 13M19.5 6.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>';
+  const OK_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M5.5 13.5l5 5L20.5 7" stroke="currentColor" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function card(dir, o, idea, x) {
     const tag = A.tagOf(dir, o);
-    const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter">' + x.letter + '</span>' : '') + '<span class="b-tag">' + esc(tag) + '</span><span class="b-stat">' + esc(A.statOf(dir, o)) + '</span></div>';
+    const facts = headFacts(dir, o, idea).map((f) => '<span class="b-f' + (/ alt$/.test(f[0]) ? ' alt' : '') + '" data-x="' + f[0].replace(/ alt$/, '') + '">' + esc(f[1]) + '</span>').join('');
+    const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter" data-x="letter">' + x.letter + '</span>' : '') + '<span class="b-tag" data-x="words">' + esc(tag) + '</span><span class="b-stat">' + facts + '</span></div>';
     const label = (x.letter ? 'option ' + x.letter + ': ' : '') + tag;
+    // under the lifted card: not it, ask, keep
+    const booth = x.i != null ? '<div class="b-booth">' +
+      '<button type="button" class="b-bx no" data-act="nope" data-i="' + x.i + '" title="Not it (X)" aria-label="Not it: pass on this one">' + X_SVG + '</button>' +
+      '<button type="button" class="b-bx ask" data-act="explain" data-i="' + x.i + '" title="What is it? (?)" aria-label="Ask Bobby what this one is">?</button>' +
+      '<button type="button" class="b-bx yes" data-act="promote" data-i="' + x.i + '" title="' + esc((x.promote || 'Keep it') + ' (Enter)') + '" aria-label="' + esc(x.promote || 'Keep it') + '">' + OK_SVG + '</button>' +
+    '</div>' : '';
     return '<div class="b-card' + (x.cls ? ' ' + x.cls : '') + '" data-key="' + x.key + '"' + (x.i != null ? ' data-i="' + x.i + '"' : '') + (x.style ? ' style="' + x.style + '"' : '') + '>' +
       '<button type="button" class="b-hit" data-act="hear" data-key="' + x.key + '" aria-label="Listen to ' + esc(label) + '"></button>' +
-      (x.i != null ? '<div class="b-reqs-in" aria-label="Ask Bobby"></div>' : '') +
       head +
       '<div class="b-vis" aria-hidden="true">' + vis(dir, o, idea) + '</div>' +
-      (x.promote ? '<button type="button" class="b-primary b-promote" data-act="promote" data-i="' + x.i + '">' +
-        '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        esc(x.promote) + '</button>' : '') +
+      booth +
       '</div>';
   }
 
@@ -569,6 +762,15 @@
     if (W && S.line) return S.line;
     if (S.phase === 'start') return S.peek ? A.line(L.peek[S.peek], (P.ex[S.peek] || 1) - 1) : S.line || L.start;
     if (P.src === 'climb' && P.playing && P.climb >= 0) return A.climbLines(S.idea)[P.climb] || 'That’s gold.';
+    // the lifted card: he's ready to talk about it, and only says more when asked
+    if (talking()) {
+      const t = talk();
+      if (t.mode === 'why') return B.ASK_WHY;
+      if (t.mode === 'facts') return 'Here’s what you passed on.';
+      if (t.mode === 'answer' || t.mode === 'explain') return t.said;
+      if (held.key === curKey(S.sel)) return held.text;
+      return S.line || B.ready(S.seq + S.sel);
+    }
     if (S.line) return S.line;
     if (P.playing && P.src.charAt(0) === 'h') {
       const pr = P.src.slice(1).split('-').map(Number), row = S.hist.find((x) => x.id === pr[0]);
@@ -578,8 +780,48 @@
     if (S.phase === 'next') return A.line(path === 'melody' ? L.next : L.nextBy[path], S.seq);
     if (S.phase === 'gold') return A.line(path === 'melody' ? L.gold : L.goldBy[path], S.hid);
     if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
-    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel, S.idea);
     return A.line(L.entry[S.round.dir], S.seq);
+  }
+
+  /** what sits in Bobby's bubble under his line: questions, ways to steer, the reasons for a no */
+  function talkHtml() {
+    if (W || !talking()) return '';
+    const t = talk(), dir = S.round.dir, reqs = A.REQS[dir] || [];
+    const qs = (skip) => B.questions(S, S.sel).filter((q) => q.id !== skip).slice(0, 3).map((q) => '<button type="button" class="b-q" data-act="ask" data-t="' + q.id + '">' + esc(q.q) + '</button>').join('');
+    if (t.mode === 'ready') return '<div class="b-qs">' + qs() + '</div>';
+    if (t.mode === 'answer' || t.mode === 'explain') {
+      const acts = (t.acts || []).map((k) => '<button type="button" class="b-steer" data-act="req" data-i="' + k + '">' + esc(reqs[k].label) + '</button>').join('');
+      return (acts ? '<div class="b-steers"><span>Hear the deck go:</span>' + acts + '</div>' : '') + '<div class="b-qs">' + qs(t.topic) + '</div>';
+    }
+    const o = F.options(S)[S.sel];
+    if (t.mode === 'why') {
+      const boxes = B.reasonsFor(dir, o, S.idea).map((r) => {
+        const on = t.why.indexOf(r.id) >= 0;
+        return '<button type="button" class="b-why' + (on ? ' on' : '') + '" data-act="why" data-f="' + r.id + '" role="checkbox" aria-checked="' + on + '"><i aria-hidden="true"></i>' + esc(r.label) + '</button>';
+      }).join('');
+      return '<div class="b-whys" role="group" aria-label="Why not">' + boxes + '</div>' +
+        '<div class="b-talk-do"><button type="button" class="b-primary" data-act="whydone"' + (t.why.length ? '' : ' disabled') + '>That’s why</button>' +
+        '<button type="button" class="b-ghost" data-act="whycancel">Never mind</button></div>';
+    }
+    if (t.mode === 'facts') {
+      const list = (t.facts || []).map((f) => '<li' + (f.fixed ? ' class="fixed"' : '') + '><b>' + esc(f.label) + '</b> ' + esc(f.text) + '</li>').join('');
+      const can = t.canChange || t.canCut;
+      return '<ul class="b-facts">' + list + '</ul>' + (t.note ? '<p class="b-talk-note">' + esc(t.note) + '</p>' : '') +
+        '<p class="b-talk-ask">' + esc(can ? (t.canChange && t.canCut ? 'Want to hear it changed, or should I filter out cards like it?' : t.canChange ? 'Want to hear it changed?' : 'Want me to filter out cards like it?') : 'Nothing in this round changes that, so there’s nothing to filter. Listen for it later.') + '</p>' +
+        '<div class="b-talk-do">' +
+          (t.canChange ? '<button type="button" class="b-primary" data-act="change">Hear it changed</button>' : '') +
+          (t.canCut ? '<button type="button" class="b-ghost" data-act="cutit">Filter out cards like it</button>' : '') +
+          '<button type="button" class="b-ghost" data-act="pass">' + (can ? 'Neither. Next.' : 'Okay') + '</button>' +
+        '</div>';
+    }
+    return '';
+  }
+
+  /** the top line in pieces, so the dev menu can hide them */
+  function metaHtml(idea) {
+    const s0 = idea.layers.sound, pk = idea.layers.pocket, p = A.pathOf(idea);
+    const bpm = s0 ? s0.bpm : pk ? pk.bpm : 100, mt = A.isStarted(idea) ? A.ideaMeter(idea).id : '4/4';
+    return '<span data-x="words">' + esc(s0 ? s0.name : A.PATHS[p].label) + '</span> · 2 bars<span data-x="bpm"> · ' + bpm + ' BPM</span>' + (mt !== '4/4' ? '<span data-x="meter"> · ' + esc(mt) + '</span>' : '');
   }
 
   function chipsHtml() {
@@ -615,10 +857,9 @@
       if (kind === 'next') { anim = 'b-in-r'; delay = (i * 0.05).toFixed(2) + 's'; }
       if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
-      const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Promote: that’s the hook' : PROMOTE[dir] || 'Add it';
+      const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Keep it: that’s the hook' : (PROMOTE[dir] || 'Keep it: add it').replace(/^Promote/, 'Keep it');
       return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style });
     }).join('');
-    const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
     const last = inf.batch >= inf.batches - 1;
     const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
     const LEFT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -629,19 +870,19 @@
     const strip = inf.sizes.map((n, b) => '<button type="button" class="b-seg' + (b === inf.batch ? ' now' : b <= seen ? ' seen' : '') + '" data-act="jump" data-b="' + b + '" tabindex="-1" aria-label="Cards ' + (inf.sizes.slice(0, b).reduce((t, x) => t + x, 0) + 1) + ' to ' + (inf.sizes.slice(0, b + 1).reduce((t, x) => t + x, 0)) + '">' + '<i></i>'.repeat(n) + '</button>').join('');
     const count = (inf.from === inf.to ? inf.from : inf.from + '–' + inf.to) + ' of ' + inf.total + ' ' + NOUN[dir] + (inf.deal ? ' · shuffled' : '');
     return '<div class="b-deal">' +
-        '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
         arrow('prev', 'prev', 'The three before', LEFT, inf.batch === 0) +
         '<div class="b-cards">' + cards + '</div>' +
         (last ? arrow('next shuf', 'next', 'That’s all of them: shuffle and deal again', SHUF, inf.batches < 2) : arrow('next', 'next', 'The next three', RIGHT, false)) +
       '</div>' +
-      '<div class="b-pool" aria-label="The deck">' +
+      '<div class="b-pool" aria-label="The deck" data-x="deck">' +
         '<div class="b-strip">' + strip + '</div>' +
         '<span class="b-count">' + esc(count) + '</span>' +
       '</div>' +
+      (inf.cut ? '<div class="b-cutnote">' + esc((inf.cut === 1 ? 'One card' : inf.cut + ' cards') + ' filtered out') + ' <button type="button" class="b-link" data-act="uncut">Bring them back</button></div>' : '') +
       '<div class="b-actions">' +
         (A.ownLabel(dir) ? '<button type="button" class="b-ghost" data-act="own">' + esc(A.ownLabel(dir)) + '</button>' : '') +
         (A.isOpening(S.idea, dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">' + esc(A.SKIP_LABEL[dir] || 'Not now') + '</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), ? what is it (?), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 
@@ -768,14 +1009,14 @@
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
-            (S.phase === 'start' ? '' : '<span class="b-meta">' + esc(A.metaOf(S.idea)) + '</span>') +
+            (S.phase === 'start' ? '' : '<span class="b-meta">' + metaHtml(S.idea) + '</span>') +
             (F.canFinish(S) && !W ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
             ((S.phase === 'round' || S.phase === 'next') && !W ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
         '</header>' +
         '<main class="b-stage">' +
-          '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span></div></section>' +
+          '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span><div class="b-talk"></div></div></section>' +
           watchBar() +
           body +
           watchLog() +
@@ -784,7 +1025,8 @@
       '</div>';
     lastAnim = S.anim;
     lastHid = S.hid;
-    reqKey = '';
+    talkKey = '';
+    EQ.colors = null;
   }
 
   /** what changes without redrawing: who is lifted, playing or waiting, Bobby's line, button labels */
@@ -806,25 +1048,17 @@
       const hit = el.querySelector('.b-hit');
       if (hit) hit.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    // requests sit above the lifted card
-    const rk = S.phase === 'round' ? S.seq + '|' + S.sel + '|' + P.pending + '|' + JSON.stringify(S.round.steer) : '';
-    if (rk !== reqKey) {
-      reqKey = rk;
-      root.querySelectorAll('.b-call, .b-reqs-in').forEach((el) => { el.innerHTML = ''; });
-      if (S.phase === 'round' && S.sel >= 0 && !P.pending) {
-        const st = S.round.steer || {};
-        const html = '<div class="b-reqs" aria-label="Ask Bobby">' + (A.REQS[S.round.dir] || []).map((rq, i) => {
-          const same = (k) => rq[k] && Math.sign(st[k] || 0) === Math.sign(rq[k]);
-          const active = (rq.x && st.x === rq.x) || same('p') || same('s') || same('t') || same('c');
-          if (rq.m && st.m) return '<button type="button" class="b-req on" data-act="req" data-i="' + i + '">' + esc(rq.label + ' (' + st.m + ')') + '</button>';
-          return '<button type="button" class="b-req' + (active ? ' on' : '') + '" data-act="req" data-i="' + i + '">' + esc(rq.label) + '</button>';
-        }).join('') + '</div>';
-        const call = root.querySelector('.b-call[data-i="' + S.sel + '"]');
-        if (call) call.innerHTML = html;
-        const inCard = root.querySelector('.b-card[data-i="' + S.sel + '"] .b-reqs-in');
-        if (inCard) inCard.innerHTML = html;
-      }
+    // what Bobby has to offer about the lifted card
+    const t = talking() ? talk() : null;
+    const tk = t ? [S.seq, S.sel, t.mode, t.topic, (t.why || []).join(), t.note, t.canChange, t.canCut, W ? 'w' : ''].join('|') : '';
+    if (tk !== talkKey) {
+      talkKey = tk;
+      const el = root.querySelector('.b-talk');
+      if (el) el.innerHTML = talkHtml();
     }
+    // the ones passed on stay where they are, marked
+    root.querySelectorAll('.b-cards .b-card[data-i]').forEach((el) => el.classList.toggle('b-nope', B.isOut(S, opts[Number(el.dataset.i)])));
+    root.querySelectorAll('.b-eq').forEach((c) => { if (!c.closest('.is-playing') && c.dataset.on) { delete c.dataset.on; c.getContext('2d').clearRect(0, 0, c.width, c.height); } });
     const st = W ? W.steps[W.i] : null;
     root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && (st.kind === 'choose' || st.kind === 'why') && st.i === Number(el.dataset.i)));
     if (W) {
@@ -849,13 +1083,62 @@
     patch();
   }
 
+  // ---------------------------------------------------------------- the dev menu: what the cards show
+
+  function loadDev() {
+    try { const d = JSON.parse(window.localStorage.getItem(DEV_KEY) || 'null'); if (d && typeof d === 'object') return { open: !!d.open, hide: d.hide || {} }; } catch (e) { /* blocked: defaults */ }
+    return { open: false, hide: {} };
+  }
+  function saveDev() { try { window.localStorage.setItem(DEV_KEY, JSON.stringify(dev)); } catch (e) { /* blocked: this visit only */ } }
+  const blind = () => HIDES.every((h) => dev.hide[h[0]]);
+  function applyDev() {
+    if (!root) return;
+    HIDES.forEach((h) => root.classList.toggle('hx-' + h[0], !!dev.hide[h[0]]));
+    root.classList.toggle('hx-blind', blind());
+    if (!devEl) return;
+    devEl.classList.toggle('open', dev.open);
+    const tab = devEl.querySelector('.b-dev-tab'), n = HIDES.filter((h) => dev.hide[h[0]]).length;
+    tab.setAttribute('aria-expanded', String(dev.open));
+    tab.textContent = 'Dev' + (blind() ? ' · blind' : n ? ' · ' + n + ' hidden' : '');
+    devEl.querySelectorAll('input[data-show]').forEach((el) => { el.checked = !dev.hide[el.dataset.show]; });
+    devEl.querySelector('input[data-blind]').checked = blind();
+  }
+  function mountDev() {
+    devEl = document.createElement('aside');
+    devEl.className = 'b-dev';
+    devEl.hidden = true;
+    devEl.setAttribute('aria-label', 'Dev: what the cards show');
+    devEl.innerHTML = '<button type="button" class="b-dev-tab" aria-controls="b-dev-panel">Dev</button>' +
+      '<div class="b-dev-panel" id="b-dev-panel">' +
+        '<b>What the cards show</b>' +
+        '<label class="b-dev-blind"><input type="checkbox" data-blind> Blind mode</label>' +
+        HIDES.map((h, k) => (k === 6 ? '<span class="b-dev-sub">Also on cards</span>' : '') + '<label><input type="checkbox" data-show="' + h[0] + '" checked> ' + esc(h[1]) + '</label>').join('') +
+        '<button type="button" class="b-dev-all">Show everything</button>' +
+      '</div>';
+    devEl.addEventListener('click', (e) => {
+      if (e.target.closest('.b-dev-tab')) { dev.open = !dev.open; saveDev(); applyDev(); }
+      if (e.target.closest('.b-dev-all')) { dev.hide = {}; saveDev(); applyDev(); }
+    });
+    devEl.addEventListener('change', (e) => {
+      const el = e.target;
+      if (el.dataset.blind != null) { dev.hide = {}; if (el.checked) HIDES.forEach((h) => { dev.hide[h[0]] = true; }); } else if (el.dataset.show) dev.hide[el.dataset.show] = !el.checked;
+      saveDev();
+      applyDev();
+      EQ.colors = null;
+    });
+    document.body.appendChild(devEl);
+  }
+
   // ---------------------------------------------------------------- outside
 
   function mount(el, h) {
     root = el;
     host = h || {};
     S = load();
+    dev = loadDev();
     root.addEventListener('click', onClick);
+    if (typeof document !== 'undefined' && document.body) mountDev();
+    applyDev();
     if (Odd.transport && Odd.transport.on) {
       Odd.transport.on('end', () => { if (P.playing) { P.playing = false; P.climb = -1; P.passes = null; render(); } });
       Odd.transport.on('stall', () => { if (P.playing) { P.playing = false; P.climb = -1; render(); } });
@@ -864,6 +1147,7 @@
 
   function show(on) {
     shown = !!on;
+    if (devEl) devEl.hidden = !shown;
     if (!shown) {
       if (W && !W.paused) { W.paused = true; clearTimeout(W.timer); }
       halt();
@@ -886,6 +1170,8 @@
     mount, show, open, onKey,
     get state() { return S; },
     get playing() { return P.playing; },
+    get talk() { return talking() ? Object.assign({}, talk()) : null; },
+    get dev() { return JSON.parse(JSON.stringify(dev)); },
     get watching() { return W ? { i: W.i, steps: W.steps.length, paused: W.paused, brief: W.brief, path: W.path, kind: W.steps[W.i].kind } : null; },
   };
 })(globalThis.Odd = globalThis.Odd || {});

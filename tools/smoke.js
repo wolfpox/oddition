@@ -51,6 +51,7 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.waitForTimeout(900);
 
   // ---- Bones to Gold
+  const Odd_ready = (t) => /talk about this one|explore that|Ask me about|story in that/.test(t);
   const bones = () => page.evaluate(() => ({ phase: Odd.bones.state.phase, sel: Odd.bones.state.sel, dir: Odd.bones.state.round && Odd.bones.state.round.dir, playing: Odd.bones.playing && Odd.transport.playing, order: Odd.bones.state.idea.order.slice() }));
   ok(await page.evaluate(() => document.body.dataset.screen === 'bones' && document.querySelectorAll('.b-open .b-big').length === 3 && getComputedStyle(document.querySelector('#desk')).display === 'none'), 'the Idea Builder opens on Groove, Melody or Riff');
   await page.click('.b-big[data-path="melody"] .b-hit');
@@ -70,10 +71,47 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.waitForTimeout(2100);
   b = await bones();
   ok(b.playing && b.sel === 2, 'then the next one lifts and plays');
-  ok((await page.$$('.b-call .b-req')).length >= 4, 'requests sit above the lifted card');
-  await page.click('.b-call .b-req >> text=Why does that work?');
-  ok(/scale|minor|major|Dorian|Lydian|Phrygian|Mixolydian|Pentatonic/i.test(await page.textContent('.b-say')), 'Bobby says why');
+  // the booth: Bobby is ready to talk, and only says more when asked
+  ok(Odd_ready(await page.textContent('.b-say')) && (await page.$$('.b-talk .b-q')).length >= 2 && (await page.$$('.b-card.lifted .b-bx')).length === 3, 'under the playing card: ✗ ? ✓; Bobby offers questions');
+  const q0 = await page.textContent('.b-talk .b-q');
+  await page.click('.b-talk .b-q >> nth=0');
+  ok((await page.textContent('.b-say')).length > 60 && !(await page.$$eval('.b-talk .b-q', (els) => els.map((e) => e.textContent))).includes(q0), 'a question gets an answer');
+  await page.click('.b-card.lifted [data-act="explain"]');
+  ok(/scale|minor|major|Dorian|Lydian|Phrygian|Mixolydian|Pentatonic/i.test(await page.textContent('.b-say')) && (await page.$$('.b-talk .b-steer')).length >= 3, '? explains it, with ways to steer');
+  await page.click('.b-card.lifted [data-act="nope"]');
+  ok(/make the cut/.test(await page.textContent('.b-say')) && (await page.$$('.b-why')).length >= 5 && await page.isDisabled('[data-act="whydone"]'), '✗ asks why, and needs a reason');
+  await page.click('.b-why[data-f="density"]');
+  await page.click('.b-why[data-f="speed"]');
+  await page.click('[data-act="whydone"]');
+  ok((await page.$$('.b-facts li')).length === 2 && /notes in two bars/.test(await page.textContent('.b-facts')) && /Same on every card/.test(await page.textContent('.b-facts li.fixed')), 'each reason comes with what the card has');
+  const card2 = await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[2]));
+  await page.click('[data-act="change"]');
+  await page.waitForTimeout(2300);
+  b = await bones();
+  ok(b.playing && b.sel === 2 && /changed/.test(await page.textContent('.b-say')) && card2 !== (await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[2]))), 'hear it changed: a new card takes its place and plays');
+  await page.click('.b-card.lifted [data-act="nope"]');
+  await page.click('.b-why[data-f="density"]');
+  await page.click('[data-act="whydone"]');
+  await page.click('[data-act="cutit"]');
+  await page.waitForTimeout(2300);
+  ok(/Filtered out/.test(await page.textContent('.b-say')) && !!(await page.$('.b-cutnote [data-act="uncut"]')), 'filter out cards like it, and it says how many are left');
+  await page.click('[data-act="uncut"]');
+  await page.waitForTimeout(200);
+  ok(!(await page.$('.b-cutnote')), 'and they can all come back');
+  // the dev menu: blind mode leaves just the card, and the EQ plays in it
+  await page.click('.b-dev .b-dev-tab');
+  await page.click('.b-dev input[data-blind]');
+  await page.click('.b-dev .b-dev-tab');
+  await page.click('.b-cards .b-card[data-i="1"] .b-hit');
+  await page.waitForTimeout(900);
+  ok(await page.evaluate(() => document.querySelector('#bones').classList.contains('hx-blind') && getComputedStyle(document.querySelector('.b-card .b-head')).display === 'none' && getComputedStyle(document.querySelector('.b-card.is-playing .b-eq')).display === 'block' && document.querySelector('.b-card.is-playing .b-eq').dataset.on === '1'), 'blind mode: just the card, with the EQ moving');
+  await page.screenshot({ path: path.join(out, 'bones-blind.png') });
+  await page.click('.b-dev .b-dev-tab');
+  await page.click('.b-dev .b-dev-all');
+  await page.click('.b-dev .b-dev-tab');
+  ok(await page.evaluate(() => !document.querySelector('#bones').className.includes('hx-')), 'show everything again');
   await page.click('.b-card.lifted [data-act="promote"]');
+  await page.waitForTimeout(2300);
   await page.waitForTimeout(500);
   b = await bones();
   ok(b.dir === 'seed2' && b.sel === 1, 'promoting moves on to the shape');
@@ -93,7 +131,7 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   }
   b = await bones();
   ok(b.order.join() === 'perc,bass' && (await page.$$('.b-dir')).length === 6, 'layers stack; grow the beat opens after percussion');
-  ok((await page.$$('.b-row')).length === 4, 'every round is in the history');
+  ok((await page.$$('.b-row')).length === 5, 'every round is in the history, and the filter before it');
   await page.click('[data-act="finish"]');
   await page.waitForTimeout(300);
   await page.click('[data-act="climb"]');

@@ -1505,18 +1505,10 @@ body:not([data-screen="song"]) #songb { display: none; }
   .b-big-name { font-size: 28px; }
 }
 
-.b-callouts { display: grid; column-gap: 28px; align-items: end; min-height: 176px; margin-top: 4px; }
-.b-reqs { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 24px; position: relative; animation: b-fadeup 0.3s ease-out backwards; }
-.b-reqs::after { content: ''; position: absolute; left: 50%; bottom: -14px; width: 2px; height: 12px; margin-left: -1px; background: var(--line); }
-.b-req { background: var(--raised); border: 1px solid var(--line); color: var(--ink); border-radius: 16px; min-height: 36px; padding: 0 16px; font-size: 14px; white-space: nowrap; }
-.b-req:hover { border-color: var(--b-bone2); }
-.b-req.on { border-color: var(--b-gold); color: var(--b-gold); }
-.b-reqs-in { display: none; }
 
 /* the deck: three cards between two arrows; the three slide off one side and the next come in from the other */
 .b-deal { display: grid; grid-template-columns: 52px auto 52px; column-gap: 14px; align-items: center; flex: none; }
-.b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 2; }
-.b-deal > .b-callouts { grid-row: 1; }
+.b-deal > .b-cards { grid-column: 2; }
 .b-deal > .b-cards { grid-row: 2; }
 .b-arrow { grid-row: 2; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: var(--raised); border: 1px solid var(--line); color: var(--ink); transition: border-color 0.2s, color 0.2s, opacity 0.2s; }
 .b-arrow.prev { grid-column: 1; }
@@ -1527,7 +1519,6 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-deal.out-l .b-card, .b-deal.out-r .b-card { transition: transform 0.2s ease-in, opacity 0.2s ease-in; opacity: 0; }
 .b-deal.out-l .b-card { transform: translateX(-90px); }
 .b-deal.out-r .b-card { transform: translateX(90px); }
-.b-deal.out-l .b-callouts, .b-deal.out-r .b-callouts { opacity: 0; transition: opacity 0.12s; }
 @keyframes b-in-r { from { opacity: 0; transform: translateX(110px); } to { opacity: 1; transform: none; } }
 @keyframes b-in-l { from { opacity: 0; transform: translateX(-110px); } to { opacity: 1; transform: none; } }
 /* the pool: a tick per card, grouped as dealt; the three on screen in gold, the ones dealt so far filled */
@@ -1540,7 +1531,7 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-seg:hover i { background: color-mix(in srgb, var(--b-gold) 55%, transparent); }
 .b-count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 
-.b-cards { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding-top: 4px; }
+.b-cards { display: flex; gap: 28px; justify-content: center; align-items: flex-start; flex-wrap: wrap; padding-top: 22px; padding-bottom: 78px; }
 .b-card {
   position: relative; box-sizing: border-box; width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px;
   transition: transform 0.28s cubic-bezier(.2,.8,.2,1), box-shadow 0.28s, border-color 0.28s;
@@ -1550,13 +1541,13 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-card.lifted { transform: translateY(-16px); border-color: var(--b-gold); box-shadow: 0 22px 44px rgba(0,0,0,.5), 0 0 0 1px color-mix(in srgb, var(--b-gold) 40%, transparent); }
 .b-card.is-wait { border-style: dashed; border-color: color-mix(in srgb, var(--b-gold) 55%, transparent); }
 .b-card.is-wait .b-vis { opacity: 0.35; transition: opacity 0.3s; }
-.b-card .b-promote { display: none; }
-.b-card.lifted .b-promote { display: flex; }
 .b-hit { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; border: 0; border-radius: 14px; z-index: 1; padding: 0; }
 .b-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 8px; }
 .b-letter { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--muted); }
 .b-tag { font-weight: 600; font-size: 15px; }
-.b-stat { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+.b-stat { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 10px; font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+.b-f { white-space: nowrap; }
+.b-f.alt { display: none; }
 .b-vis { position: relative; width: 272px; height: 92px; background: var(--screen); border-radius: 8px; overflow: hidden; }
 .b-vis i { position: absolute; display: block; }
 .b-gl { top: 0; bottom: 0; width: 1px; background: var(--grid); }
@@ -1580,7 +1571,6 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-nlab { position: absolute; font-family: var(--font-mono); font-size: 10px; color: var(--ink); }
 .b-vis .b-ph { display: none; top: 0; bottom: 0; width: 2px; background: var(--b-gold); box-shadow: 0 0 8px var(--b-gold); }
 .is-playing .b-ph { display: block; }
-.b-promote { position: relative; z-index: 2; margin-top: 12px; width: 100%; justify-content: center; }
 
 .b-actions { display: flex; gap: 14px; justify-content: center; align-items: center; margin-top: 30px; flex-wrap: wrap; text-align: center; }
 .b-hint { color: var(--faint); font-size: 13px; }
@@ -1631,24 +1621,18 @@ body:not([data-screen="song"]) #songb { display: none; }
 
 @media (max-width: 1140px) {
   .b-deal { grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; width: 100%; }
-  .b-deal > .b-callouts, .b-deal > .b-cards { grid-column: 1 / -1; }
+  .b-deal > .b-cards { grid-column: 1 / -1; }
   .b-arrow { grid-row: 3; }
   .b-arrow.prev { grid-column: 1; justify-self: end; }
   .b-arrow.next { grid-column: 2; justify-self: start; }
 }
 @media (max-width: 1000px) {
-  .b-callouts { display: none; }
-  .b-reqs-in { display: block; position: relative; z-index: 2; }
-  .b-reqs-in .b-reqs { flex-direction: row; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
-  .b-reqs-in .b-reqs::after { display: none; }
-  .b-cards { padding-top: 20px; }
   .b-dirs { grid-template-columns: minmax(0, 340px); }
 }
 @media (max-width: 560px) {
   .b-top { padding-left: 16px; padding-right: 16px; gap: 10px; }
   .b-meta { display: none; }
   .b-row-label { width: 100%; }
-  .b-req { white-space: normal; }
   .b-bobby { gap: 8px; }
   .b-face { width: 64px; height: 64px; }
   .b-bubble { font-size: 15px; }
@@ -2078,9 +2062,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
 .b-wb-step { font-family: var(--font-mono); font-size: 12px; color: var(--faint); margin-right: 4px; white-space: nowrap; }
 .b-wb-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--line) 70%, transparent); }
 .b-wb-bar i { display: block; height: 100%; width: 0; background: var(--b-gold); transition: width 0.4s; }
-.b-watching .b-promote, .b-watching .b-actions, .b-watching .b-arrow, .b-watching .b-call, .b-watching .b-reqs-in, .b-watching .b-back, .b-watching .b-big-go { display: none !important; }
+.b-watching .b-booth, .b-watching .b-talk, .b-watching .b-actions, .b-watching .b-arrow, .b-watching .b-cutnote, .b-watching .b-back, .b-watching .b-big-go { display: none !important; }
 .b-watching .b-hit, .b-watching .b-seg { pointer-events: none; }
-.b-watching .b-callouts { min-height: 24px; }
 .b-card.b-chosen { border-color: var(--b-gold); box-shadow: 0 22px 44px rgba(0,0,0,.5), 0 0 0 3px color-mix(in srgb, var(--b-gold) 70%, transparent); }
 .b-card.b-chosen::before { content: 'Chosen'; position: absolute; top: -11px; right: 12px; z-index: 3; font-family: var(--font-mono); font-size: 11px; font-weight: 700; background: var(--b-gold); color: var(--b-on-gold); padding: 2px 8px; border-radius: 5px; }
 .b-again { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 14px; }
@@ -2102,6 +2085,84 @@ span.sg-rname { cursor: default; color: var(--muted); }
   .b-watchbar { margin: 10px 0 20px; }
   .b-wb-ctl { width: 100%; }
   .b-wb-ctl .b-primary { margin-left: auto; }
+}
+
+/* ======================= the booth =======================
+ * Under the card that's playing: ✗ not it, ? what is it, ✓ keep it.
+ * Bobby's bubble holds the questions a card raises and the reasons for a no. */
+.b-booth { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 12px); z-index: 2; justify-content: center; gap: 14px; animation: b-fadeup 0.25s ease-out backwards; }
+.b-card.lifted .b-booth { display: flex; }
+.b-bx { width: 58px; height: 52px; border-radius: 14px; display: grid; place-items: center; padding: 0; border: 2px solid var(--line); background: var(--raised); color: var(--ink); font-family: var(--font-display); font-weight: 800; font-size: 26px; line-height: 1; transition: transform 0.15s, filter 0.15s, border-color 0.15s; }
+.b-bx:hover { transform: translateY(-2px); }
+.b-bx.no { background: #d8423a; border-color: #d8423a; color: #fff; width: 66px; }
+.b-bx.no:hover { filter: brightness(1.08); }
+.b-bx.ask:hover { border-color: var(--b-bone2); }
+.b-bx.yes { background: var(--b-gold); border-color: var(--b-gold); color: var(--b-on-gold); }
+.b-bx.yes:hover { filter: brightness(1.06); }
+.b-card.b-nope:not(.lifted) { opacity: 0.42; }
+.b-card.b-nope::after { content: '✕'; position: absolute; top: -12px; left: 12px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #d8423a; color: #fff; font-size: 13px; font-weight: 800; }
+.b-cutnote { margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.b-cutnote .b-link { margin: 0; }
+
+.b-talk:empty { display: none; }
+.b-talk { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.b-qs, .b-steers, .b-whys, .b-talk-do { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.b-q { background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; min-height: 36px; padding: 6px 14px; font-size: 14px; text-align: left; line-height: 1.3; }
+.b-q::before { content: '?'; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border-radius: 50%; background: color-mix(in srgb, var(--b-bone2) 30%, transparent); color: var(--ink); font-size: 11px; font-weight: 800; vertical-align: 1px; }
+.b-q:hover { border-color: var(--b-bone2); }
+.b-steers > span { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.b-steer { background: transparent; border: 1px solid color-mix(in srgb, var(--b-gold) 60%, var(--line)); color: var(--b-gold); border-radius: 10px; min-height: 36px; padding: 0 14px; font-size: 14px; font-weight: 600; }
+.b-steer:hover { background: color-mix(in srgb, var(--b-gold) 12%, transparent); }
+.b-why { display: inline-flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; min-height: 38px; padding: 0 14px 0 10px; font-size: 14px; }
+.b-why i { width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--muted); display: grid; place-items: center; box-sizing: border-box; }
+.b-why.on { border-color: #d8423a; }
+.b-why.on i { background: #d8423a; border-color: #d8423a; }
+.b-why.on i::after { content: ''; width: 7px; height: 4px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateY(-1px) rotate(-45deg); }
+.b-talk-do .b-primary, .b-talk-do .b-ghost { min-height: 40px; font-size: 14px; }
+.b-talk-do .b-primary:disabled { opacity: 0.45; filter: none; cursor: default; }
+.b-facts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; line-height: 1.45; }
+.b-facts li { padding-left: 12px; border-left: 3px solid #d8423a; }
+.b-facts li.fixed { border-left-color: var(--line); color: var(--muted); }
+.b-facts b { font-weight: 700; margin-right: 4px; }
+.b-talk-ask { margin: 2px 0 0; font-size: 15px; }
+.b-talk-note { margin: 0; font-size: 14px; color: var(--muted); }
+
+/* the EQ: shown in place of the piano roll */
+.b-vis .b-eq { display: none; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.hx-roll .b-vis > :not(.b-eq) { display: none !important; }
+.hx-roll .b-vis .b-eq { display: block; }
+.hx-roll .b-vis { background: var(--screen) linear-gradient(to top, color-mix(in srgb, var(--ink) 10%, transparent) 1px, transparent 1px) 0 calc(100% - 15px) / 100% 1px no-repeat; }
+
+/* what the dev menu hides */
+.hx-roll .b-f.alt { display: inline; }
+.hx-words [data-x="words"], .hx-bpm [data-x="bpm"], .hx-key [data-x="key"], .hx-scale [data-x="scale"], .hx-chords [data-x="chords"],
+.hx-inst [data-x="inst"], .hx-meter [data-x="meter"], .hx-num [data-x="num"], .hx-letter [data-x="letter"], .hx-deck [data-x="deck"] { display: none !important; }
+.hx-blind .b-head, .hx-blind .b-meta { display: none; }
+@media (min-width: 1141px) { .b-deal > .b-cards { flex-wrap: nowrap; } }
+@media (max-width: 1140px) {
+  .b-cards { padding-bottom: 14px; }
+  .b-cards > .b-card.lifted { margin-bottom: 66px; }
+}
+.hx-blind .b-card { padding-top: 14px; }
+
+/* the dev menu, on the left edge */
+.b-dev { position: fixed; left: 0; top: 96px; z-index: 40; display: flex; align-items: flex-start; font-size: 13px; }
+.b-dev[hidden] { display: none; }
+.b-dev-tab { order: 2; writing-mode: vertical-rl; transform: rotate(180deg); background: var(--raised); color: var(--muted); border: 1px solid var(--line); border-left: 0; border-radius: 8px 0 0 8px; padding: 12px 6px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.b-dev-tab:hover { color: var(--ink); }
+.b-dev-panel { display: none; flex-direction: column; gap: 4px; width: 210px; padding: 12px 14px; background: var(--raised); border: 1px solid var(--line); border-left: 0; border-radius: 0 10px 10px 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.b-dev.open .b-dev-panel { display: flex; }
+.b-dev-panel > b { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-bottom: 4px; }
+.b-dev-panel label { display: flex; align-items: center; gap: 8px; min-height: 28px; color: var(--ink); cursor: pointer; }
+.b-dev-blind { font-weight: 700; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.b-dev-sub { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-top: 8px; }
+.b-dev-all { margin-top: 8px; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; min-height: 32px; font-size: 12px; }
+.b-dev-all:hover { color: var(--ink); }
+@media (max-width: 560px) {
+  .b-dev { top: auto; bottom: 16px; }
+  .b-dev-panel { width: min(230px, calc(100vw - 60px)); }
+  .b-bx { width: 54px; height: 48px; }
+  .b-bx.no { width: 60px; }
 }
 
 </style>
@@ -10496,8 +10557,22 @@ span.sg-rname { cursor: default; color: var(--muted); }
     });
   }
 
-  /** the batches for a round: [[option x3]], plus the pool's size */
+  /**
+   * The batches for a round: [[option x3]], plus the pool's size. Cards the
+   * listener filtered out (round.cut, judged by Odd.booth) leave the pool,
+   * and what's left is dealt again the same way.
+   */
   function deckOf(dir, round, idea) {
+    const full = fullDeck(dir, round, idea);
+    const cut = round.cut;
+    if (!cut || !cut.length || !Odd.booth) return full;
+    return cached('c' + dir + (round.deal || 0) + JSON.stringify(round.steer || {}) + JSON.stringify(cut) + JSON.stringify(idea), () => {
+      const all = [].concat.apply([], full.batches);
+      const pool = Odd.booth.keep(dir, all, cut, idea).sort((x, y) => x.a - y.a || (x.b || 0) - (y.b || 0));
+      return { batches: dealBands(bandsOf(pool, round.deal || 0, dir)), total: pool.length, cut: all.length - pool.length };
+    });
+  }
+  function fullDeck(dir, round, idea) {
     const st = round.steer || {}, deal = round.deal || 0;
     return cached('d' + dir + deal + JSON.stringify(st) + JSON.stringify(idea), () => {
       if (dir === 'seed1') {
@@ -10642,15 +10717,18 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
 
   /** the three options on screen: batch round.batch of the round's deck */
+  /** the three on screen; a card the listener asked to hear changed takes its slot (round.subs[batch][slot]) */
   function options(dir, round, idea) {
     const bs = deckOf(dir, round, idea).batches;
-    return bs.length ? bs[Math.max(0, Math.min(bs.length - 1, round.batch || 0))] : [];
+    if (!bs.length) return [];
+    const b = Math.max(0, Math.min(bs.length - 1, round.batch || 0)), sub = round.subs && round.subs[b];
+    return sub ? bs[b].map((o, i) => sub[i] || o) : bs[b];
   }
   /** where the round is in its deck: batch, batches, cards from..to of total */
   function deckInfo(dir, round, idea) {
     const d = deckOf(dir, round, idea), b = Math.max(0, Math.min(d.batches.length - 1, round.batch || 0));
     const from = d.batches.slice(0, b).reduce((n, x) => n + x.length, 0);
-    return { batch: b, batches: d.batches.length, sizes: d.batches.map((x) => x.length), from: from + 1, to: from + d.batches[b].length, total: d.total, deal: round.deal || 0 };
+    return { batch: b, batches: d.batches.length, sizes: d.batches.map((x) => x.length), from: from + 1, to: from + d.batches[b].length, total: d.total, deal: round.deal || 0, cut: d.cut || 0 };
   }
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
@@ -11135,7 +11213,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       const r = S.round, inf = flow.info(S);
       if (!inf) return S;
       const last = inf.batch >= inf.batches - 1;
-      const round = last ? Object.assign({}, r, { batch: 0, deal: (r.deal || 0) + 1, seen: 0 }) : Object.assign({}, r, { batch: inf.batch + 1, seen: Math.max(r.seen || 0, inf.batch + 1) });
+      const round = last ? Object.assign({}, r, { batch: 0, deal: (r.deal || 0) + 1, seen: 0, subs: null }) : Object.assign({}, r, { batch: inf.batch + 1, seen: Math.max(r.seen || 0, inf.batch + 1) });
       return Object.assign({}, S, { round, seq: S.seq + 1, sel: -1, msg: last ? 'shuffled' : 'more', line: null, anim: S.anim + 1, kind: 'next' });
     },
     /** the three before; the first three stay put */
@@ -11174,7 +11252,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
         if (next === '4/4') delete steer.m; else steer.m = next;
         reply = meterLine(next);
       }
-      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0, deal: 0, seen: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0, deal: 0, seen: 0, subs: null }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
     },
     /** go back to an earlier round as it was; everything after it stays in the history */
     back(S, row) {
@@ -11218,8 +11296,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
-    emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
+    steerPool, deckOf, fullDeck, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
+    emptyIdea, upTo, seq, climb, cap, KEY_WORD, UNDER_INST, PAD_INST, BASS_WORD, KIT_WORD, VOICE_WORD, climbSeq, lineage, ideaName, toParts, flow,
   };
 })(globalThis.Odd = globalThis.Odd || {});
 
@@ -11486,6 +11564,609 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
 
   Odd.watch = { TRAITS, BRIEFS, BRIEF_ORDER, AXIS, plan, transcript, waysFor };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/booth.js */
+/* Oddition — the audition booth: listen, then keep a card, pass on it, or ask about it.
+ *
+ * Cards say little; Bobby knows the rest. This module measures what a card
+ * actually plays (its tempo, notes, range, instrument...), turns a "no"
+ * into reasons with the numbers behind them, finds a version of the card
+ * changed on those reasons, or filters the deck of cards like it. It also
+ * holds Bobby's encyclopedia: questions a card raises, and his answers,
+ * each ending in directions the deck can be steered in.
+ *
+ * Pure: everything takes the flow state (Odd.audition.flow) or a card and
+ * gives back words or a new state.
+ */
+(function (Odd) {
+  'use strict';
+  const A = Odd.audition;
+  const F = A.flow;
+
+  // ---------------------------------------------------------------- what a card plays
+
+  // the transport tracks a round's own cards play on (a sound changes everything)
+  const OWN = {
+    seed1: ['mel'], seed2: ['mel'], hook: ['mel'], rrhythm: ['rlo', 'rhi'], rnotes: ['rlo', 'rhi'], weight: ['rlo', 'rhi'],
+    chords: ['chd'], bass: ['bas'], gbass: ['bas'], pads: ['pad'], keys: ['kys'], under: ['und'], perc: ['prc'],
+    beat: ['bt'], pocket: ['bt'], drums: ['bt'],
+  };
+  const PATCH_WORD = {
+    'kit-acoustic': 'a live kit', 'kit-808': 'an 808 kit', 'kit-909': 'a 909 kit', 'kit-lofi': 'a dusty kit', 'kit-perc': 'hand percussion',
+    'bass-sub': 'sub bass', 'bass-saw': 'saw bass', 'bass-808': '808 bass', 'bass-pluck': 'picked bass',
+    epiano: 'electric piano', keys: 'soft keys', organ: 'organ', stab: 'synth stabs', 'pad-warm': 'a warm pad', 'pad-glass': 'a glassy pad', strings: 'strings',
+    'lead-square': 'a square lead', 'lead-saw': 'a saw lead', 'lead-soft': 'a soft lead', grit: 'gritty guitar', bell: 'bells', pluck: 'a pluck',
+  };
+  const PERC_WORD = {
+    clap: 'claps', tap: 'woodblock', tapLo: 'woodblock', shaker: 'shaker', tamb: 'tambourine', rim: 'rimshot', cowbell: 'cowbell', conga: 'congas', congaLo: 'congas',
+    bongo: 'bongos', bongoLo: 'bongos', claves: 'claves', agogo: 'agogô', agogoLo: 'agogô', guiro: 'guiro', tri: 'triangle',
+  };
+  const DRUMS = /^(perc|beat|pocket|drums)$/;
+  // how bright each interval above home sounds: the major 3rd most, the minor 3rd least
+  const LIGHT = { 1: -0.8, 3: -1, 4: 1, 6: 0.4, 8: -0.6, 9: 0.6, 10: -0.4, 11: 0.5 };
+
+  const MEMO = new WeakMap();
+  const listOf = (xs) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+  const mod = (a, n) => ((a % n) + n) % n;
+  const r1 = (x) => Math.round(x * 10) / 10;
+
+  /** what a card plays, measured: null fields don't apply to it (drums have no pitch) */
+  function measure(dir, o, idea) {
+    let byIdea = MEMO.get(idea);
+    if (!byIdea) { byIdea = new WeakMap(); MEMO.set(idea, byIdea); }
+    const hit = byIdea.get(o);
+    if (hit) return hit;
+    const q = A.seq(idea, { dir, spec: o });
+    const own = OWN[dir] ? OWN[dir].map((k) => 'b2g-' + k) : Object.keys(q.tracks);
+    const evs = q.events.filter((e) => own.indexOf(e.track) >= 0);
+    const drum = (e) => q.tracks[e.track] && q.tracks[e.track].channel === 9;
+    const pit = evs.filter((e) => !drum(e));
+    const m = A.ideaMeter(idea, { dir, spec: o });
+    const steps = q.steps || 2 * m.steps;
+    const onsets = {};
+    evs.forEach((e) => { onsets[Math.round(e.t / A.STEP_TICKS)] = (onsets[Math.round(e.t / A.STEP_TICKS)] || 0) + 1; });
+    const at = Object.keys(onsets).map(Number);
+    const offs = at.filter((s) => !m.pulses.some((p) => p.s === mod(s, m.steps))).length;
+    const sound = dir === 'sound' ? o : idea.layers.sound;
+    const kit = /^(pocket|beat|drums)$/.test(dir) ? o : idea.layers.pocket || idea.layers.beat || idea.layers.drums;
+    const swing = m.compound ? 0 : sound ? sound.swing || 0 : kit ? kit.swing || 0 : 0;
+    // instruments: the patches heard, or for hand percussion the instruments it hits
+    let inst;
+    if (dir === 'perc') inst = Array.from(new Set(o.hits.map((h) => PERC_WORD[h.k] || 'woodblock')));
+    else inst = Array.from(new Set(own.filter((k) => q.tracks[k] && evs.some((e) => e.track === k)).map((k) => PATCH_WORD[q.tracks[k].patch] || q.tracks[k].patch)));
+    const out = {
+      bpm: q.bpm, steps, n: at.length, off: at.length ? offs / at.length : 0, offs, swing: swing > 0.5, meter: m.id,
+      inst: inst.length ? listOf(inst) : null, drums: DRUMS.test(dir),
+      lo: null, hi: null, avg: null, range: null, len: null, thick: null, mood: null,
+    };
+    if (pit.length) {
+      const ps = pit.map((e) => e.p), dur = pit.reduce((t, e) => t + e.d, 0) || 1;
+      out.lo = Math.min.apply(null, ps);
+      out.hi = Math.max.apply(null, ps);
+      out.range = out.hi - out.lo;
+      out.avg = pit.reduce((t, e) => t + e.p * e.d, 0) / dur;
+      out.len = pit.reduce((t, e) => t + e.d, 0) / pit.length / (A.STEP_TICKS * 4);
+      const pon = new Set(pit.map((e) => Math.round(e.t / A.STEP_TICKS)));
+      out.thick = pit.length / Math.max(1, pon.size);
+      // everything is in C here: an interval above home is the pitch class
+      out.mood = pit.reduce((t, e) => t + (LIGHT[mod(e.p, 12)] || 0) * e.d, 0) / dur;
+      out.scale = scaleOfCard(dir, o, idea);
+    }
+    byIdea.set(o, out);
+    return out;
+  }
+  function scaleOfCard(dir, o, idea) {
+    if (o.mel && o.mel.scale) return o.mel.scale;
+    if (o.scale && A.MODE[o.scale]) return o.scale;
+    try { return A.scaleOf(idea); } catch (e) { return null; }
+  }
+
+  // ---------------------------------------------------------------- words for numbers
+
+  const IV_NAME = ['one note', 'a half step', 'a whole step', 'a minor 3rd', 'a major 3rd', 'a 4th', 'a tritone', 'a 5th', 'a minor 6th', 'a major 6th', 'a minor 7th', 'a major 7th', 'an octave'];
+  function intervalName(st) {
+    if (st <= 12) return IV_NAME[Math.max(0, st)];
+    if (st < 24) return 'an octave and ' + IV_NAME[st - 12].replace(/^an? /, 'a ');
+    return 'two octaves or more';
+  }
+  function noteName(p) { const r = Math.round(p); return A.NAMES[mod(r, 12)] + (Math.floor(r / 12) - 1); }
+  function tempoWord(bpm) {
+    return bpm < 70 ? 'slow, near a resting heartbeat' : bpm < 90 ? 'relaxed, a head-nodding pace' : bpm < 108 ? 'about walking pace' : bpm < 125 ? 'brisk, where a lot of dance music sits' : bpm < 145 ? 'fast' : 'very fast';
+  }
+  function regWord(p) {
+    return p < 36 ? 'very low, down where you feel it more than hear it' : p < 48 ? 'low, in the bass' : p < 60 ? 'low-middle, under a singing voice' : p < 72 ? 'in the middle, where a voice sings' : p < 84 ? 'high' : 'very high';
+  }
+  function lenWord(b) { return b < 0.3 ? 'short and choppy' : b < 0.6 ? 'clipped' : b < 1.3 ? 'medium' : b < 2.5 ? 'long' : 'held'; }
+  function beatsWord(b) { return b < 0.3 ? 'a quarter of a beat or less' : b < 0.7 ? 'about half a beat' : b < 1.5 ? 'about a beat' : 'about ' + Math.round(b) + ' beats'; }
+  function moodWord(x) { return x < -0.35 ? 'dark: the notes that sound minor lead' : x < -0.1 ? 'a little dark' : x < 0.1 ? 'neither dark nor bright' : x < 0.35 ? 'a little bright' : 'bright: the notes that sound major lead'; }
+  /** what a card's sounds are called: hits for drums and a riff's rhythm, chords when they stack */
+  function unitOf(dir, m) { return DRUMS.test(dir) || dir === 'rrhythm' ? 'hits' : m && m.thick >= 1.5 && dir !== 'sound' ? 'chords' : 'notes'; }
+  const semis = (n) => n + (n === 1 ? ' semitone' : ' semitones');
+  function pct(x) { return Math.round(100 * x) + '%'; }
+
+  // ---------------------------------------------------------------- why not: the reasons
+
+  /*
+   * A reason to pass on a card. val reads it off a measured card (null: it
+   * doesn't apply); words says what the card has; up and down name the two
+   * ways it can change; show formats a value.
+   */
+  const FACTORS = [
+    { id: 'speed', label: 'Speed', val: (m) => m.bpm, eps: 1, up: 'faster', down: 'slower', show: (v) => Math.round(v) + ' BPM',
+      words: (m) => m.bpm + ' BPM: ' + m.bpm + ' beats a minute, ' + tempoWord(m.bpm) + '.' },
+    { id: 'inst', label: 'Instrument', cat: true, val: (m) => m.inst, show: (v) => v,
+      words: (m) => A.cap(m.inst) + '.' },
+    { id: 'rhythm', label: 'Rhythm', val: (m) => (m.n ? m.off : null), eps: 0.02, up: 'more off the beat', down: 'straighter', show: (v) => pct(v) + ' off the beat',
+      words: (m, dir) => m.n + ' ' + unitOf(dir, m) + ' over two bars, ' + (m.offs ? m.offs + ' of them between the beats' : 'every one on a beat') + '. ' + (m.swing ? 'Swung: the off-beats come a little late.' : 'Straight, not swung.') },
+    { id: 'pitch', label: 'Pitch', val: (m) => m.avg, eps: 0.5, up: 'higher', down: 'lower', show: (v) => 'around ' + noteName(v),
+      words: (m) => 'It sits around ' + noteName(m.avg) + ', ' + regWord(m.avg) + '.' },
+    { id: 'range', label: 'Range', val: (m) => m.range, eps: 0.5, up: 'wider', down: 'narrower', show: (v) => semis(Math.round(v)),
+      words: (m) => (m.range ? 'From ' + noteName(m.lo) + ' up to ' + noteName(m.hi) + ': ' + semis(m.range) + ', ' + intervalName(m.range) + '.' : 'One note, ' + noteName(m.lo) + ': no range at all.') },
+    { id: 'density', label: 'Density', val: (m) => m.n, eps: 0.5, up: 'busier', down: 'sparser', show: (v, dir, m) => Math.round(v) + ' ' + unitOf(dir, m),
+      words: (m, dir) => m.n + ' ' + unitOf(dir, m) + ' in two bars, about ' + r1(m.n / 2) + ' a bar.' },
+    { id: 'length', label: 'Note length', val: (m) => m.len, eps: 0.03, up: 'longer', down: 'shorter', show: (v) => beatsWord(v),
+      words: (m) => 'Its notes last ' + beatsWord(m.len) + ' on average: ' + lenWord(m.len) + '.' },
+    { id: 'thick', label: 'Thickness', val: (m) => m.thick, eps: 0.05, up: 'thicker', down: 'thinner', show: (v) => (v < 1.15 ? 'one note at a time' : 'about ' + r1(v) + ' notes at once'),
+      words: (m) => (m.thick < 1.15 ? 'One note at a time.' : 'About ' + r1(m.thick) + ' notes sounding at once.') },
+    { id: 'mood', label: 'Mood', val: (m) => m.mood, eps: 0.02, up: 'brighter', down: 'darker', show: (v) => (v < 0 ? 'darker' : 'brighter'),
+      words: (m) => A.cap(moodWord(m.mood)) + '.' + (m.scale && A.MODE[m.scale] ? ' Its scale is ' + A.MODE[m.scale].name + ', which sounds ' + A.MODE[m.scale].mood + '.' : '') },
+  ];
+  const FAC = {};
+  FACTORS.forEach((f) => { FAC[f.id] = f; });
+
+  /** every card in the round's deck as it stands (filters applied) */
+  function poolOf(S) {
+    return [].concat.apply([], A.deckOf(S.round.dir, S.round, S.idea).batches);
+  }
+  /** how a factor spreads over a pool: lo, hi, median, and whether it changes at all */
+  function spread(dir, pool, idea, f) {
+    const vs = pool.map((c) => f.val(measure(dir, c, idea))).filter((v) => v != null);
+    if (!vs.length) return { varies: false };
+    if (f.cat) return { varies: new Set(vs).size > 1, values: vs };
+    const s = vs.slice().sort((a, b) => a - b);
+    return { lo: s[0], hi: s[s.length - 1], med: s[Math.floor(s.length / 2)], varies: s[s.length - 1] - s[0] > f.eps };
+  }
+  /** where something the round can't change gets picked instead */
+  function elsewhere(f, dir, idea) {
+    const p = A.pathOf(idea);
+    if (f.id === 'speed') return p === 'groove' ? 'The speed was set with the pocket, the groove’s first screen.' : 'The speed gets picked later, in Sound and feel.';
+    if (f.id === 'inst') return dir === 'sound' ? '' : 'Instruments get picked later, in Sound and feel.';
+    return '';
+  }
+
+  /** the reasons a card can be passed on for: the factors that apply to it */
+  function reasonsFor(dir, o, idea) {
+    const m = measure(dir, o, idea);
+    return FACTORS.filter((f) => f.val(m) != null).map((f) => ({ id: f.id, label: f.label }));
+  }
+
+  /** what the card has, factor by factor, and whether this deck can change it: [{ id, label, text, fixed }] */
+  function facts(S, i, ids) {
+    const dir = S.round.dir, o = F.options(S)[i], idea = S.idea, m = measure(dir, o, idea), pool = poolOf(S);
+    return ids.map((id) => {
+      const f = FAC[id], sp = spread(dir, pool, idea, f);
+      let text = f.words(m, dir);
+      if (!sp.varies) text += ' Same on every card in this round. ' + elsewhere(f, dir, idea);
+      return { id, label: f.label, text: text.trim(), fixed: !sp.varies };
+    });
+  }
+
+  /** which way to move a factor: away from the card's end of the pool, toward the middle */
+  function wayOf(v, sp) {
+    if (v > sp.med) return -1;
+    if (v < sp.med) return 1;
+    return sp.hi - v >= v - sp.lo ? 1 : -1;
+  }
+
+  /**
+   * The card again, changed on the given reasons: the card in the deck that
+   * moves furthest toward the middle on each of them while staying closest
+   * on everything else. { card, text } or null.
+   */
+  function changed(S, i, ids) {
+    const dir = S.round.dir, opts = F.options(S), o = opts[i], idea = S.idea, m = measure(dir, o, idea);
+    const pool = poolOf(S).filter((c) => fp(c) !== fp(o) && opts.indexOf(c) < 0);
+    const all = FACTORS.map((f) => ({ f, sp: spread(dir, pool.concat([o]), idea, f) })).filter((x) => x.sp.varies && x.f.val(m) != null);
+    const on = all.filter((x) => ids.indexOf(x.f.id) >= 0);
+    if (!on.length) return null;
+    on.forEach((x) => { if (!x.f.cat) x.way = wayOf(x.f.val(m), x.sp); });
+    let best = null, bestD = Infinity;
+    pool.forEach((c) => {
+      const mc = measure(dir, c, idea);
+      let d = 0;
+      for (const x of on) {
+        const a = x.f.val(m), b = x.f.val(mc);
+        if (b == null) return;
+        if (x.f.cat) { if (a === b) return; continue; }
+        const span = x.sp.hi - x.sp.lo, move = (b - a) * x.way / span;
+        if (move < 0.12) return;
+        d += 0.4 * Math.abs(move - 0.35);
+      }
+      for (const x of all) {
+        if (ids.indexOf(x.f.id) >= 0) continue;
+        const a = x.f.val(m), b = x.f.val(mc);
+        if (b == null) { d += 1; continue; }
+        d += x.f.cat ? (a === b ? 0 : 1) : Math.abs(b - a) / (x.sp.hi - x.sp.lo);
+      }
+      if (d < bestD) { bestD = d; best = c; }
+    });
+    if (!best) return null;
+    const mb = measure(dir, best, idea);
+    const parts = on.map((x) => (x.f.cat ? 'on ' + x.f.val(mb) + ' instead of ' + x.f.val(m) : (x.way > 0 ? x.f.up : x.f.down) + ': ' + x.f.show(x.f.val(mb), dir, mb) + ' instead of ' + x.f.show(x.f.val(m), dir, m)));
+    const kept = all.filter((x) => ids.indexOf(x.f.id) < 0).length;
+    return { card: best, text: A.cap(listOf(parts)) + '.' + (kept ? ' Everything else as close as the deck allows.' : '') };
+  }
+
+  /**
+   * Filters for cards like this one on the given reasons: everything at the
+   * card's end of the pool and beyond, or near it when it sits in the middle.
+   * Instruments: everything on the same one. { cut: [...], text } or null.
+   */
+  function cutsFor(S, i, ids) {
+    const dir = S.round.dir, o = F.options(S)[i], idea = S.idea, m = measure(dir, o, idea), pool = poolOf(S);
+    const cut = [], words = [];
+    ids.forEach((id) => {
+      const f = FAC[id], sp = spread(dir, pool, idea, f), v = f.val(m);
+      if (!sp.varies || v == null) return;
+      if (f.cat) { cut.push({ f: id, ne: v }); words.push(/ and /.test(v) ? 'anything with that same line-up' : 'anything on ' + v); return; }
+      const span = sp.hi - sp.lo, tol = 0.05 * span, w = wayOf(v, sp);
+      if (v !== sp.med) {
+        if (w < 0) { cut.push({ f: id, lt: v - tol }); words.push('anything ' + f.show(v, dir, m).replace(/^around /, '') + ' or ' + f.up); } else { cut.push({ f: id, gt: v + tol }); words.push('anything ' + f.show(v, dir, m).replace(/^around /, '') + ' or ' + f.down); }
+      } else {
+        cut.push({ f: id, far: v, by: 0.15 * span });
+        words.push('anything close to it on ' + f.label.toLowerCase());
+      }
+    });
+    if (!cut.length) return null;
+    return { cut, text: listOf(words) };
+  }
+  function passes(e, m) {
+    const v = FAC[e.f].val(m);
+    if (v == null) return true;
+    if (e.ne != null) return v !== e.ne;
+    if (e.lt != null) return v < e.lt;
+    if (e.gt != null) return v > e.gt;
+    return Math.abs(v - e.far) > e.by;
+  }
+  /** the cards a set of filters keeps; never fewer than three, the nearest misses come back first */
+  function keep(dir, cards, cut, idea) {
+    const fails = (c) => { const m = measure(dir, c, idea); return cut.filter((e) => !passes(e, m)).length; };
+    const scored = cards.map((c) => ({ c, x: fails(c) }));
+    const out = scored.filter((s) => !s.x).map((s) => s.c);
+    if (out.length >= 3 || out.length === cards.length) return out;
+    const back = scored.filter((s) => s.x).sort((a, b) => a.x - b.x).slice(0, 3 - out.length).map((s) => s.c);
+    return out.concat(back);
+  }
+
+  /** a short fingerprint of a card, to remember the ones passed on */
+  function fp(o) {
+    const s = JSON.stringify(o);
+    let h = 2166136261;
+    for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36);
+  }
+  function isOut(S, o) { return !!(S.round && S.round.rej && o && S.round.rej.indexOf(fp(o)) >= 0); }
+
+  // ---------------------------------------------------------------- flow: pure steps
+
+  const flow = {
+    /** mark the card a no; it stays in its place, dimmed */
+    reject(S, i, ids) {
+      const o = F.options(S)[i];
+      if (!o) return S;
+      const rej = (S.round.rej || []).filter((x) => x !== fp(o)).concat([fp(o)]);
+      const why = Object.assign({}, S.round.why, { [fp(o)]: ids });
+      return Object.assign({}, S, { round: Object.assign({}, S.round, { rej, why }) });
+    },
+    /** the changed version takes the card's place: { S, text } or null */
+    change(S, i, ids) {
+      const c = changed(S, i, ids);
+      if (!c) return null;
+      const inf = F.info(S), b = inf.batch;
+      const subs = Object.assign({}, S.round.subs);
+      subs[b] = Object.assign({}, subs[b], { [i]: c.card });
+      const ns = Object.assign({}, S, { round: Object.assign({}, S.round, { subs }), seq: S.seq + 1, sel: i, msg: null, line: null, kind: 'pop' });
+      return { S: ns, text: c.text };
+    },
+    /** filter the deck of cards like it, and deal again: { S, text, gone, left } or null */
+    cut(S, i, ids) {
+      const c = cutsFor(S, i, ids);
+      if (!c) return null;
+      const before = F.info(S).total;
+      const round = Object.assign({}, S.round, { cut: (S.round.cut || []).concat(c.cut), batch: 0, seen: 0, subs: null });
+      const note = 'Before filtering out ' + listOf(ids.map((id) => FAC[id].label.toLowerCase()).filter((x, k, a) => a.indexOf(x) === k));
+      const ns = Object.assign({}, S, F.row(S, { note }), { round, seq: S.seq + 1, sel: -1, anim: S.anim + 1, kind: 'pop', msg: null, line: null });
+      const left = F.info(ns).total;
+      return { S: ns, text: c.text, gone: before - left, left };
+    },
+    /** every card back */
+    uncut(S) {
+      const round = Object.assign({}, S.round, { cut: [], batch: 0, seen: 0, subs: null });
+      return Object.assign({}, S, { round, seq: S.seq + 1, sel: -1, anim: S.anim + 1, kind: 'pop', msg: null, line: 'Everything’s back in the deck.' });
+    },
+  };
+
+  // ---------------------------------------------------------------- Bobby's encyclopedia
+
+  const READY = ['I can talk about this one.', 'We can explore that.', 'Ask me about this one.', 'There’s a story in that one.'];
+  const ASK_WHY = 'Why didn’t that one make the cut?';
+
+  /*
+   * A topic: a question a card raises (q), Bobby's answer (a), and the
+   * requests that steer the deck that way (acts, by label; only the ones
+   * the round has are offered). when: only for cards it fits.
+   */
+  const T = {
+    tempo: {
+      q: (c) => (c.m.bpm >= 118 ? 'Why do people like a fast beat?' : c.m.bpm <= 88 ? 'Why would a beat go slow?' : 'What does the speed change?'),
+      a: (c) => 'This one’s at ' + c.m.bpm + ' BPM: ' + c.m.bpm + ' beats a minute, ' + tempoWord(c.m.bpm) + '. ' +
+        (c.m.bpm >= 118 ? 'Fast beats move bodies. Dance music lives around 120 to 130, drum and bass up near 170. Speed is energy, and it gives each hit less time to hang in the air.'
+          : c.m.bpm <= 88 ? 'Slow beats give every hit time to land, so each one feels heavier. A lot of hip hop sits between 80 and 95, slow R&B lower still. Slow isn’t lazy; it’s room.'
+            : 'The middle: fast enough to move, slow enough for every hit to land. Most pop and hip hop sits around here.') +
+        ' The same pattern at another speed is a different groove.',
+      acts: ['Slower', 'Faster', 'More energy', 'Calmer'],
+    },
+    swing: {
+      q: (c) => (c.m.swing ? 'What makes this one bounce?' : 'What is swing?'),
+      a: (c) => 'Swing plays every second eighth note a little late, so pairs go long-short instead of even: da-DUM, da-DUM. Jazz, shuffle blues and plenty of hip hop and house use it. ' +
+        (c.m.swing ? 'This one swings; that’s its bounce.' : 'This one is straight: every eighth even, which feels tighter and more machine-like, in a good way.'),
+      acts: ['Swing it'],
+      when: (c) => !Odd.theory.meter(c.m.meter).compound,
+    },
+    meter: {
+      q: (c) => (c.m.meter !== '4/4' ? 'Why count it in ' + c.m.meter + '?' : 'Does music always count in four?'),
+      a: (c) => {
+        const mt = Odd.theory.meter(c.m.meter);
+        return c.m.meter !== '4/4'
+          ? 'This one is in ' + mt.id + ': ' + mt.feel + '. Most music you hear is in four, so your body keeps expecting a beat that comes early or late here. That little surprise is the attraction. Waltzes live in three, a lot of folk rolls in 6/8, and prog rock loves five and seven.'
+          : 'Mostly, yes: four beats to a bar, which is why bands count “one, two, three, four”. But three gives a waltz its sway, 6/8 rolls, and five or seven feel like a limp you start to enjoy. The count decides where the strong beats fall.';
+      },
+      acts: ['Another meter'],
+    },
+    offbeat: {
+      q: (c) => (c.m.off >= 0.3 ? 'Why put hits between the beats?' : 'Why keep it right on the beat?'),
+      a: (c) => (c.m.off >= 0.3
+        ? pct(c.m.off) + ' of this one’s ' + unitOf(c.dir, c.m) + ' land between the beats. That’s syncopation: the rhythm leans against the pulse your foot is tapping, and that lean is what makes it groove. Funk, reggae and Latin music are built on it.'
+        : 'Most of this one lands right on the beat (' + (c.m.n - c.m.offs) + ' of ' + c.m.n + '). On-the-beat rhythms are easy to follow and easy to dance to: four-on-the-floor house, marching bands, a lot of rock. They sound sure of themselves. The opposite is syncopation: hits between the beats that lean against the pulse.'),
+      acts: ['Straighter', 'Looser', 'Against the beat', 'With the riff', 'Against it'],
+    },
+    density: {
+      q: (c) => (c.rk === 'high' ? 'When is busy better?' : c.rk === 'low' ? 'Why leave so much space?' : 'How busy should a part be?'),
+      a: (c) => {
+        const n = c.m.n + ' ' + unitOf(c.dir, c.m) + ' in two bars';
+        if (c.rk === 'high') return 'This one has ' + n + '. Busy parts bring energy and motion, and they work best when something else holds still: busy hats over a slow bass, a fast riff over long chords. Two busy parts at once start to fight.';
+        if (c.rk === 'low') return 'This one has just ' + n + '. Space is part of rhythm: the gaps let each note land and leave room for other parts to answer. Plenty of great hooks are three or four notes.';
+        return n + ': room to breathe, enough to move. The trick is balance. When one part gets busier, another usually gets simpler.';
+      },
+      acts: ['Busier', 'Sparser', 'Simpler', 'More drive', 'Calmer'],
+    },
+    scale: {
+      q: (c) => { const md = A.MODE[c.m.scale]; return 'What makes ' + md.name + ' sound ' + md.mood + '?'; },
+      a: (c) => 'A scale is the set of notes a tune is allowed to use, usually seven of the twelve. Which ones it keeps sets the mood before a note is played. ' + A.MODE[c.m.scale].why,
+      acts: ['Darker scale', 'Brighter scale', 'Darker', 'Brighter'],
+      when: (c) => !!(c.m.scale && A.MODE[c.m.scale]),
+    },
+    landing: {
+      q: () => 'Why does where it ends matter?',
+      a: (c) => 'This one lands on the ' + A.IV[c.o.land] + '. Ending on home, the note the scale is built on, sounds finished, like a full stop. Ending anywhere else sounds like a comma or a question and makes you want the next bar. Songs often pair them: a phrase that asks, then one that answers.',
+      acts: ['Land on home'],
+      when: (c) => c.o.land != null,
+    },
+    contour: {
+      q: (c) => (c.o.size === 2 || c.o.leap >= 3 ? 'Why do big leaps stand out?' : 'Why do small moves work?'),
+      a: (c) => (c.o.size === 2 || c.o.leap >= 3
+        ? 'Big moves are the event: the ear jumps with them, so they’re what people remember. Too many and a tune gets tiring to follow, which is why singable melodies mostly step and save the leap for the moment that matters.'
+        : 'Small steps are easy to sing and easy to remember. When the notes barely move, rhythm and repetition carry the hook. Lots of famous choruses use three or four neighbouring notes.') +
+        (c.m.range != null ? ' This one spans ' + intervalName(c.m.range) + '.' : ''),
+      acts: ['Subtler', 'Bigger', 'More jumps'],
+    },
+    chordfit: {
+      q: () => 'How do chords fit a melody?',
+      a: (c) => 'Each chord here was picked so the melody’s long, strong notes belong to it: ' + c.o.fit + '% of this melody sits on chord notes. When a melody note is in the chord under it, they blend. When it isn’t, it rubs, and the ear wants it to move. A bit of rub is spice; a lot is a clash.',
+      acts: ['Darker', 'Brighter'],
+      when: (c) => c.o.fit != null,
+    },
+    chordmood: {
+      q: () => 'Why do some chords sound sad?',
+      a: (c) => {
+        const cs = c.o.chords || [], mi = cs.filter((x) => x.q === 'm').length;
+        return 'A chord is usually three notes stacked a third apart. Lower the middle one by a half step and major becomes minor: that one note is most of what we hear as happy or sad.' +
+          (cs.length ? ' This one: ' + A.chordLine(cs) + '. ' + (mi ? mi + ' of its ' + cs.length + ' chords are minor.' : 'All major.') : '');
+      },
+      acts: ['Darker', 'Brighter'],
+      when: (c) => !!(c.o.chords && c.o.chords.length && (c.dir !== 'under' || c.o.changes)),
+    },
+    borrowed: {
+      q: (c) => (c.o.chords.some((x) => x.colour) ? 'Why does a chord from outside the scale work?' : 'Can chords come from outside the scale?'),
+      a: (c) => {
+        const col = c.o.chords.find((x) => x.colour);
+        return (col ? A.chordName(col) + ' isn’t in the scale. ' : 'They can. ') + 'Borrowing a chord from a neighbouring key is an old trick; the Beatles did it constantly. It works when the melody note above it belongs to the borrowed chord, so the surprise has a reason. The ear hears colour, not a mistake.';
+      },
+      acts: ['Surprise me'],
+      when: (c) => !!c.o.chords,
+    },
+    basslock: {
+      q: (c) => (c.o.lock > 0.6 ? 'Why hit with the melody?' : c.o.lock < 0.3 ? 'Why play in the gaps?' : 'Should the bass follow the melody?'),
+      a: (c) => (c.o.lock > 0.6 ? 'When bass and melody hit together they sound like one bigger instrument, and the rhythm gets louder. That’s how a lot of rock and funk unisons hit so hard.'
+        : c.o.lock < 0.3 ? 'Playing in the melody’s gaps is call and response: one speaks, the other answers. Each stays clear because they never talk at once. It’s as old as work songs and gospel.'
+          : 'Most bass lines do a bit of both: hit with the melody on the strong beats so the chord is clear, then move in the gaps.'),
+      acts: ['Lock tighter', 'Busier', 'Simpler'],
+      when: (c) => c.o.lock != null,
+    },
+    bassroot: {
+      q: () => 'What does a bass line actually do?',
+      a: (c) => 'Two jobs. It tells your ear which chord you’re on, mostly by playing the chord’s root (the note it’s named after) on the strong beats. And it locks with the drums, so the rhythm has weight. When the bass leaves the root, the chord sounds less sure, which can be lovely.' +
+        (c.m.lo != null ? ' This one: ' + c.m.n + ' notes, from ' + noteName(c.m.lo) + ' to ' + noteName(c.m.hi) + '.' : ''),
+      acts: ['Simpler', 'Busier'],
+    },
+    kicklock: {
+      q: (c) => (c.o.lock > 0.6 ? 'Why lock the bass to the kick?' : 'Why play between the kicks?'),
+      a: (c) => (c.o.lock > 0.6 ? 'Bass and kick are both low. When they land together they fuse into one big thump: that’s the punch of most dance music and hip hop.'
+        : 'When the bass plays between the kicks, the two take turns filling the low end, so it bounces instead of thumps. Funk and reggae bass lines live there.'),
+      acts: ['Simpler', 'Busier'],
+      when: (c) => c.o.lock != null,
+    },
+    grooveharm: {
+      q: () => 'How can a bass line make the chords?',
+      a: (c) => (c.o.move === 'stay'
+        ? 'This one stays on ' + A.chordName(c.o.chords[0]) + '. A groove that sits on one chord is a vamp: funk, Afrobeat and a lot of house do it for minutes, so all the interest is in the rhythm.'
+        : 'This one moves through ' + A.chordLine(c.o.chords) + '. Nobody plays a chord, but the bass notes alone tell your ear where the harmony goes. Two chords swaying back and forth is one of the most common moves in pop and soul.'),
+      acts: ['Darker', 'Brighter'],
+      when: (c) => !!(c.o.chords && c.o.move),
+    },
+    heldchop: {
+      q: (c) => (c.m.len != null && c.m.len < 0.6 ? 'Why chop the chords up?' : 'Why hold the chords?'),
+      a: (c) => (c.m.len != null && c.m.len < 0.6
+        ? 'Short, chopped chords join the drums. In funk it’s the chank, in reggae the skank on the backbeat: the chord becomes a rhythm part.'
+        : 'Held chords give the groove a floor, a bed everything else sits on. Soul, gospel and lo-fi lean on them.'),
+      acts: ['More held', 'More chopped'],
+      when: (c) => !c.o.none,
+    },
+    nochords: {
+      q: () => 'Does a groove need chords at all?',
+      a: (c) => 'No. Plenty of grooves are just drums and bass: the bass already says where the harmony is. Leaving chords out leaves room for a voice or a hook later.' + (c.o.none ? ' This one has none.' : ''),
+      acts: [],
+    },
+    voicing: {
+      q: (c) => (c.m.thick > 2.2 ? 'What does a fuller chord add?' : 'Why so few notes at once?'),
+      a: (c) => 'This one plays ' + FAC.thick.show(c.m.thick) + '. A chord’s voicing is which notes you play and how you stack them. More notes spread wide sound rich and fill the room; two or three close together sound lean and leave space. Sevenths add a fourth note that makes chords sound jazzier and softer.',
+      acts: ['Fuller', 'Thinner'],
+      when: (c) => c.m.thick != null,
+    },
+    register: {
+      q: () => 'Why does it matter how high it sits?',
+      a: (c) => 'This one sits around ' + noteName(c.m.avg) + ', ' + regWord(c.m.avg) + '. Every part needs its own floor in the range. Low parts carry weight but turn muddy when they crowd together; high parts sparkle but get thin. Pads usually sit above the bass and around or under the tune, so they glue without getting in the way.',
+      acts: ['Higher'],
+      when: (c) => c.m.avg != null,
+    },
+    padjob: {
+      q: () => 'What is a pad for?',
+      a: () => 'A pad is a long, soft sound that fills the space between the bass and the tune, like the air in a room. You barely notice it until it’s gone. A second voice, a harmony a third above or below, does the same job with a tune of its own.',
+      acts: ['Fuller', 'Thinner'],
+    },
+    percjob: {
+      q: () => 'What does hand percussion add?',
+      a: (c) => 'Shakers and tambourines keep a steady pulse between the big hits; claps and woodblocks mark the accents. They’re the small motion that makes a part feel alive, even before there’s a drum kit. This one: ' + c.m.n + ' hits, on ' + c.m.inst + '.',
+      acts: ['More drive', 'Calmer', 'Follow the melody'],
+    },
+    backbeat: {
+      q: () => 'Why is the snare usually on 2 and 4?',
+      a: () => 'That’s the backbeat. The kick takes the strong beats, 1 and 3, and the snare answers on 2 and 4. Rock, pop, soul and hip hop are built on it. Move the snare and the whole feel changes: half-time puts it only on 3, and it feels twice as heavy.',
+      acts: ['Harder'],
+      when: (c) => c.m.meter === '4/4',
+    },
+    genre: {
+      q: (c) => 'What makes this one ' + String(c.o.name || 'that style').split(/,| with /)[0].toLowerCase() + '?',
+      a: (c) => 'A genre is a bundle of habits: a tempo range, a drum kit, a few typical sounds, swing or no swing. Change those and the same tune moves house. This one: ' + c.m.bpm + ' BPM, ' + c.m.inst + (c.m.swing ? ', swung' : '') + '.' + (c.o.why ? ' ' + A.cap(c.o.why) + '.' : ''),
+      acts: ['More energy', 'Calmer', 'Surprise me'],
+    },
+    timbre: {
+      q: () => 'Why does the instrument change the feel?',
+      a: (c) => 'The same notes on another instrument can feel like another song. Every instrument has its own tone, or timbre: how bright it is, how it starts (plucked, bowed, hit) and how it fades. A saw synth is buzzy and modern, an electric piano warm, a gritty guitar aggressive. This one: ' + c.m.inst + '.',
+      acts: ['Surprise me', 'Heavier', 'Lighter'],
+      when: (c) => !!c.m.inst,
+    },
+    hookgaps: {
+      q: () => 'Where should a hook sit in a groove?',
+      a: (c) => 'In the gaps. ' + Math.round(100 * (1 - (c.o.clash || 0))) + '% of this hook’s notes land where the bass and kick are quiet. Notes there get heard; notes on top of the kick get swallowed. Think of it as a conversation: the groove talks, the hook answers.',
+      acts: ['In the gaps', 'Busier', 'Sparser'],
+    },
+    riffstick: {
+      q: () => 'What makes a riff stick?',
+      a: (c) => 'Repetition and accents. A riff repeats until it’s part of the furniture, and its hard hits are what you remember. Put those accents off the beat and the riff pulls against the drums; that pull is why some riffs stay in your head for days. This one: ' + c.m.n + ' hits, ' + pct(c.m.off) + ' between the beats.',
+      acts: ['Straighter', 'Against the beat', 'Busier', 'Sparser'],
+    },
+    riffnotes: {
+      q: (c) => (c.o.distinct <= 2 ? 'Why so few notes?' : 'How many notes should a riff use?'),
+      a: (c) => 'Fewer than you’d think. Many famous riffs use two or three notes and let the rhythm do the rest. More notes make a riff travel, more like a tune; fewer make it stubborn and heavy. This one uses ' + c.o.distinct + ' different notes across ' + intervalName(c.o.span || 0) + '.',
+      acts: ['Simpler', 'Wider'],
+      when: (c) => c.o.distinct != null,
+    },
+    outside: {
+      q: (c) => (c.o.odd ? 'Why play notes outside the scale?' : 'Can a riff break the scale?'),
+      a: (c) => 'It can. Notes from outside the scale rub, and in a riff that rub is attitude: the blues lives on the note between the 4th and 5th, and metal leans on the half step above home. The repeating rhythm holds it together, so the clash sounds meant.' + (c.o.odd ? ' This one does it.' : ''),
+      acts: ['Stranger'],
+    },
+    power: {
+      q: () => 'What is a power chord?',
+      a: () => 'Two notes: a root and the 5th above it. With no 3rd it isn’t major or minor, so it sounds hard and neutral, and it stays clear even through heavy distortion. That’s why rock and metal riffs are built on them.',
+      acts: ['Heavier', 'Lighter'],
+    },
+    doubling: {
+      q: () => 'Why double a riff?',
+      a: (c) => 'Doubling, the same riff on two instruments or in two octaves, makes it thicker and heavier without adding a single new note. A bass an octave under a guitar is the classic.' + (c.o.words ? ' This one: ' + c.o.words + '.' : ''),
+      acts: ['Heavier', 'Lighter'],
+    },
+    drumsriff: {
+      q: (c) => (c.o.follow > 0.6 ? 'Why have the kick follow the riff?' : 'Why play drums against the riff?'),
+      a: (c) => (c.o.follow > 0.6 ? 'When the kick doubles the riff, they hit as one huge sound. That’s how heavy music gets heavy.'
+        : 'Drums against the riff make two rhythms at once: the riff pulls one way, the beat holds the other. That tension keeps a repeating riff from going stale.'),
+      acts: ['With the riff', 'Against it', 'Harder'],
+      when: (c) => c.o.follow != null,
+    },
+    drone: {
+      q: (c) => (c.o.changes ? 'Why move the chords under a riff?' : 'What does a drone do?'),
+      a: (c) => (c.o.changes
+        ? 'The riff stays the same while the chords under it change (' + A.chordLine(c.o.chords) + '), so the same notes take on a new colour each time. That’s how one riff can carry a whole song.'
+        : 'A drone is one note, or a note and its 5th, held underneath. Every note of the riff rubs against it a little differently, so the drone makes the riff’s tension audible. Indian classical music, bagpipes and doom metal all love one.'),
+      acts: ['Stiller', 'More movement'],
+    },
+  };
+  const TOPICS = {
+    seed1: ['scale', 'offbeat', 'density', 'meter'],
+    seed2: ['landing', 'contour', 'density'],
+    chords: ['chordfit', 'chordmood', 'borrowed'],
+    bass: ['basslock', 'bassroot', 'density'],
+    perc: ['percjob', 'offbeat', 'density'],
+    beat: ['backbeat', 'offbeat', 'density'],
+    pads: ['padjob', 'voicing', 'register'],
+    sound: ['genre', 'tempo', 'timbre', 'swing'],
+    pocket: ['tempo', 'offbeat', 'swing', 'backbeat', 'meter', 'density'],
+    gbass: ['grooveharm', 'kicklock', 'bassroot', 'scale'],
+    keys: ['heldchop', 'voicing', 'nochords'],
+    hook: ['hookgaps', 'density', 'offbeat'],
+    rrhythm: ['riffstick', 'offbeat', 'meter', 'density'],
+    rnotes: ['riffnotes', 'scale', 'outside'],
+    weight: ['power', 'doubling', 'timbre'],
+    drums: ['drumsriff', 'backbeat', 'density'],
+    under: ['drone', 'voicing', 'chordmood'],
+  };
+
+  function ctxOf(S, i) {
+    const dir = S.round.dir, opts = F.options(S), o = opts[i];
+    return { dir, o, opts, i, idea: S.idea, m: measure(dir, o, S.idea), rk: A.rankOf(opts, i) };
+  }
+  /** the questions this card raises, most telling first: [{ id, q }]. An odd meter jumps the queue */
+  function questions(S, i) {
+    const c = ctxOf(S, i);
+    let ids = (TOPICS[c.dir] || []).filter((id) => !T[id].when || T[id].when(c));
+    if (c.m.meter !== '4/4' && ids.indexOf('meter') > 0) ids = ['meter'].concat(ids.filter((x) => x !== 'meter'));
+    return ids.map((id) => ({ id, q: T[id].q(c) }));
+  }
+  /** Bobby's answer, and the requests (by index into REQS[dir]) that steer the deck that way */
+  function answer(S, i, id) {
+    const c = ctxOf(S, i), t = T[id];
+    return { text: t.a(c), acts: actsOf(c.dir, t.acts) };
+  }
+  function actsOf(dir, labels) {
+    const reqs = A.REQS[dir] || [];
+    return labels.map((l) => reqs.findIndex((r) => r.label === l)).filter((k) => k >= 0);
+  }
+  /** "?": what this card is, set against the other two, and why it works; then every way to steer */
+  function explain(S, i) {
+    const dir = S.round.dir, opts = F.options(S);
+    const reqs = A.REQS[dir] || [];
+    return { text: A.comment(dir, opts, i, S.idea) + ' ' + A.whyText(dir, opts[i], S.idea), acts: reqs.map((r, k) => (r.why ? -1 : k)).filter((k) => k >= 0) };
+  }
+  function ready(n) { return READY[mod(n || 0, READY.length)]; }
+
+  Odd.booth = {
+    FACTORS, TOPICS, TOPIC: T, READY, ASK_WHY, OWN,
+    measure, reasonsFor, facts, changed, cutsFor, keep, fp, isOut, poolOf,
+    questions, answer, explain, ready, intervalName, noteName,
+    flow,
+  };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/songmaker.js */
@@ -17968,6 +18649,13 @@ span.sg-rname { cursor: default; color: var(--muted); }
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
+ * The booth: the card playing lifts, and under it are three answers: ✗ not
+ * it (Bobby asks why, says what the card has on each reason, and offers it
+ * changed or the deck filtered), ? (he explains it) and ✓ (keep it and build
+ * on it). Bobby's bubble holds the questions a card raises (Odd.booth).
+ * A dev menu on the left edge hides what the cards show, one kind at a
+ * time; with the piano roll hidden a card shows the sound's EQ instead.
+ *
  * Watch Bobby: from the opener he can build one himself (Odd.watch plans
  * the run), playing each card and saying why he takes the one he takes.
  * While he works, the screen only listens: Pause, Back, Next and Take over.
@@ -17984,6 +18672,13 @@ span.sg-rname { cursor: default; color: var(--muted); }
 
   const PAUSE_MS = 2000;
   const STORE_KEY = 'oddition.bones.v1';
+  const DEV_KEY = 'oddition.dev.v1';
+  const B = Odd.booth;
+  // what the dev menu can hide on the cards: [key, label]
+  const HIDES = [
+    ['words', 'Descriptive words'], ['bpm', 'BPM'], ['key', 'Key (note names)'], ['scale', 'Scale'], ['chords', 'Chords'], ['roll', 'Piano roll'],
+    ['inst', 'Instrument names'], ['meter', 'Meter (3/4, 6/8…)'], ['num', 'Numbers (counts, %, intervals)'], ['letter', 'Letters A B C'], ['deck', 'Deck counter'],
+  ];
   const VW = 272, VH = 92;
   const r1 = (v) => Math.round(v * 10) / 10;
   // cards are drawn across their idea's two bars: NS steps (32 in 4/4, 24 in 3/4, ...), set per card by vis()
@@ -18019,11 +18714,19 @@ span.sg-rname { cursor: default; color: var(--muted); }
   // what is sounding: src is the key of what plays (or played last), pending the one waiting out its pause
   const P = { playing: false, src: '', pending: '', heard: '', climb: -1, passes: null, timer: 0, pc: 0, steps: A.STEPS, len: A.LENGTH, ex: {} };
   let built = '';
-  let lastAnim = -1, lastHid = -1, reqKey = '';
+  let lastAnim = -1, lastHid = -1;
   let raf = 0, saveTimer = 0, sliding = false;
   // Bobby building one himself: the planned steps, where he is, and the timer to the next
   let W = null;
   const WATCH_ACTS = { wpause: 1, wnext: 1, wprev: 1, wtake: 1, wcopy: 1, home: 1, studio: 1 };
+  // talking about the lifted card: ready, answer, explain, why (the reasons for a no), facts (what it has)
+  let T = { key: '', mode: 'ready' };
+  let talkKey = '';
+  // a line that stays with the card it came with (a request's reply, what changed)
+  let held = { key: '', text: '' };
+  let dev = { open: false, hide: {} };
+  let devEl = null;
+  const EQ = { buf: null, lv: [], pk: [], colors: null };
 
   // ---------------------------------------------------------------- state
 
@@ -18165,9 +18868,59 @@ span.sg-rname { cursor: default; color: var(--muted); }
       }
       const left = r1(xOf(Math.max(0, Math.min(P.steps, step)), P.steps)) + 'px';
       root.querySelectorAll('.is-playing .b-ph').forEach((el) => { el.style.left = left; });
+      if (root.classList.contains('hx-roll')) drawEq();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+  }
+
+  /**
+   * The booth's view of the sound with the piano roll hidden: what's
+   * playing, as energy across the range, lows on the left. Bands are spaced
+   * like the ear hears them (each a step up in pitch, not in Hz).
+   */
+  const EQ_BANDS = 30, EQ_LO = 35, EQ_HI = 14000;
+  function drawEq() {
+    const an = Odd.audio && Odd.audio.analyser;
+    const cs = Array.from(new Set(root.querySelectorAll('.is-playing .b-eq')));
+    if (!an || !cs.length) return;
+    if (!EQ.buf || EQ.buf.length !== an.frequencyBinCount) EQ.buf = new Uint8Array(an.frequencyBinCount);
+    an.getByteFrequencyData(EQ.buf);
+    const hz = an.context.sampleRate / an.fftSize;
+    if (!EQ.colors) {
+      const st = getComputedStyle(root);
+      EQ.colors = ['--r-bass', '--r-chords', '--r-lead', '--faint'].map((v) => st.getPropertyValue(v).trim() || '#999');
+    }
+    for (let k = 0; k < EQ_BANDS; k++) {
+      const f0 = EQ_LO * Math.pow(EQ_HI / EQ_LO, k / EQ_BANDS), f1 = EQ_LO * Math.pow(EQ_HI / EQ_LO, (k + 1) / EQ_BANDS);
+      let v = 0;
+      for (let b = Math.floor(f0 / hz); b <= Math.max(Math.floor(f0 / hz), Math.ceil(f1 / hz) - 1) && b < EQ.buf.length; b++) v = Math.max(v, EQ.buf[b]);
+      v /= 255;
+      EQ.lv[k] = Math.max(v, (EQ.lv[k] || 0) * 0.86);
+      EQ.pk[k] = Math.max(EQ.lv[k], (EQ.pk[k] || 0) - 0.008);
+    }
+    cs.forEach((c) => {
+      const g = c.getContext('2d'), W0 = c.width, H0 = c.height, base = H0 - 30, bw = W0 / EQ_BANDS;
+      c.dataset.on = '1';
+      g.clearRect(0, 0, W0, H0);
+      for (let k = 0; k < EQ_BANDS; k++) {
+        const f = EQ_LO * Math.pow(EQ_HI / EQ_LO, (k + 0.5) / EQ_BANDS);
+        g.fillStyle = f < 250 ? EQ.colors[0] : f < 2500 ? EQ.colors[1] : EQ.colors[2];
+        const h = Math.max(2, EQ.lv[k] * (base - 8));
+        g.globalAlpha = 0.85;
+        g.fillRect(k * bw + 2, base - h, bw - 4, h);
+        g.globalAlpha = 1;
+        g.fillRect(k * bw + 2, base - EQ.pk[k] * (base - 8) - 3, bw - 4, 3);
+      }
+      g.fillStyle = EQ.colors[3];
+      g.font = '600 18px ui-monospace, monospace';
+      const xAt = (f) => Math.log(f / EQ_LO) / Math.log(EQ_HI / EQ_LO) * W0;
+      g.fillText('LOWS', 8, H0 - 8);
+      g.fillText('MIDS', xAt(250) + 8, H0 - 8);
+      g.fillText('HIGHS', xAt(2500) + 8, H0 - 8);
+      g.fillRect(xAt(250), base + 4, 2, 24);
+      g.fillRect(xAt(2500), base + 4, 2, 24);
+    });
   }
 
   // ---------------------------------------------------------------- actions
@@ -18192,7 +18945,74 @@ span.sg-rname { cursor: default; color: var(--muted); }
     halt();
     const ns = F.request(S, rq);
     set(ns);
+    held = { key: curKey(1), text: ns.line || rq.reply };
     hear(curKey(1), ns.line || rq.reply, busy);
+  }
+
+  // ---------------------------------------------------------------- the booth: keep, pass, ask
+
+  /** the talk about the lifted card, fresh whenever another card lifts */
+  function talk() {
+    const k = S.phase === 'round' && S.sel >= 0 ? curKey(S.sel) : '';
+    if (T.key !== k) T = { key: k, mode: 'ready', why: [] };
+    return T;
+  }
+  function talking() { return S.phase === 'round' && S.sel >= 0 && !P.pending && P.heard === curKey(S.sel) && !!F.options(S)[S.sel]; }
+  function nope(i) {
+    if (!talking() || S.sel !== i) return;
+    Object.assign(talk(), { mode: 'why', why: [] });
+    render();
+  }
+  function toggleWhy(id) {
+    const t = talk();
+    t.why = t.why.indexOf(id) >= 0 ? t.why.filter((x) => x !== id) : t.why.concat([id]);
+    render();
+  }
+  function whyDone() {
+    const t = talk();
+    if (!t.why.length) return;
+    const ids = B.FACTORS.map((f) => f.id).filter((id) => t.why.indexOf(id) >= 0);
+    const ns = B.flow.reject(S, S.sel, ids);
+    Object.assign(t, { mode: 'facts', why: ids, facts: B.facts(ns, S.sel, ids), canChange: !!B.changed(ns, S.sel, ids), canCut: !!B.cutsFor(ns, S.sel, ids), note: '' });
+    set(Object.assign({}, ns, { line: null }));
+  }
+  function changeIt() {
+    const t = talk(), busy = P.playing || !!P.pending;
+    const r = B.flow.change(S, S.sel, t.why);
+    if (!r) { t.canChange = false; t.note = 'Nothing else in this deck goes the other way on that.'; render(); return; }
+    halt();
+    set(r.S);
+    const line = 'Here it is changed. ' + r.text;
+    held = { key: curKey(r.S.sel), text: line };
+    hear(curKey(r.S.sel), line, busy);
+  }
+  function cutIt() {
+    const t = talk(), busy = P.playing || !!P.pending;
+    const r = B.flow.cut(S, S.sel, t.why);
+    if (!r) { t.canCut = false; render(); return; }
+    halt();
+    P.src = '';
+    set(r.S);
+    const line = 'Filtered out ' + r.text + ': ' + (r.gone === 1 ? 'one card' : r.gone + ' cards') + ' gone, ' + r.left + ' left. Here’s one of them.';
+    held = { key: curKey(1), text: line };
+    hear(curKey(1), line, busy);
+  }
+  function passIt() {
+    halt();
+    T = { key: '', mode: 'ready', why: [] };
+    set(Object.assign({}, S, { sel: -1, line: 'Noted. It stays where it is, marked, in case you change your mind. Try another.' }));
+  }
+  function explain(i) {
+    if (!talking() || S.sel !== i) return;
+    const ex = B.explain(S, i);
+    Object.assign(talk(), { mode: 'explain', said: ex.text, acts: ex.acts, topic: '' });
+    render();
+  }
+  function ask(id) {
+    if (!talking()) return;
+    const an = B.answer(S, S.sel, id);
+    Object.assign(talk(), { mode: 'answer', said: an.text, acts: an.acts, topic: id });
+    render();
   }
 
   function step(fn) {
@@ -18321,6 +19141,16 @@ span.sg-rname { cursor: default; color: var(--muted); }
     begin: (el) => begin(el.dataset.path),
     hear: (el) => hear(el.dataset.key),
     promote: (el) => promote(Number(el.dataset.i)),
+    nope: (el) => nope(Number(el.dataset.i)),
+    explain: (el) => explain(Number(el.dataset.i)),
+    ask: (el) => ask(el.dataset.t),
+    why: (el) => toggleWhy(el.dataset.f),
+    whydone: () => whyDone(),
+    whycancel: () => { talk().mode = 'ready'; render(); },
+    change: () => changeIt(),
+    cutit: () => cutIt(),
+    pass: () => passIt(),
+    uncut: () => { halt(); P.src = ''; set(B.flow.uncut(S)); },
     own: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
     next: () => slide(F.next),
@@ -18373,6 +19203,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (F.options(S)[i]) hear(curKey(i));
       return true;
     }
+    // the booth: x pass, ? ask, Enter keep, on the card that's lifted
+    if (S.phase === 'round' && talking() && !(e.target && e.target.closest && e.target.closest('button, input, textarea, select'))) {
+      if (k === 'x' || k === 'X' || k === 'Delete' || k === 'Backspace') { e.preventDefault(); nope(S.sel); return true; }
+      if (k === '?' || k === '/') { e.preventDefault(); explain(S.sel); return true; }
+      if (k === 'Enter') { e.preventDefault(); promote(S.sel); return true; }
+    }
     if ((k === 'ArrowRight' || k === 'ArrowLeft') && S.phase === 'round') {
       if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return false;
       e.preventDefault();
@@ -18411,7 +19247,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
   function chordRow(chords, m, top) {
     const slots = A.slotsOf(m);
-    return chords.map((c, i) => '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
+    return chords.map((c, i) => '<span data-x="chords" class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
   }
 
   /** what makes the option special, drawn on a 272 x 92 screen */
@@ -18426,7 +19262,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (dir === 'seed1') {
       o.mel.r.hits.forEach((x) => { const hh = [12, 20, 30][x[2]]; h += blk(xOf(x[0]), VH - 24 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
       const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
-      for (let pc = 0; pc < 12; pc++) h += '<i class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
+      for (let pc = 0; pc < 12; pc++) h += '<i data-x="scale" class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
     } else if (dir === 'seed2') {
       // one scale for every card (at least an octave tall), so a small shape looks small
       const ns = A.melodyNotes(o.mel), ds = ns.map((n) => n.deg), lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds), span = Math.max(7, hi - lo);
@@ -18442,11 +19278,11 @@ span.sg-rname { cursor: default; color: var(--muted); }
       });
       pts.forEach((p, i) => { h += '<i class="b-dot' + (i === pts.length - 1 ? ' land' : '') + '" style="left:' + r1(p.x) + 'px;top:' + r1(p.y) + 'px"></i>'; });
       const last = pts[pts.length - 1];
-      h += '<span class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
+      h += '<span data-x="key" class="b-nlab" style="left:' + r1(Math.min(last.x - 4, VW - 22)) + 'px;top:' + r1(last.y < 22 ? last.y + 9 : last.y - 20) + 'px">' + esc(A.NAMES[mod(ns[ns.length - 1].m, 12)]) + '</span>';
     } else if (dir === 'chords') {
       ghost(6, 50);
       const slots = A.slotsOf(m);
-      o.chords.forEach((c, i) => { h += '<span class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:62px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
+      o.chords.forEach((c, i) => { h += '<span data-x="chords" class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:62px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>'; });
     } else if (dir === 'bass') {
       ghost(6, 30);
       const ms = o.notes.map((n) => n.m), lo = Math.min.apply(null, ms), hi = Math.max.apply(null, ms), span = Math.max(1, hi - lo);
@@ -18465,7 +19301,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       h += kitVis(o);
     } else if (dir === 'pocket') {
       h += kitVis(o);
-      h += '<span class="b-nlab" style="left:8px;top:8px">' + esc(o.bpm + ' BPM' + (o.swing ? ' · swung' : '')) + '</span>';
+      h += '<span data-x="bpm" class="b-nlab" style="left:8px;top:8px">' + esc(o.bpm + ' BPM') + '</span>' + (o.swing ? '<span data-x="words" class="b-nlab" style="left:62px;top:8px">swung</span>' : '');
     } else if (dir === 'gbass') {
       // the kick it plays against, the bass, and the chords it implies
       idea.layers.pocket.k.forEach((s) => { h += blk(xOf(s), 82, 5, 6, '', 'ghost'); });
@@ -18473,7 +19309,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       h += chordRow(o.chords, m, 4);
     } else if (dir === 'keys') {
       ghost(70, 18);
-      if (o.none) h += '<span class="b-nlab" style="left:10px;top:24px">no chords: just drums and bass</span>';
+      if (o.none) h += '<span data-x="words" class="b-nlab" style="left:10px;top:24px">no chords: just drums and bass</span>';
       else o.notes.forEach((n) => n.ms.forEach((p, k) => { h += blk(xOf(n.s), 52 - k * 9, Math.max(3, sw(n.d) - 2), 6, col('keys'), 'half'); }));
       h += chordRow(idea.layers.gbass ? idea.layers.gbass.chords : [], m, 4);
     } else if (dir === 'hook') {
@@ -18498,23 +19334,61 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (o.changes) h += chordRow(o.chords, m, 36);
     } else {
       ghost(8, 70);
-      h += '<span class="b-nlab" style="left:10px;top:74px">' + esc(o.inst + (o.swing ? ' · swung' : '')) + '</span>';
+      h += '<span data-x="inst" class="b-nlab" style="left:10px;top:74px">' + esc(o.inst) + '</span>' + (o.swing ? '<span data-x="words" class="b-nlab" style="left:10px;top:60px">swung</span>' : '');
     }
-    return h + '<i class="b-ph"></i>';
+    return h + '<i class="b-ph"></i><canvas class="b-eq" width="544" height="184"></canvas>';
   }
+
+  /**
+   * What a card says in words, each piece tagged with what it is so the dev
+   * menu can hide it: [kind, text]. alt: shown only when the piano roll
+   * (which already draws it) is hidden.
+   */
+  function headFacts(dir, o, idea) {
+    const f = [], add = (x, t) => { if (t != null && t !== '') f.push([x, String(t)]); };
+    const parts = (d) => String(d || '').split(' · ');
+    const meter = (id) => add('meter', id && id !== '4/4' ? id : '');
+    const swung = (x) => add('words', x ? 'swung' : '');
+    if (dir === 'seed1') { add('scale', A.MODE[o.mel.scale].name.toLowerCase()); meter(A.meterOf(o.mel).id); } else if (dir === 'seed2') {
+      add('num', 'lands on ' + A.IV[o.land]);
+      const ns = A.melodyNotes(o.mel);
+      add('key alt', 'ends on ' + A.NAMES[mod(ns[ns.length - 1].m, 12)]);
+    } else if (dir === 'chords') { add('chords alt', A.chordLine(o.chords)); add('num', o.fit + '% fit'); } else if (dir === 'bass') add(o.detail ? 'words' : 'num', o.detail || o.n + (o.n === 1 ? ' note' : ' notes'));
+    else if (dir === 'pads') { if (o.detail) { add('words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); } else add('num', o.voices + (o.voices === 1 ? ' voice' : ' voices')); } else if (dir === 'perc') add(o.detail ? 'words' : 'num', o.detail || o.n + ' hits');
+    else if (dir === 'pocket') { add('bpm', o.bpm + ' BPM'); swung(o.swing); parts(o.detail).forEach((x) => add('words', x)); meter(o.m); } else if (dir === 'hook') add('num', Math.round(100 * (1 - o.clash)) + '% in the gaps');
+    else if (dir === 'rrhythm') { add('num', o.r.n + ' hits'); add('words', o.r.turn ? 'new ending' : ''); meter(o.r.m); } else if (dir === 'gbass') { add('chords', A.chordLine(o.chords)); add('scale', A.MODE[o.scale].name.toLowerCase()); } else if (dir === 'keys') {
+      if (o.none) add('words', o.detail);
+      else { add('words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); }
+      if (idea && idea.layers.gbass) add('chords alt', A.chordLine(idea.layers.gbass.chords));
+    } else if (dir === 'rnotes') add('scale', o.detail);
+    else if (dir === 'weight') add('inst', o.detail);
+    else if (dir === 'under') { add(o.changes ? 'chords' : 'words', parts(o.detail)[0]); add('inst', parts(o.detail)[1]); } else if (dir === 'beat' || dir === 'drums') { swung(o.swing); add(o.detail ? 'words' : 'num', o.detail || Math.round(o.off * 100) + '% off grid'); } else if (dir === 'sound') {
+      add('bpm', o.bpm + ' BPM');
+      if (o.detail) parts(o.detail).forEach((x) => add('inst', x));
+      else { add('inst', o.inst); swung(o.swing && o.swing > 0.5); }
+    }
+    return f;
+  }
+
+  const X_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M6.5 6.5l13 13M19.5 6.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>';
+  const OK_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M5.5 13.5l5 5L20.5 7" stroke="currentColor" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function card(dir, o, idea, x) {
     const tag = A.tagOf(dir, o);
-    const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter">' + x.letter + '</span>' : '') + '<span class="b-tag">' + esc(tag) + '</span><span class="b-stat">' + esc(A.statOf(dir, o)) + '</span></div>';
+    const facts = headFacts(dir, o, idea).map((f) => '<span class="b-f' + (/ alt$/.test(f[0]) ? ' alt' : '') + '" data-x="' + f[0].replace(/ alt$/, '') + '">' + esc(f[1]) + '</span>').join('');
+    const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter" data-x="letter">' + x.letter + '</span>' : '') + '<span class="b-tag" data-x="words">' + esc(tag) + '</span><span class="b-stat">' + facts + '</span></div>';
     const label = (x.letter ? 'option ' + x.letter + ': ' : '') + tag;
+    // under the lifted card: not it, ask, keep
+    const booth = x.i != null ? '<div class="b-booth">' +
+      '<button type="button" class="b-bx no" data-act="nope" data-i="' + x.i + '" title="Not it (X)" aria-label="Not it: pass on this one">' + X_SVG + '</button>' +
+      '<button type="button" class="b-bx ask" data-act="explain" data-i="' + x.i + '" title="What is it? (?)" aria-label="Ask Bobby what this one is">?</button>' +
+      '<button type="button" class="b-bx yes" data-act="promote" data-i="' + x.i + '" title="' + esc((x.promote || 'Keep it') + ' (Enter)') + '" aria-label="' + esc(x.promote || 'Keep it') + '">' + OK_SVG + '</button>' +
+    '</div>' : '';
     return '<div class="b-card' + (x.cls ? ' ' + x.cls : '') + '" data-key="' + x.key + '"' + (x.i != null ? ' data-i="' + x.i + '"' : '') + (x.style ? ' style="' + x.style + '"' : '') + '>' +
       '<button type="button" class="b-hit" data-act="hear" data-key="' + x.key + '" aria-label="Listen to ' + esc(label) + '"></button>' +
-      (x.i != null ? '<div class="b-reqs-in" aria-label="Ask Bobby"></div>' : '') +
       head +
       '<div class="b-vis" aria-hidden="true">' + vis(dir, o, idea) + '</div>' +
-      (x.promote ? '<button type="button" class="b-primary b-promote" data-act="promote" data-i="' + x.i + '">' +
-        '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        esc(x.promote) + '</button>' : '') +
+      booth +
       '</div>';
   }
 
@@ -18530,6 +19404,15 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (W && S.line) return S.line;
     if (S.phase === 'start') return S.peek ? A.line(L.peek[S.peek], (P.ex[S.peek] || 1) - 1) : S.line || L.start;
     if (P.src === 'climb' && P.playing && P.climb >= 0) return A.climbLines(S.idea)[P.climb] || 'That’s gold.';
+    // the lifted card: he's ready to talk about it, and only says more when asked
+    if (talking()) {
+      const t = talk();
+      if (t.mode === 'why') return B.ASK_WHY;
+      if (t.mode === 'facts') return 'Here’s what you passed on.';
+      if (t.mode === 'answer' || t.mode === 'explain') return t.said;
+      if (held.key === curKey(S.sel)) return held.text;
+      return S.line || B.ready(S.seq + S.sel);
+    }
     if (S.line) return S.line;
     if (P.playing && P.src.charAt(0) === 'h') {
       const pr = P.src.slice(1).split('-').map(Number), row = S.hist.find((x) => x.id === pr[0]);
@@ -18539,8 +19422,48 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (S.phase === 'next') return A.line(path === 'melody' ? L.next : L.nextBy[path], S.seq);
     if (S.phase === 'gold') return A.line(path === 'melody' ? L.gold : L.goldBy[path], S.hid);
     if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
-    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel, S.idea);
     return A.line(L.entry[S.round.dir], S.seq);
+  }
+
+  /** what sits in Bobby's bubble under his line: questions, ways to steer, the reasons for a no */
+  function talkHtml() {
+    if (W || !talking()) return '';
+    const t = talk(), dir = S.round.dir, reqs = A.REQS[dir] || [];
+    const qs = (skip) => B.questions(S, S.sel).filter((q) => q.id !== skip).slice(0, 3).map((q) => '<button type="button" class="b-q" data-act="ask" data-t="' + q.id + '">' + esc(q.q) + '</button>').join('');
+    if (t.mode === 'ready') return '<div class="b-qs">' + qs() + '</div>';
+    if (t.mode === 'answer' || t.mode === 'explain') {
+      const acts = (t.acts || []).map((k) => '<button type="button" class="b-steer" data-act="req" data-i="' + k + '">' + esc(reqs[k].label) + '</button>').join('');
+      return (acts ? '<div class="b-steers"><span>Hear the deck go:</span>' + acts + '</div>' : '') + '<div class="b-qs">' + qs(t.topic) + '</div>';
+    }
+    const o = F.options(S)[S.sel];
+    if (t.mode === 'why') {
+      const boxes = B.reasonsFor(dir, o, S.idea).map((r) => {
+        const on = t.why.indexOf(r.id) >= 0;
+        return '<button type="button" class="b-why' + (on ? ' on' : '') + '" data-act="why" data-f="' + r.id + '" role="checkbox" aria-checked="' + on + '"><i aria-hidden="true"></i>' + esc(r.label) + '</button>';
+      }).join('');
+      return '<div class="b-whys" role="group" aria-label="Why not">' + boxes + '</div>' +
+        '<div class="b-talk-do"><button type="button" class="b-primary" data-act="whydone"' + (t.why.length ? '' : ' disabled') + '>That’s why</button>' +
+        '<button type="button" class="b-ghost" data-act="whycancel">Never mind</button></div>';
+    }
+    if (t.mode === 'facts') {
+      const list = (t.facts || []).map((f) => '<li' + (f.fixed ? ' class="fixed"' : '') + '><b>' + esc(f.label) + '</b> ' + esc(f.text) + '</li>').join('');
+      const can = t.canChange || t.canCut;
+      return '<ul class="b-facts">' + list + '</ul>' + (t.note ? '<p class="b-talk-note">' + esc(t.note) + '</p>' : '') +
+        '<p class="b-talk-ask">' + esc(can ? (t.canChange && t.canCut ? 'Want to hear it changed, or should I filter out cards like it?' : t.canChange ? 'Want to hear it changed?' : 'Want me to filter out cards like it?') : 'Nothing in this round changes that, so there’s nothing to filter. Listen for it later.') + '</p>' +
+        '<div class="b-talk-do">' +
+          (t.canChange ? '<button type="button" class="b-primary" data-act="change">Hear it changed</button>' : '') +
+          (t.canCut ? '<button type="button" class="b-ghost" data-act="cutit">Filter out cards like it</button>' : '') +
+          '<button type="button" class="b-ghost" data-act="pass">' + (can ? 'Neither. Next.' : 'Okay') + '</button>' +
+        '</div>';
+    }
+    return '';
+  }
+
+  /** the top line in pieces, so the dev menu can hide them */
+  function metaHtml(idea) {
+    const s0 = idea.layers.sound, pk = idea.layers.pocket, p = A.pathOf(idea);
+    const bpm = s0 ? s0.bpm : pk ? pk.bpm : 100, mt = A.isStarted(idea) ? A.ideaMeter(idea).id : '4/4';
+    return '<span data-x="words">' + esc(s0 ? s0.name : A.PATHS[p].label) + '</span> · 2 bars<span data-x="bpm"> · ' + bpm + ' BPM</span>' + (mt !== '4/4' ? '<span data-x="meter"> · ' + esc(mt) + '</span>' : '');
   }
 
   function chipsHtml() {
@@ -18576,10 +19499,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (kind === 'next') { anim = 'b-in-r'; delay = (i * 0.05).toFixed(2) + 's'; }
       if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
-      const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Promote: that’s the hook' : PROMOTE[dir] || 'Add it';
+      const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Keep it: that’s the hook' : (PROMOTE[dir] || 'Keep it: add it').replace(/^Promote/, 'Keep it');
       return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style });
     }).join('');
-    const callouts = opts.map((_, i) => '<div class="b-call" data-i="' + i + '"></div>').join('');
     const last = inf.batch >= inf.batches - 1;
     const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
     const LEFT = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -18590,19 +19512,19 @@ span.sg-rname { cursor: default; color: var(--muted); }
     const strip = inf.sizes.map((n, b) => '<button type="button" class="b-seg' + (b === inf.batch ? ' now' : b <= seen ? ' seen' : '') + '" data-act="jump" data-b="' + b + '" tabindex="-1" aria-label="Cards ' + (inf.sizes.slice(0, b).reduce((t, x) => t + x, 0) + 1) + ' to ' + (inf.sizes.slice(0, b + 1).reduce((t, x) => t + x, 0)) + '">' + '<i></i>'.repeat(n) + '</button>').join('');
     const count = (inf.from === inf.to ? inf.from : inf.from + '–' + inf.to) + ' of ' + inf.total + ' ' + NOUN[dir] + (inf.deal ? ' · shuffled' : '');
     return '<div class="b-deal">' +
-        '<div class="b-callouts" style="grid-template-columns:repeat(' + opts.length + ',300px)">' + callouts + '</div>' +
         arrow('prev', 'prev', 'The three before', LEFT, inf.batch === 0) +
         '<div class="b-cards">' + cards + '</div>' +
         (last ? arrow('next shuf', 'next', 'That’s all of them: shuffle and deal again', SHUF, inf.batches < 2) : arrow('next', 'next', 'The next three', RIGHT, false)) +
       '</div>' +
-      '<div class="b-pool" aria-label="The deck">' +
+      '<div class="b-pool" aria-label="The deck" data-x="deck">' +
         '<div class="b-strip">' + strip + '</div>' +
         '<span class="b-count">' + esc(count) + '</span>' +
       '</div>' +
+      (inf.cut ? '<div class="b-cutnote">' + esc((inf.cut === 1 ? 'One card' : inf.cut + ' cards') + ' filtered out') + ' <button type="button" class="b-link" data-act="uncut">Bring them back</button></div>' : '') +
       '<div class="b-actions">' +
         (A.ownLabel(dir) ? '<button type="button" class="b-ghost" data-act="own">' + esc(A.ownLabel(dir)) + '</button>' : '') +
         (A.isOpening(S.idea, dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">' + esc(A.SKIP_LABEL[dir] || 'Not now') + '</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), ? what is it (?), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 
@@ -18729,14 +19651,14 @@ span.sg-rname { cursor: default; color: var(--muted); }
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
-            (S.phase === 'start' ? '' : '<span class="b-meta">' + esc(A.metaOf(S.idea)) + '</span>') +
+            (S.phase === 'start' ? '' : '<span class="b-meta">' + metaHtml(S.idea) + '</span>') +
             (F.canFinish(S) && !W ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
             ((S.phase === 'round' || S.phase === 'next') && !W ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
         '</header>' +
         '<main class="b-stage">' +
-          '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span></div></section>' +
+          '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span><div class="b-talk"></div></div></section>' +
           watchBar() +
           body +
           watchLog() +
@@ -18745,7 +19667,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
       '</div>';
     lastAnim = S.anim;
     lastHid = S.hid;
-    reqKey = '';
+    talkKey = '';
+    EQ.colors = null;
   }
 
   /** what changes without redrawing: who is lifted, playing or waiting, Bobby's line, button labels */
@@ -18767,25 +19690,17 @@ span.sg-rname { cursor: default; color: var(--muted); }
       const hit = el.querySelector('.b-hit');
       if (hit) hit.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    // requests sit above the lifted card
-    const rk = S.phase === 'round' ? S.seq + '|' + S.sel + '|' + P.pending + '|' + JSON.stringify(S.round.steer) : '';
-    if (rk !== reqKey) {
-      reqKey = rk;
-      root.querySelectorAll('.b-call, .b-reqs-in').forEach((el) => { el.innerHTML = ''; });
-      if (S.phase === 'round' && S.sel >= 0 && !P.pending) {
-        const st = S.round.steer || {};
-        const html = '<div class="b-reqs" aria-label="Ask Bobby">' + (A.REQS[S.round.dir] || []).map((rq, i) => {
-          const same = (k) => rq[k] && Math.sign(st[k] || 0) === Math.sign(rq[k]);
-          const active = (rq.x && st.x === rq.x) || same('p') || same('s') || same('t') || same('c');
-          if (rq.m && st.m) return '<button type="button" class="b-req on" data-act="req" data-i="' + i + '">' + esc(rq.label + ' (' + st.m + ')') + '</button>';
-          return '<button type="button" class="b-req' + (active ? ' on' : '') + '" data-act="req" data-i="' + i + '">' + esc(rq.label) + '</button>';
-        }).join('') + '</div>';
-        const call = root.querySelector('.b-call[data-i="' + S.sel + '"]');
-        if (call) call.innerHTML = html;
-        const inCard = root.querySelector('.b-card[data-i="' + S.sel + '"] .b-reqs-in');
-        if (inCard) inCard.innerHTML = html;
-      }
+    // what Bobby has to offer about the lifted card
+    const t = talking() ? talk() : null;
+    const tk = t ? [S.seq, S.sel, t.mode, t.topic, (t.why || []).join(), t.note, t.canChange, t.canCut, W ? 'w' : ''].join('|') : '';
+    if (tk !== talkKey) {
+      talkKey = tk;
+      const el = root.querySelector('.b-talk');
+      if (el) el.innerHTML = talkHtml();
     }
+    // the ones passed on stay where they are, marked
+    root.querySelectorAll('.b-cards .b-card[data-i]').forEach((el) => el.classList.toggle('b-nope', B.isOut(S, opts[Number(el.dataset.i)])));
+    root.querySelectorAll('.b-eq').forEach((c) => { if (!c.closest('.is-playing') && c.dataset.on) { delete c.dataset.on; c.getContext('2d').clearRect(0, 0, c.width, c.height); } });
     const st = W ? W.steps[W.i] : null;
     root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && (st.kind === 'choose' || st.kind === 'why') && st.i === Number(el.dataset.i)));
     if (W) {
@@ -18810,13 +19725,62 @@ span.sg-rname { cursor: default; color: var(--muted); }
     patch();
   }
 
+  // ---------------------------------------------------------------- the dev menu: what the cards show
+
+  function loadDev() {
+    try { const d = JSON.parse(window.localStorage.getItem(DEV_KEY) || 'null'); if (d && typeof d === 'object') return { open: !!d.open, hide: d.hide || {} }; } catch (e) { /* blocked: defaults */ }
+    return { open: false, hide: {} };
+  }
+  function saveDev() { try { window.localStorage.setItem(DEV_KEY, JSON.stringify(dev)); } catch (e) { /* blocked: this visit only */ } }
+  const blind = () => HIDES.every((h) => dev.hide[h[0]]);
+  function applyDev() {
+    if (!root) return;
+    HIDES.forEach((h) => root.classList.toggle('hx-' + h[0], !!dev.hide[h[0]]));
+    root.classList.toggle('hx-blind', blind());
+    if (!devEl) return;
+    devEl.classList.toggle('open', dev.open);
+    const tab = devEl.querySelector('.b-dev-tab'), n = HIDES.filter((h) => dev.hide[h[0]]).length;
+    tab.setAttribute('aria-expanded', String(dev.open));
+    tab.textContent = 'Dev' + (blind() ? ' · blind' : n ? ' · ' + n + ' hidden' : '');
+    devEl.querySelectorAll('input[data-show]').forEach((el) => { el.checked = !dev.hide[el.dataset.show]; });
+    devEl.querySelector('input[data-blind]').checked = blind();
+  }
+  function mountDev() {
+    devEl = document.createElement('aside');
+    devEl.className = 'b-dev';
+    devEl.hidden = true;
+    devEl.setAttribute('aria-label', 'Dev: what the cards show');
+    devEl.innerHTML = '<button type="button" class="b-dev-tab" aria-controls="b-dev-panel">Dev</button>' +
+      '<div class="b-dev-panel" id="b-dev-panel">' +
+        '<b>What the cards show</b>' +
+        '<label class="b-dev-blind"><input type="checkbox" data-blind> Blind mode</label>' +
+        HIDES.map((h, k) => (k === 6 ? '<span class="b-dev-sub">Also on cards</span>' : '') + '<label><input type="checkbox" data-show="' + h[0] + '" checked> ' + esc(h[1]) + '</label>').join('') +
+        '<button type="button" class="b-dev-all">Show everything</button>' +
+      '</div>';
+    devEl.addEventListener('click', (e) => {
+      if (e.target.closest('.b-dev-tab')) { dev.open = !dev.open; saveDev(); applyDev(); }
+      if (e.target.closest('.b-dev-all')) { dev.hide = {}; saveDev(); applyDev(); }
+    });
+    devEl.addEventListener('change', (e) => {
+      const el = e.target;
+      if (el.dataset.blind != null) { dev.hide = {}; if (el.checked) HIDES.forEach((h) => { dev.hide[h[0]] = true; }); } else if (el.dataset.show) dev.hide[el.dataset.show] = !el.checked;
+      saveDev();
+      applyDev();
+      EQ.colors = null;
+    });
+    document.body.appendChild(devEl);
+  }
+
   // ---------------------------------------------------------------- outside
 
   function mount(el, h) {
     root = el;
     host = h || {};
     S = load();
+    dev = loadDev();
     root.addEventListener('click', onClick);
+    if (typeof document !== 'undefined' && document.body) mountDev();
+    applyDev();
     if (Odd.transport && Odd.transport.on) {
       Odd.transport.on('end', () => { if (P.playing) { P.playing = false; P.climb = -1; P.passes = null; render(); } });
       Odd.transport.on('stall', () => { if (P.playing) { P.playing = false; P.climb = -1; render(); } });
@@ -18825,6 +19789,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
 
   function show(on) {
     shown = !!on;
+    if (devEl) devEl.hidden = !shown;
     if (!shown) {
       if (W && !W.paused) { W.paused = true; clearTimeout(W.timer); }
       halt();
@@ -18847,6 +19812,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
     mount, show, open, onKey,
     get state() { return S; },
     get playing() { return P.playing; },
+    get talk() { return talking() ? Object.assign({}, talk()) : null; },
+    get dev() { return JSON.parse(JSON.stringify(dev)); },
     get watching() { return W ? { i: W.i, steps: W.steps.length, paused: W.paused, brief: W.brief, path: W.path, kind: W.steps[W.i].kind } : null; },
   };
 })(globalThis.Odd = globalThis.Odd || {});

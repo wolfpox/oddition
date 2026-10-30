@@ -54,14 +54,14 @@ Every round is a deck: its whole pool of options (80
 rhythms, around 70 shapes, 24 chord progressions, ...), dealt three at a
 time. The three are spread along what matters most for that layer, so they
 sound clearly different; options that sound alike are never dealt together.
-Click a card to hear it (or press `1` `2` `3`); promote the one you like.
+Click a card to hear it (or press `1` `2` `3`); keep the one you like.
 The arrows beside the cards (or `←` `→`) slide to the next three or back to
 the three before. Under the cards, a strip shows the deck, one tick per card,
 and how far you've dealt; click it to jump. Every card comes up once before
 anything repeats; after the last three the deck is shuffled and dealt again
 in new threes. The first three are each round's clearest; the unusual ones
 (shapes past an octave or with big jumps, chords that fit less well) come
-later, not never. Every round you promoted from stays in the history below,
+later, not never. Every round you kept from stays in the history below,
 where you can hear its cards again or go **Back to this round** and build
 again from there.
 
@@ -127,10 +127,44 @@ again from there.
    drone or slow chords; or **Nothing under it**), **Percussion** and
    **Sound and feel** (stoner, metal, post-punk, funk, surf, ...).
 
-Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
-**Land on home**, **Surprise me** and so on re-roll the three with that
-steer, from a narrower deck; **Why does that work?** has him explain. When something is playing and you pick another card, it stops, its
-card lowers, and Bobby gives your ears two seconds before the next one plays.
+### Keep it, pass on it, or ask
+
+The card that's playing lifts, and under it are three buttons:
+
+- **✓** keeps it and builds on it (`Enter`).
+- **?** has Bobby say what it is next to the other two, and why it works (`?`).
+- **✗** passes on it (`X`). Bobby asks *Why didn't that one make the cut?*
+  and you tick one or more reasons: **Speed**, **Instrument**, **Rhythm**,
+  **Pitch**, **Range**, **Density**, **Note length**, **Thickness**, **Mood**
+  (only the ones that apply: drums have no pitch). For each, he says what the
+  card has, measured from what it plays (*88 BPM: relaxed, a head-nodding
+  pace*; *19 hits over two bars, 11 of them between the beats*), and says so
+  when every card in the round shares it (the speed of a bass line is set
+  elsewhere). Then:
+  - **Hear it changed** swaps in the card from the deck that moves furthest
+    from it on those reasons while staying closest on everything else, and
+    says what changed (*Faster: 127 BPM instead of 80 BPM*).
+  - **Filter out cards like it** takes everything at that end of the deck
+    out (*anything 110 BPM or faster*), never leaving fewer than three, and
+    deals again. **Bring them back** under the deck undoes it.
+  - **Neither** leaves it marked where it is.
+
+Bobby doesn't describe a card unless asked. While one plays he says *I can
+talk about this one* or *We can explore that*, and his bubble holds the
+questions it raises (*Why would a beat go slow?*, *What is swing?*, *Why do
+some chords sound sad?*). Each answer ties the theory to this card's numbers
+and ends with the ways the deck can go from there (**Slower**, **Faster**,
+**Swing it**, **Another meter**, **Darker scale**, ...), which re-deal the
+three with that steer. When something is playing and you pick another card,
+it stops, its card lowers, and Bobby gives your ears two seconds before the
+next one plays.
+
+A **Dev** tab on the left edge hides what the cards show, one kind at a
+time: descriptive words, BPM, key (note names), scale, chords, the piano
+roll, instrument names, meter, numbers, the letters A B C, and the deck
+counter. **Blind mode** hides all of it and leaves just the card. With the
+piano roll hidden, the playing card shows the sound's EQ instead, lows to
+highs, so you listen as if in an audition booth.
 
 ### Watch Bobby build one
 
@@ -597,7 +631,8 @@ WAV export always renders at full quality.
 ## Keyboard
 
 On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: on the opening choice `1` `2` `3` hear Groove, Melody and
-Riff; in a round they hear options A, B, C; while watching Bobby, `Space`
+Riff; in a round they hear options A, B, C, and on the card playing `Enter`
+keeps it, `X` passes on it and `?` asks about it; while watching Bobby, `Space`
 pauses and `←` `→` step back and on; `Space` plays or stops;
 `Esc` stops. In the Song Builder: `Space` plays the song from the playhead
 or stops it; `C` flips between the option you're hearing and the section as

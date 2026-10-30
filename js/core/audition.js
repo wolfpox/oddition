@@ -1437,8 +1437,22 @@
     });
   }
 
-  /** the batches for a round: [[option x3]], plus the pool's size */
+  /**
+   * The batches for a round: [[option x3]], plus the pool's size. Cards the
+   * listener filtered out (round.cut, judged by Odd.booth) leave the pool,
+   * and what's left is dealt again the same way.
+   */
   function deckOf(dir, round, idea) {
+    const full = fullDeck(dir, round, idea);
+    const cut = round.cut;
+    if (!cut || !cut.length || !Odd.booth) return full;
+    return cached('c' + dir + (round.deal || 0) + JSON.stringify(round.steer || {}) + JSON.stringify(cut) + JSON.stringify(idea), () => {
+      const all = [].concat.apply([], full.batches);
+      const pool = Odd.booth.keep(dir, all, cut, idea).sort((x, y) => x.a - y.a || (x.b || 0) - (y.b || 0));
+      return { batches: dealBands(bandsOf(pool, round.deal || 0, dir)), total: pool.length, cut: all.length - pool.length };
+    });
+  }
+  function fullDeck(dir, round, idea) {
     const st = round.steer || {}, deal = round.deal || 0;
     return cached('d' + dir + deal + JSON.stringify(st) + JSON.stringify(idea), () => {
       if (dir === 'seed1') {
@@ -1583,15 +1597,18 @@
   }
 
   /** the three options on screen: batch round.batch of the round's deck */
+  /** the three on screen; a card the listener asked to hear changed takes its slot (round.subs[batch][slot]) */
   function options(dir, round, idea) {
     const bs = deckOf(dir, round, idea).batches;
-    return bs.length ? bs[Math.max(0, Math.min(bs.length - 1, round.batch || 0))] : [];
+    if (!bs.length) return [];
+    const b = Math.max(0, Math.min(bs.length - 1, round.batch || 0)), sub = round.subs && round.subs[b];
+    return sub ? bs[b].map((o, i) => sub[i] || o) : bs[b];
   }
   /** where the round is in its deck: batch, batches, cards from..to of total */
   function deckInfo(dir, round, idea) {
     const d = deckOf(dir, round, idea), b = Math.max(0, Math.min(d.batches.length - 1, round.batch || 0));
     const from = d.batches.slice(0, b).reduce((n, x) => n + x.length, 0);
-    return { batch: b, batches: d.batches.length, sizes: d.batches.map((x) => x.length), from: from + 1, to: from + d.batches[b].length, total: d.total, deal: round.deal || 0 };
+    return { batch: b, batches: d.batches.length, sizes: d.batches.map((x) => x.length), from: from + 1, to: from + d.batches[b].length, total: d.total, deal: round.deal || 0, cut: d.cut || 0 };
   }
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
@@ -2076,7 +2093,7 @@
       const r = S.round, inf = flow.info(S);
       if (!inf) return S;
       const last = inf.batch >= inf.batches - 1;
-      const round = last ? Object.assign({}, r, { batch: 0, deal: (r.deal || 0) + 1, seen: 0 }) : Object.assign({}, r, { batch: inf.batch + 1, seen: Math.max(r.seen || 0, inf.batch + 1) });
+      const round = last ? Object.assign({}, r, { batch: 0, deal: (r.deal || 0) + 1, seen: 0, subs: null }) : Object.assign({}, r, { batch: inf.batch + 1, seen: Math.max(r.seen || 0, inf.batch + 1) });
       return Object.assign({}, S, { round, seq: S.seq + 1, sel: -1, msg: last ? 'shuffled' : 'more', line: null, anim: S.anim + 1, kind: 'next' });
     },
     /** the three before; the first three stay put */
@@ -2115,7 +2132,7 @@
         if (next === '4/4') delete steer.m; else steer.m = next;
         reply = meterLine(next);
       }
-      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0, deal: 0, seen: 0 }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
+      return Object.assign({}, S, flow.row(S, { note: 'Before “' + rq.label + '”' }), { round: Object.assign({}, S.round, { steer, batch: 0, deal: 0, seen: 0, subs: null }), seq: S.seq + 1, sel: 1, anim: S.anim + 1, kind: 'pop', msg: null, line: stuck ? 'That’s as far as it goes.' : reply });
     },
     /** go back to an earlier round as it was; everything after it stays in the history */
     back(S, row) {
@@ -2159,7 +2176,7 @@
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
-    emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
+    steerPool, deckOf, fullDeck, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
+    emptyIdea, upTo, seq, climb, cap, KEY_WORD, UNDER_INST, PAD_INST, BASS_WORD, KIT_WORD, VOICE_WORD, climbSeq, lineage, ideaName, toParts, flow,
   };
 })(globalThis.Odd = globalThis.Odd || {});
