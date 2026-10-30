@@ -2066,6 +2066,44 @@ span.sg-rname { cursor: default; color: var(--muted); }
   .sg-role, .sg-menu, .sg-panel, .sg-all { animation: none; }
 }
 
+/* Watch Bobby: he builds one, the screen only listens */
+.b-link { background: none; border: 0; padding: 6px 4px; color: var(--muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.b-link:hover { color: var(--ink); }
+.b-open + .b-open-hint + .b-link { margin-top: 10px; }
+.b-watchbar { position: relative; width: 100%; max-width: 940px; box-sizing: border-box; margin: 14px 0 26px; padding: 12px 16px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; overflow: hidden; }
+.b-wb-what { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.b-wb-what b { font-size: 15px; }
+.b-wb-what span { color: var(--muted); font-size: 13.5px; }
+.b-wb-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.b-wb-step { font-family: var(--font-mono); font-size: 12px; color: var(--faint); margin-right: 4px; white-space: nowrap; }
+.b-wb-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--line) 70%, transparent); }
+.b-wb-bar i { display: block; height: 100%; width: 0; background: var(--b-gold); transition: width 0.4s; }
+.b-watching .b-promote, .b-watching .b-actions, .b-watching .b-arrow, .b-watching .b-call, .b-watching .b-reqs-in, .b-watching .b-back, .b-watching .b-big-go { display: none !important; }
+.b-watching .b-hit, .b-watching .b-seg { pointer-events: none; }
+.b-watching .b-callouts { min-height: 24px; }
+.b-card.b-chosen { border-color: var(--b-gold); box-shadow: 0 22px 44px rgba(0,0,0,.5), 0 0 0 3px color-mix(in srgb, var(--b-gold) 70%, transparent); }
+.b-card.b-chosen::before { content: 'Chosen'; position: absolute; top: -11px; right: 12px; z-index: 3; font-family: var(--font-mono); font-size: 11px; font-weight: 700; background: var(--b-gold); color: var(--b-on-gold); padding: 2px 8px; border-radius: 5px; }
+.b-again { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 14px; }
+.b-watchlog { width: 100%; max-width: 940px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 18px; }
+.b-watchlog .b-h-title { align-items: center; }
+.b-watchlog .b-link { font-family: var(--font-body, inherit); text-transform: none; letter-spacing: 0; font-size: 13px; padding: 0; }
+.b-watchlog ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.b-wl-row { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
+.b-wl-row p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; }
+.b-wl-head { display: flex; align-items: baseline; gap: 4px 9px; flex-wrap: wrap; }
+.b-wl-head .b-dot-c { width: 9px; height: 9px; border-radius: 50%; display: inline-block; align-self: center; }
+.b-wl-n { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+.b-wl-pick { font-weight: 600; }
+.b-wl-stat { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+.b-wl-asked { font-family: var(--font-mono); font-size: 12px !important; color: var(--faint); }
+.b-wl-why { color: var(--muted); }
+.b-wl-others { color: var(--faint); font-size: 13.5px !important; }
+@media (max-width: 760px) {
+  .b-watchbar { margin: 10px 0 20px; }
+  .b-wb-ctl { width: 100%; }
+  .b-wb-ctl .b-primary { margin-left: auto; }
+}
+
 </style>
 </head>
 <body>
@@ -10657,13 +10695,18 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (dir === 'beat' || dir === 'drums') return (o.swing ? 'swung' + (o.detail ? ' · ' : '') : '') + (o.detail || (o.swing ? '' : Math.round(o.off * 100) + '% off grid'));
     return o.bpm + ' BPM' + (o.swing && o.swing > 0.5 ? ' · swung' : '');
   }
+  /** where option i sits among the three: when two tie at an end, only the outermost counts as that end */
   function rankOf(opts, i) {
     const as = opts.map((o) => o.a);
-    return as[i] === minOf(as) ? 'low' : as[i] === maxOf(as) ? 'high' : 'mid';
+    if (as[i] === minOf(as) && as.indexOf(as[i]) === i) return 'low';
+    if (as[i] === maxOf(as) && as.lastIndexOf(as[i]) === i) return 'high';
+    return 'mid';
   }
-  /** Bobby on the option just heard, set against the other two */
-  function comment(dir, opts, i) {
-    const o = opts[i], rk = rankOf(opts, i);
+  /** what everything else is fitted against, in words */
+  function leadOf(idea) { return { melody: 'the melody', groove: 'the bass', riff: 'the riff' }[pathOf(idea)]; }
+  /** Bobby on the option just heard, set against the other two (idea: what it's for; a melody when not given) */
+  function comment(dir, opts, i, idea) {
+    const o = opts[i], rk = rankOf(opts, i), lead = idea ? leadOf(idea) : 'the melody';
     if (dir === 'seed1') {
       const r = o.mel.r, m = MODE[o.mel.scale];
       const sc = m.name + ', so it sounds ' + m.mood + '.' + (meterNote(o.mel) ? ' In ' + meterNote(o.mel) + '.' : '');
@@ -10686,7 +10729,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       return t;
     }
     if (dir === 'bass') return rk === 'high' ? 'Locks onto the melody: they hit together, so it sounds heavier.' : rk === 'low' ? 'Waits for the melody to breathe, then answers in the gaps. Call and response.' : o.tag + '. Holds the floor without crowding the melody.';
-    if (dir === 'perc') return rk === 'low' ? 'Barely there. The melody still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
+    if (dir === 'perc') return rk === 'low' ? 'Barely there. ' + cap(lead) + ' still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
     if (dir === 'beat') return rk === 'low' ? 'Right on the grid. Solid, dance-floor straight.' : rk === 'high' ? 'Leans against the grid: kicks land between the beats. More swagger.' : o.tag + '. Somewhere between steady and loose.';
     if (dir === 'pads') return rk === 'low' ? 'Barely there. A shadow, nothing more.' : rk === 'high' ? 'Full and wide. Everything else floats on top.' : o.tag + '. Fills in without taking over.';
     if (dir === 'pocket') return (rk === 'low' ? 'Right on the grid at ' + o.bpm + '. Solid, easy to trust.' : rk === 'high' ? 'Leans against the grid: hits land between the beats. ' + o.bpm + ' BPM of swagger.' : o.tag + ' at ' + o.bpm + '. Somewhere between steady and loose.') + (o.swing ? ' Swung, too.' : '');
@@ -10704,7 +10747,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
     const t = o.name + ' at ' + o.bpm + '. ' + cap(o.why) + '.';
     return rk === 'low' ? t + ' Calmest of the three.' : rk === 'high' ? t + ' Most energy of the three.' : t;
   }
-  function whyText(dir, o) {
+  function whyText(dir, o, idea) {
+    const lead = idea ? leadOf(idea) : 'the melody';
     if (dir === 'seed1') {
       const mt = meterOf(o.mel);
       const t = MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
@@ -10714,10 +10758,10 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.') + (o.size === 0 ? ' It only moves a step or two, so repeated notes and rhythm make the hook.' : o.size === 2 ? ' It travels a long way, so the tune itself is the hook. Too many of those and a song gets tiring.' : '');
     if (dir === 'chords') { const col = o.chords.find((c) => c.colour); return 'Each chord was picked so the melody’s long, strong notes are notes of the chord: ' + o.fit + '% of the melody sits on them. ' + (col ? chordName(col) + ' is borrowed from outside the scale; it works because the melody note above it belongs to it.' : 'Minor chords under the same notes sound darker, major ones brighter.'); }
     if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
-    if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight the melody. ' + (o.voices <= 1.2 ? 'One quiet voice adds depth without crowding.' : 'More voices fill the space around the melody, so it floats on top.');
-    if (dir === 'perc') return 'Claps on the melody’s accents make those notes jump out. A steady shaker gives a pulse the melody can lean against.';
+    if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight ' + lead + '. ' + (o.voices <= 2 ? 'A voice or two adds depth without crowding.' : 'More voices fill the space around ' + lead + ', so it floats on top.');
+    if (dir === 'perc') return 'Claps on ' + lead + '’s accents make those notes jump out. A steady shaker gives a pulse ' + lead + ' can lean against.';
     if (dir === 'pocket') return 'A groove is mostly where the hits sit and how fast they come. The same kick and snare at 72 and at 120 are different grooves, so the speed is picked with the beat.' + (o.swing ? ' Swing plays each off-beat a little late, which gives the bounce.' : '');
-    if (dir === 'gbass') return 'In a groove the bass decides the harmony. ' + (o.move === 'stay' ? 'Staying on one chord keeps all the attention on the rhythm.' : 'Moving between ' + chordLine(o.chords) + ' gives it somewhere to go without a tune.') + ' ' + (o.lock > 0.6 ? 'Hitting with the kick makes them one big low sound.' : o.lock < 0.3 ? 'Playing between the kicks keeps the low end busy without crowding.' : '');
+    if (dir === 'gbass') return 'In a groove the bass decides the harmony. ' + (o.move === 'stay' ? 'Staying on one chord keeps all the attention on the rhythm.' : 'Moving between ' + chordLine(o.chords) + ' gives it somewhere to go without a tune.') + (o.lock > 0.6 ? ' Hitting with the kick makes them one big low sound.' : o.lock < 0.3 ? ' Playing between the kicks keeps the low end busy without crowding.' : '');
     if (dir === 'keys') return o.none ? 'No chords leaves room. The bass already says where the harmony is.' : 'These play the chords the bass implies, so they can’t clash with it. ' + (o.n > 8 ? 'Short, choppy chords become part of the rhythm.' : 'Long chords give the groove a floor to sit on.');
     if (dir === 'hook') return 'A hook in a groove works best where the bass and kick leave space. Notes that land in the gaps get heard; notes on top of the kick get swallowed.';
     if (dir === 'rrhythm') return 'A riff is a rhythm first. The accents, the hard hits, decide how it feels: on the beat it sounds solid; off the beat it pulls.' + (o.r.fam === 'threes' ? ' Accents in threes cross the beat, so the riff seems to turn over itself.' : '') + ' The rests do as much as the notes.';
@@ -11111,7 +11155,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     more(S) { return flow.next(S); },
     /** a request re-rolls the three with a steer; "why" only explains. Returns the new state; play the middle one */
     request(S, rq) {
-      if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel]) : S.line });
+      if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel], S.idea) : S.line });
       const steer = Object.assign({}, S.round.steer);
       if (rq.p) steer.p = Math.max(-2, Math.min(2, (steer.p || 0) + rq.p));
       // shapes can get flatter one step further than the other rounds' -2
@@ -11174,9 +11218,274 @@ span.sg-rname { cursor: default; color: var(--muted); }
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, comment, whyText, directions,
+    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
   };
+})(globalThis.Odd = globalThis.Odd || {});
+
+/* js/core/watch.js */
+/* Oddition — Watch Bobby: he builds an idea himself and says why at every step.
+ *
+ * Odd.watch.plan({ seed, path, brief }) works out the whole run up front as a
+ * list of steps over Odd.audition.flow states: the same decks, requests and
+ * words the Idea Builder uses. The cards are never ranked. Bobby starts from
+ * a brief, a mood set on five qualities (dark or bright, calm or driving,
+ * airy or full, straight or loose, light or heavy). Each round's three cards
+ * are spread along one quality (AXIS), so he takes the card at the end the
+ * brief points to, or the middle one when the brief doesn't lean. Every pick
+ * comes with a reason, and the two he passed over stay valid choices.
+ *
+ * step = { kind, S, say, hear, i }
+ *   kind  brief | enter | request | more | hear | choose | why | ways | done
+ *   hear  a card index on S's screen, 'all' (the idea so far), or null
+ *   i     the card a choose/why step is about (-1: the round's own way out)
+ * S.watch = { brief, path, log } grows as he decides:
+ *   log entry = { dir, label, pick, stat, reason, why, others, asked }
+ */
+(function (Odd) {
+  'use strict';
+  const A = Odd.audition;
+  const F = A.flow;
+
+  // the five qualities a brief sets, and their words at each end
+  const TRAITS = { dark: ['dark', 'bright'], energy: ['calm', 'driving'], space: ['airy', 'full'], lean: ['straight', 'loose'], weight: ['light', 'heavy'] };
+
+  const BRIEFS = {
+    late: { label: 'Late night', line: 'dark, slow, lots of air, a little loose', t: { dark: -1, energy: -1, space: -1, lean: 1, weight: 0 }, paths: { groove: 2, melody: 2, riff: 1 } },
+    stomp: { label: 'Stomp', line: 'heavy, straight and hard, a bit dark', t: { dark: -1, energy: 1, space: 0, lean: -1, weight: 1 }, paths: { groove: 1, melody: 1, riff: 3 } },
+    sunny: { label: 'Sunny', line: 'bright, busy, light on its feet', t: { dark: 1, energy: 1, space: 1, lean: 0, weight: -1 }, paths: { groove: 2, melody: 3, riff: 1 } },
+    lazy: { label: 'Lazy afternoon', line: 'slow and loose, nothing in a hurry', t: { dark: 0, energy: -1, space: -1, lean: 1, weight: -1 }, paths: { groove: 3, melody: 2, riff: 1 } },
+    tense: { label: 'Tense', line: 'dark and busy, leaning against the beat', t: { dark: -1, energy: 1, space: 1, lean: 1, weight: 0 }, paths: { groove: 1, melody: 2, riff: 2 } },
+    wide: { label: 'Wide open', line: 'calm and bright, straight, lots of room', t: { dark: 1, energy: -1, space: -1, lean: -1, weight: -1 }, paths: { groove: 1, melody: 3, riff: 1 } },
+    plain: { label: 'Middle of the road', line: 'nothing pushed anywhere, so you can hear each part do its job', t: { dark: 0, energy: 0, space: 0, lean: 0, weight: 0 }, paths: { groove: 1, melody: 1, riff: 1 } },
+  };
+  const BRIEF_ORDER = Object.keys(BRIEFS);
+
+  // the quality each round's three are spread along (low a = the trait's first word, high a = its second)
+  const AXIS = {
+    seed1: 'space', seed2: 'energy', chords: 'dark', bass: 'weight', perc: 'energy', beat: 'lean', pads: 'space', sound: 'energy',
+    pocket: 'lean', gbass: 'weight', keys: 'energy', hook: 'space', rrhythm: 'lean', rnotes: 'space', weight: 'weight', drums: 'lean', under: 'space',
+  };
+  // requests he makes before listening, when the brief leans that way: [trait, { side: the request's label }]
+  const ASKS = {
+    seed1: [['dark', { '-1': 'Darker scale', 1: 'Brighter scale' }]],
+    seed2: [['space', { '-1': 'Subtler', 1: 'Bigger' }]],
+    bass: [['space', { '-1': 'Simpler', 1: 'Busier' }]],
+    pocket: [['energy', { '-1': 'Slower', 1: 'Faster' }], ['lean', { 1: 'Swing it' }]],
+    gbass: [['dark', { '-1': 'Darker', 1: 'Brighter' }]],
+    keys: [['space', { '-1': 'Thinner', 1: 'Fuller' }]],
+    rrhythm: [['space', { '-1': 'Sparser', 1: 'Busier' }]],
+    rnotes: [['dark', { '-1': 'Darker', 1: 'Brighter' }]],
+    drums: [['weight', { 1: 'Harder' }]],
+  };
+  const FIRST = { seed1: true, pocket: true, rrhythm: true }; // rounds with Another meter
+
+  const PATH_WHY = {
+    groove: 'I’ll start with a groove: the beat and the bass set the feel, and the feel is the brief.',
+    melody: 'I’ll start with a melody: a tune first, then everything built to hold it up.',
+    riff: 'I’ll start with a riff: one stubborn figure, and the rest built around it.',
+  };
+  // the ways on he takes after the first screens, in order, and why
+  function waysFor(path, t) {
+    const out = [];
+    if (path === 'melody') {
+      out.push('chords', 'bass');
+      if (t.energy >= 0 || t.lean > 0) out.push('perc');
+      if (out.indexOf('perc') >= 0 && (t.energy > 0 || t.lean > 0) && t.weight >= 0) out.push('beat');
+      if (t.space >= 0 || t.energy < 0) out.push('pads');
+    } else if (path === 'groove') {
+      if (t.space >= 0) out.push('hook');
+      if (t.lean > 0 || t.energy > 0) out.push('perc');
+      if (t.energy < 0 || t.space > 0) out.push('pads');
+    } else {
+      out.push('drums', 'under');
+      if (t.energy > 0 || t.lean > 0) out.push('perc');
+    }
+    out.push('sound');
+    return out;
+  }
+  const WAY = {
+    chords: () => 'Chords first: the bass and everything after lean on them.',
+    bass: (t) => 'A bass to hold the floor' + (t.weight > 0 ? '. The brief is heavy, so it matters.' : '.'),
+    perc: (t) => t.lean > 0 ? 'Percussion: the brief is loose, and claps and taps can lean.' : 'Percussion, for motion' + (t.energy > 0 ? ': the brief is driving.' : '.'),
+    beat: () => 'Now I grow those claps into a full beat.',
+    pads: (t) => t.space < 0 ? 'Pads, but thin: a shadow, so the air stays.' : 'Pads, to fill the space around it.',
+    hook: () => 'A hook on top. The brief wants it full, so the groove gets a tune.',
+    drums: () => 'Drums first: a riff needs to know where the beat is.',
+    under: (t) => t.space < 0 ? 'Something under it. The brief is airy, so I’m expecting a drone.' : 'Something under it, to give the riff some colour.',
+    sound: () => 'Last, the sound: instruments, tempo and swing. It comes last so the idea could live in many genres.',
+  };
+  const LEFT_OUT = {
+    perc: 'percussion (the parts carry the rhythm themselves)',
+    beat: 'a full beat (claps and taps were enough)',
+    pads: 'pads (I wanted air around it)',
+    hook: 'a hook (the groove is the idea, so I left the space)',
+  };
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function weighted(R, W) {
+    let tot = 0;
+    for (const k in W) tot += W[k];
+    let x = R() * tot;
+    for (const k in W) { x -= W[k]; if (x <= 0) return k; }
+    return Object.keys(W)[0];
+  }
+  const word = (trait, v) => TRAITS[trait][v > 0 ? 1 : 0];
+  const quote = (s) => '“' + s + '”';
+  function joinAnd(list) { return list.length < 2 ? list.join('') : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]; }
+
+  /** a round's name in his mouth: a groove's shape round is its hook's */
+  function roundLabel(S, dir) { return dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'The hook’s shape' : A.DIRS[dir].label; }
+
+  /** what he listens for in a round, from the brief */
+  function intent(S, t) {
+    const dir = S.round.dir, tr = AXIS[dir], v = t[tr], D = A.DIRS[dir], inf = F.info(S);
+    const head = roundLabel(S, dir) + ': ' + inf.total + ' in the deck. ';
+    if (!v) return head + 'The brief doesn’t push this one either way, so I’m after the middle, between ' + quote(D.low) + ' and ' + quote(D.high) + '.';
+    return head + 'The brief is ' + word(tr, v) + ', so I’m listening for ' + quote(v > 0 ? D.high : D.low) + '.';
+  }
+
+  /** the card the brief points to: the low end, the high end or the middle of the three (they're dealt sorted along the axis) */
+  function target(opts, v) {
+    if (opts.length < 2) return 0;
+    if (v < 0) return 0;
+    if (v > 0) return opts.length - 1;
+    return Math.floor((opts.length - 1) / 2);
+  }
+
+  /**
+   * The whole run. opts: { seed, path, brief } (path and brief are picked
+   * from the seed when not given). Returns { path, brief, steps }.
+   */
+  function plan(opts) {
+    const o = opts || {};
+    const seed = o.seed == null ? 1 : o.seed;
+    const R = rng(seed);
+    const bid = BRIEFS[o.brief] ? o.brief : BRIEF_ORDER[Math.floor(R() * BRIEF_ORDER.length)];
+    const B = BRIEFS[bid], t = B.t;
+    const path = A.PATHS[o.path] ? o.path : weighted(R, B.paths);
+    const steps = [];
+    let log = [];
+    const watch = () => ({ brief: bid, path, seed, log });
+    const push = (kind, S, say, hear, i) => { steps.push({ kind, S: Object.assign({}, S, { watch: watch() }), say, hear: hear == null ? null : hear, i: i == null ? null : i }); };
+
+    let S = Object.assign(F.fresh(), { peek: path });
+    push('brief', S, 'Sit back: I’ll build one and tell you why as I go. Today’s brief: ' + B.label + '. That means ' + B.line + '. ' + PATH_WHY[path]);
+    S = F.begin(Object.assign({}, S, { peek: null }), path);
+
+    /** one round, from what he listens for to the card he takes; returns the state after the pick */
+    const round = () => {
+      const dir = S.round.dir, tr = AXIS[dir], v = t[tr], asked = [];
+      push('enter', S, intent(S, t));
+      const reqs = A.REQS[dir] || [];
+      const ask = (rq, say) => { S = F.request(S, rq); asked.push(rq.label); push('request', S, say); };
+      // now and then, out of 4/4
+      if (FIRST[dir] && R() < 0.3) {
+        const rq = reqs.find((q) => q.m);
+        const n = R() < 0.5 ? 1 : 2;
+        for (let k = 0; k < n; k++) { S = F.request(S, rq); }
+        asked.push(rq.label + (n > 1 ? ' (twice)' : ''));
+        push('request', S, 'Not 4/4 this time. ' + S.line);
+      }
+      (ASKS[dir] || []).forEach(([trait, sides]) => {
+        const side = t[trait], label = side && sides[side];
+        // dark or bright is a scale, and asking is the only way to steer it; the rest he asks for most of the time
+        if (!label || asked.length >= 2 || (trait !== 'dark' && R() > 0.75)) return;
+        const rq = reqs.find((q) => q.label === label);
+        if (!rq) return;
+        if (rq.x === 'swing' && Odd.theory.meter(S.round.steer.m).compound) return;
+        ask(rq, label + ': the brief is ' + word(trait, side) + '. ' + (rq.reply || ''));
+      });
+      const listen = () => {
+        const opts = F.options(S);
+        opts.forEach((_, i) => push('hear', Object.assign({}, S, { sel: i }), A.comment(dir, opts, i, S.idea), i));
+      };
+      S = Object.assign({}, S, { sel: -1 });
+      listen();
+      const inf = F.info(S);
+      // now and then, three more from somewhere further into the deck
+      if (inf.batches > 1 && R() < 0.3) {
+        const b = 1 + Math.floor(R() * (inf.batches - 1));
+        S = Object.assign(F.to(S, b), { sel: -1 });
+        push('more', S, 'Let me hear three more before I choose, from further into the deck. ' + inf.total + ' cards fit this round; the first three are just the clearest.');
+        listen();
+      }
+      const opts = F.options(S);
+      // the round's own way out, when the brief asks for less
+      const ownNow = (dir === 'keys' && t.space < 0 && t.energy <= 0 && R() < 0.6) || (dir === 'seed2' && A.pathOf(S.idea) === 'melody' && bid === 'plain' && R() < 0.35);
+      const i = ownNow ? -1 : target(opts, v);
+      const others = opts.map((_, j) => j).filter((j) => j !== i);
+      const name = (j) => A.ABC.charAt(j) + ' (' + A.tagOf(dir, opts[j]) + ')';
+      let reason, why, othersLine;
+      if (ownNow) {
+        reason = dir === 'keys'
+          ? 'None of them: no chords. The brief wants air, and the bass already says where the harmony is.'
+          : 'None of them: the plain walk. The brief is middle of the road, and the walk through the scale already makes a tune.';
+        why = dir === 'keys' ? A.whyText('keys', A.NO_CHORDS) : 'A shape pushes a tune somewhere: up like a question, down like an answer. The plain walk doesn’t push, which is what this brief asks for.';
+        othersLine = 'Any of the three would fit; they’d just fill space this idea wants empty.';
+      } else {
+        const o2 = opts[i], D = A.DIRS[dir];
+        reason = A.ABC.charAt(i) + ', ' + A.tagOf(dir, o2) + '. ' + (v
+          ? 'Of these three it’s furthest toward ' + quote(v > 0 ? D.high : D.low) + ', and the brief is ' + word(tr, v) + '.'
+          : 'It sits between the other two, and the brief keeps this part in the middle.');
+        why = A.whyText(dir, o2, S.idea);
+        othersLine = others.length ? joinAnd(others.map(name)) + (others.length > 1 ? ' fit too' : ' fits too') + (v
+          ? '. Nothing wrong with ' + (others.length > 1 ? 'them' : 'it') + '; ' + (others.length > 1 ? 'they’re' : 'it’s') + ' just less ' + word(tr, v) + '.'
+          : ', one each side of the middle.') : '';
+      }
+      const entry = { dir, label: roundLabel(S, dir), pick: ownNow ? A.ownLabel(dir) : A.ABC.charAt(i) + ' · ' + A.tagOf(dir, opts[i]), stat: ownNow ? '' : A.statOf(dir, opts[i]), reason, why, others: othersLine, asked };
+      log = log.concat([entry]);
+      const at = Object.assign({}, S, { sel: i });
+      push('choose', at, reason + (othersLine ? ' ' + othersLine : ''), ownNow ? null : i, i);
+      push('why', at, 'Why it works: ' + why, ownNow ? null : i, i);
+      const before = S;
+      S = ownNow ? F.own(S) : F.pick(S, i);
+      S = Object.assign({}, S, { watch: watch() });
+      return { dir, own: ownNow, before };
+    };
+
+    // the first screens, in order
+    let last = null;
+    while (S.phase === 'round') last = round();
+    // then the ways on
+    const ways = waysFor(path, t);
+    ways.forEach((d, k) => {
+      const lead = k === 0 ? A.pickedLine(S.idea, last.dir, last.own, S.seq) : 'Here’s where it stands.';
+      push('ways', S, lead + ' Next: ' + A.DIRS[d].label.toLowerCase() + '. ' + WAY[d](t), 'all');
+      S = F.enter(S, d);
+      do last = round(); while (S.phase === 'round'); // a hook goes on to its shape
+    });
+    S = F.finish(S);
+    const left = A.PATHS[path].next.filter((d) => ways.indexOf(d) < 0 && LEFT_OUT[d]).map((d) => LEFT_OUT[d]);
+    push('done', S, 'That’s the idea: ' + A.ideaName(S.idea) + '. ' + (left.length ? 'I left out ' + joinAnd(left) + '. ' : '') + 'Every card I passed over fit as well; the brief is what chose. Watch another, or take this one and keep building.', 'all');
+    return { path, brief: bid, steps };
+  }
+
+  /** the run as plain text, for notes: the brief, then each round's pick, reason and the ones passed over */
+  function transcript(w) {
+    if (!w) return '';
+    const B = BRIEFS[w.brief];
+    const lines = ['Bobby built a ' + A.PATHS[w.path].label.toLowerCase() + '. Brief: ' + (B ? B.label + ' (' + B.line + ')' : w.brief) + '.', ''];
+    w.log.forEach((e, n) => {
+      lines.push((n + 1) + '. ' + e.label + ': ' + e.pick + (e.stat ? ' (' + e.stat + ')' : ''));
+      if (e.asked && e.asked.length) lines.push('   Asked for: ' + e.asked.join(', '));
+      lines.push('   ' + e.reason);
+      lines.push('   Why it works: ' + e.why);
+      if (e.others) lines.push('   ' + e.others);
+    });
+    return lines.join('\n');
+  }
+
+  Odd.watch = { TRAITS, BRIEFS, BRIEF_ORDER, AXIS, plan, transcript, waysFor };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/songmaker.js */
@@ -17659,6 +17968,10 @@ span.sg-rname { cursor: default; color: var(--muted); }
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
+ * Watch Bobby: from the opener he can build one himself (Odd.watch plans
+ * the run), playing each card and saying why he takes the one he takes.
+ * While he works, the screen only listens: Pause, Back, Next and Take over.
+ *
  * Odd.bones.mount(el, host) once; host = { toStudio, toHome, stopStudio, saveIdea, toast }.
  * Odd.bones.show(on) when the screen changes; Odd.bones.open(bones, ideaId)
  * reopens a saved idea at its gold stage.
@@ -17708,6 +18021,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
   let raf = 0, saveTimer = 0, sliding = false;
+  // Bobby building one himself: the planned steps, where he is, and the timer to the next
+  let W = null;
+  const WATCH_ACTS = { wpause: 1, wnext: 1, wprev: 1, wtake: 1, wcopy: 1, home: 1, studio: 1 };
 
   // ---------------------------------------------------------------- state
 
@@ -17909,6 +18225,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
 
   function restart() {
+    if (W) { clearTimeout(W.timer); W = null; }
     const prev = S;
     step(() => Object.assign(F.fresh(), { anim: prev.anim + 1 }));
     if (host.toast && prev.phase !== 'start') {
@@ -17933,7 +18250,73 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (id) set(Object.assign({}, S, { saved: id, line: L.saved }));
   }
 
+  // ---------------------------------------------------------------- watch Bobby
+
+  const passMs = (q) => (q ? (q.length / (A.STEP_TICKS * 4)) * (60000 / q.bpm) : 0);
+  const readMs = (text) => Math.min(14000, 1400 + 38 * String(text || '').length);
+
+  /** Bobby builds one: on a path, or one he picks */
+  function watch(path) {
+    halt();
+    P.src = '';
+    const run = Odd.watch.plan({ seed: (Date.now() % 1e9) + Math.floor(Math.random() * 1e6), path: A.PATHS[path] ? path : null });
+    // offsets keep this run's screens from matching an earlier run's
+    W = { steps: run.steps, i: -1, paused: false, timer: 0, brief: run.brief, path: run.path, seq: S.seq + 1, anim: S.anim + 1 };
+    goStep(0);
+  }
+  function goStep(i) {
+    if (!W) return;
+    clearTimeout(W.timer);
+    if (i >= W.steps.length) { endWatch(); return; }
+    W.i = Math.max(0, i);
+    const st = W.steps[W.i];
+    set(Object.assign({}, st.S, { line: st.say, seq: st.S.seq + W.seq, anim: st.S.anim + W.anim }));
+    const key = st.hear == null ? '' : st.hear === 'all' ? 'all' : curKey(st.hear);
+    let ms = readMs(st.say);
+    const a = key ? audioFor(key) : null; // paused, Back and Next still play the step; it just doesn't move on
+    if (a) {
+      const q = a.seq();
+      if (!(P.playing && P.src === key)) { halt(); run(q); P.src = key; P.heard = key; }
+      ms = Math.max(ms, passMs(q) + 300);
+    } else if (!key) halt();
+    render();
+    if (!W.paused) W.timer = setTimeout(() => goStep(W.i + 1), ms);
+  }
+  function pauseWatch() {
+    if (!W) return;
+    if (W.paused) { W.paused = false; goStep(W.i); return; }
+    W.paused = true;
+    clearTimeout(W.timer);
+    halt();
+    render();
+  }
+  function endWatch() {
+    if (!W) return;
+    clearTimeout(W.timer);
+    W = null;
+    halt();
+    render();
+  }
+  /** stop watching and carry on from here, everything live again */
+  function takeOver() {
+    if (!W) return;
+    clearTimeout(W.timer);
+    W = null;
+    set(Object.assign({}, S, { line: 'Your turn. Everything’s live again: pick, ask, go back.' }));
+  }
+  function copyLog() {
+    const txt = Odd.watch.transcript(S.watch);
+    const done = () => { if (host.toast) host.toast('Copied how Bobby built it.'); };
+    try { navigator.clipboard.writeText(txt).then(done, () => { if (host.toast) host.toast('Couldn’t copy here.', { kind: 'warn' }); }); } catch (e) { if (host.toast) host.toast('Couldn’t copy here.', { kind: 'warn' }); }
+  }
+
   const ACTS = {
+    watch: (el) => watch(el.dataset.path),
+    wpause: () => pauseWatch(),
+    wnext: () => goStep(W ? W.i + 1 : 0),
+    wprev: () => goStep(W ? W.i - 1 : 0),
+    wtake: () => takeOver(),
+    wcopy: () => copyLog(),
     peek: (el) => peek(el.dataset.path),
     begin: (el) => begin(el.dataset.path),
     hear: (el) => hear(el.dataset.key),
@@ -17959,6 +18342,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   function onClick(e) {
     const el = e.target.closest('[data-act]');
     if (!el || !root.contains(el) || el.disabled) return;
+    if (W && !WATCH_ACTS[el.dataset.act]) return; // he's working: the screen only listens
     const fn = ACTS[el.dataset.act];
     if (fn) fn(el);
   }
@@ -17967,6 +18351,13 @@ span.sg-rname { cursor: default; color: var(--muted); }
   function onKey(e) {
     if (!shown || e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = e.key;
+    if (W) {
+      if (k === ' ' && e.target && e.target.closest && e.target.closest('button') && e.target.closest('#bones')) return false;
+      if (k === ' ' || k === 'Escape') { e.preventDefault(); if (k === ' ' || !W.paused) pauseWatch(); return true; }
+      if (k === 'ArrowRight') { e.preventDefault(); goStep(W.i + 1); return true; }
+      if (k === 'ArrowLeft') { e.preventDefault(); goStep(W.i - 1); return true; }
+      return false;
+    }
     if (k === 'Escape') { stop(); return true; }
     if (k === ' ') {
       if (e.target && e.target.closest && e.target.closest('button') && e.target.closest('#bones')) return false; // the button handles it
@@ -18136,6 +18527,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   const BOBBY_SVG = Odd.brand.BOBBY;
 
   function bobby(opts) {
+    if (W && S.line) return S.line;
     if (S.phase === 'start') return S.peek ? A.line(L.peek[S.peek], (P.ex[S.peek] || 1) - 1) : S.line || L.start;
     if (P.src === 'climb' && P.playing && P.climb >= 0) return A.climbLines(S.idea)[P.climb] || 'That’s gold.';
     if (S.line) return S.line;
@@ -18147,7 +18539,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (S.phase === 'next') return A.line(path === 'melody' ? L.next : L.nextBy[path], S.seq);
     if (S.phase === 'gold') return A.line(path === 'melody' ? L.gold : L.goldBy[path], S.hid);
     if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
-    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
+    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel, S.idea);
     return A.line(L.entry[S.round.dir], S.seq);
   }
 
@@ -18244,6 +18636,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
         '<button type="button" class="b-ghost" data-act="save" data-label="save">Save to Ideas</button>' +
         '<button type="button" class="b-ghost" data-act="restart">Start a new idea</button>' +
       '</div>' +
+      (S.watch && !W ? '<div class="b-again"><span>Watch Bobby build another:</span>' +
+        ['', 'groove', 'melody', 'riff'].map((p) => '<button type="button" class="b-ghost" data-act="watch"' + (p ? ' data-path="' + p + '"' : '') + '>' + (p ? A.PATHS[p].label : 'Any') + '</button>').join('') + '</div>' : '') +
       '<span class="b-lin-title">How it got here</span>' +
       '<div class="b-lineage">' + lin + '</div>' +
     '</div>';
@@ -18282,7 +18676,44 @@ span.sg-rname { cursor: default; color: var(--muted); }
         '<button type="button" class="b-primary b-big-go" data-act="begin" data-path="' + p + '">Start with a ' + esc(name) + '</button>' +
       '</div>';
     }).join('');
-    return '<div class="b-open">' + cards + '</div><p class="b-hint b-open-hint">Tap a card to hear an example of it. Each time is a new one.</p>';
+    return '<div class="b-open">' + cards + '</div><p class="b-hint b-open-hint">Tap a card to hear an example of it. Each time is a new one.</p>' +
+      (W ? '' : '<button type="button" class="b-link" data-act="watch">Or watch Bobby build one, and hear why he picks what he picks</button>');
+  }
+
+  /** while he works: what he's going for, where he is, and the controls */
+  function watchBar() {
+    if (!W) return '';
+    const B = Odd.watch.BRIEFS[W.brief];
+    return '<div class="b-watchbar" role="region" aria-label="Watching Bobby">' +
+      '<div class="b-wb-what"><b>Watching Bobby build a ' + esc(A.PATHS[W.path].label.toLowerCase()) + '</b><span>Brief: ' + esc(B.label) + ' · ' + esc(B.line) + '</span></div>' +
+      '<div class="b-wb-ctl">' +
+        '<span class="b-wb-step"></span>' +
+        '<button type="button" class="b-ghost" data-act="wprev" title="Back a step (←)">Back</button>' +
+        '<button type="button" class="b-ghost" data-act="wpause" data-label="wpause" title="Space">Pause</button>' +
+        '<button type="button" class="b-ghost" data-act="wnext" title="Next step (→)">Next</button>' +
+        '<button type="button" class="b-primary" data-act="wtake" title="Stop watching and carry on from here yourself">Take over</button>' +
+      '</div>' +
+      '<i class="b-wb-bar"><i></i></i>' +
+    '</div>';
+  }
+
+  /** every decision so far, in order: the pick, why, why it works, and the ones passed over */
+  function watchLog() {
+    const w = S.watch;
+    if (!w || !w.log.length) return '';
+    const B = Odd.watch.BRIEFS[w.brief];
+    const rows = w.log.map((e, n) =>
+      '<li class="b-wl-row">' +
+        '<div class="b-wl-head"><span class="b-wl-n">' + (n + 1) + '</span><i class="b-dot-c" style="background:' + col(e.dir) + '"></i><b>' + esc(e.label) + '</b><span class="b-wl-pick">' + esc(e.pick) + '</span>' + (e.stat ? '<span class="b-wl-stat">' + esc(e.stat) + '</span>' : '') + '</div>' +
+        (e.asked && e.asked.length ? '<p class="b-wl-asked">Asked for: ' + esc(e.asked.join(', ')) + '</p>' : '') +
+        '<p>' + esc(e.reason) + '</p>' +
+        '<p class="b-wl-why"><b>Why it works:</b> ' + esc(e.why) + '</p>' +
+        (e.others ? '<p class="b-wl-others">' + esc(e.others) + '</p>' : '') +
+      '</li>').join('');
+    return '<section class="b-watchlog" aria-label="How Bobby built it">' +
+      '<div class="b-h-title"><span>How Bobby built it · brief: ' + esc(B ? B.label : w.brief) + '</span>' +
+        '<button type="button" class="b-link" data-act="wcopy">Copy as text</button></div>' +
+      '<ol>' + rows + '</ol></section>';
   }
 
   function full() {
@@ -18293,20 +18724,22 @@ span.sg-rname { cursor: default; color: var(--muted); }
     else if (S.phase === 'next') body = nextHtml(animate);
     else body = goldHtml(animate);
     root.innerHTML =
-      '<div class="b2g' + (animate ? ' b-animate' : '') + '">' +
+      '<div class="b2g' + (animate ? ' b-animate' : '') + (W ? ' b-watching' : '') + '">' +
         '<header class="b-top">' +
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
             (S.phase === 'start' ? '' : '<span class="b-meta">' + esc(A.metaOf(S.idea)) + '</span>') +
-            (F.canFinish(S) ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
-            (S.phase === 'round' || S.phase === 'next' ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
+            (F.canFinish(S) && !W ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
+            ((S.phase === 'round' || S.phase === 'next') && !W ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
         '</header>' +
         '<main class="b-stage">' +
           '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span></div></section>' +
+          watchBar() +
           body +
+          watchLog() +
           historyHtml() +
         '</main>' +
       '</div>';
@@ -18353,6 +18786,16 @@ span.sg-rname { cursor: default; color: var(--muted); }
         if (inCard) inCard.innerHTML = html;
       }
     }
+    const st = W ? W.steps[W.i] : null;
+    root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && (st.kind === 'choose' || st.kind === 'why') && st.i === Number(el.dataset.i)));
+    if (W) {
+      const n = root.querySelector('.b-wb-step');
+      if (n) n.textContent = 'Step ' + (W.i + 1) + ' of ' + W.steps.length;
+      const pb = root.querySelector('[data-label="wpause"]');
+      if (pb) pb.textContent = W.paused ? 'Play' : 'Pause';
+      const bar = root.querySelector('.b-wb-bar i');
+      if (bar) bar.style.width = (100 * (W.i + 1) / W.steps.length).toFixed(1) + '%';
+    }
     root.querySelectorAll('[data-label="all"]').forEach((b) => { b.textContent = P.playing && P.src === 'all' ? 'Stop' : 'Play the idea so far'; });
     const cb = root.querySelector('[data-label="climb"] span');
     if (cb) cb.textContent = climbing ? 'Stop the climb' : 'Play the climb';
@@ -18362,7 +18805,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
 
   function render() {
     if (!root || !shown) return;
-    const key = [S.phase, S.seq, S.hid, S.anim, S.round ? S.round.dir : '', S.idea.order.join(',')].join('|');
+    const key = [S.phase, S.seq, S.hid, S.anim, S.round ? S.round.dir : '', S.idea.order.join(','), W ? 'w' : '', S.watch ? S.watch.log.length + S.watch.brief : ''].join('|');
     if (key !== built) { built = key; full(); }
     patch();
   }
@@ -18382,13 +18825,18 @@ span.sg-rname { cursor: default; color: var(--muted); }
 
   function show(on) {
     shown = !!on;
-    if (!shown) { halt(); return; }
+    if (!shown) {
+      if (W && !W.paused) { W.paused = true; clearTimeout(W.timer); }
+      halt();
+      return;
+    }
     built = '';
     render();
   }
 
   /** reopen a saved idea at its gold stage */
   function open(bones, ideaId) {
+    if (W) { clearTimeout(W.timer); W = null; }
     halt();
     P.src = '';
     const ns = F.repair(Object.assign(F.fresh(), { phase: 'gold', idea: clone(bones), anim: (S ? S.anim : 0) + 1, saved: ideaId || null }));
@@ -18399,6 +18847,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     mount, show, open, onKey,
     get state() { return S; },
     get playing() { return P.playing; },
+    get watching() { return W ? { i: W.i, steps: W.steps.length, paused: W.paused, brief: W.brief, path: W.path, kind: W.steps[W.i].kind } : null; },
   };
 })(globalThis.Odd = globalThis.Odd || {});
 

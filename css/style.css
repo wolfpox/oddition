@@ -2056,3 +2056,41 @@ span.sg-rname { cursor: default; color: var(--muted); }
   .sg-oc.rise, .sg-ic.rise { border-style: dashed; border-color: var(--b-gold); }
   .sg-role, .sg-menu, .sg-panel, .sg-all { animation: none; }
 }
+
+/* Watch Bobby: he builds one, the screen only listens */
+.b-link { background: none; border: 0; padding: 6px 4px; color: var(--muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.b-link:hover { color: var(--ink); }
+.b-open + .b-open-hint + .b-link { margin-top: 10px; }
+.b-watchbar { position: relative; width: 100%; max-width: 940px; box-sizing: border-box; margin: 14px 0 26px; padding: 12px 16px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; overflow: hidden; }
+.b-wb-what { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.b-wb-what b { font-size: 15px; }
+.b-wb-what span { color: var(--muted); font-size: 13.5px; }
+.b-wb-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.b-wb-step { font-family: var(--font-mono); font-size: 12px; color: var(--faint); margin-right: 4px; white-space: nowrap; }
+.b-wb-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--line) 70%, transparent); }
+.b-wb-bar i { display: block; height: 100%; width: 0; background: var(--b-gold); transition: width 0.4s; }
+.b-watching .b-promote, .b-watching .b-actions, .b-watching .b-arrow, .b-watching .b-call, .b-watching .b-reqs-in, .b-watching .b-back, .b-watching .b-big-go { display: none !important; }
+.b-watching .b-hit, .b-watching .b-seg { pointer-events: none; }
+.b-watching .b-callouts { min-height: 24px; }
+.b-card.b-chosen { border-color: var(--b-gold); box-shadow: 0 22px 44px rgba(0,0,0,.5), 0 0 0 3px color-mix(in srgb, var(--b-gold) 70%, transparent); }
+.b-card.b-chosen::before { content: 'Chosen'; position: absolute; top: -11px; right: 12px; z-index: 3; font-family: var(--font-mono); font-size: 11px; font-weight: 700; background: var(--b-gold); color: var(--b-on-gold); padding: 2px 8px; border-radius: 5px; }
+.b-again { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 14px; }
+.b-watchlog { width: 100%; max-width: 940px; margin-top: 40px; border-top: 1px solid var(--line); padding-top: 18px; }
+.b-watchlog .b-h-title { align-items: center; }
+.b-watchlog .b-link { font-family: var(--font-body, inherit); text-transform: none; letter-spacing: 0; font-size: 13px; padding: 0; }
+.b-watchlog ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.b-wl-row { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
+.b-wl-row p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; }
+.b-wl-head { display: flex; align-items: baseline; gap: 4px 9px; flex-wrap: wrap; }
+.b-wl-head .b-dot-c { width: 9px; height: 9px; border-radius: 50%; display: inline-block; align-self: center; }
+.b-wl-n { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+.b-wl-pick { font-weight: 600; }
+.b-wl-stat { font-family: var(--font-mono); font-size: 12px; color: var(--faint); }
+.b-wl-asked { font-family: var(--font-mono); font-size: 12px !important; color: var(--faint); }
+.b-wl-why { color: var(--muted); }
+.b-wl-others { color: var(--faint); font-size: 13.5px !important; }
+@media (max-width: 760px) {
+  .b-watchbar { margin: 10px 0 20px; }
+  .b-wb-ctl { width: 100%; }
+  .b-wb-ctl .b-primary { margin-left: auto; }
+}

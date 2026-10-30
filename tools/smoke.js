@@ -128,6 +128,28 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
     ok(b.phase === 'next' && b.playing && ways === dirs, 'a ' + p + ' in three screens, then ' + dirs);
     await page.screenshot({ path: path.join(out, 'bones-' + p + '.png') });
   }
+  // watch Bobby build one: he steps on his own, the cards don't take clicks, Take over hands it back
+  await page.click('.b-top [data-act="restart"]');
+  await page.waitForTimeout(300);
+  await page.click('.b-link[data-act="watch"]');
+  await page.waitForTimeout(400);
+  const wt = () => page.evaluate(() => Odd.bones.watching);
+  let w = await wt();
+  ok(!!w && w.kind === 'brief' && !!(await page.$('.b-watchbar')), 'Watch Bobby starts on his brief');
+  for (let k = 0; k < 60 && (await wt()).kind !== 'choose'; k++) { await page.click('[data-act="wnext"]'); await page.waitForTimeout(80); }
+  await page.waitForTimeout(300);
+  ok((await wt()).kind === 'choose' && (await page.$$('.b-card.b-chosen')).length === 1, 'he marks the card he takes and says why');
+  await page.click('[data-act="wpause"]');
+  w = await wt();
+  await page.waitForTimeout(1500);
+  ok((await wt()).i === w.i && (await wt()).paused, 'pause holds him');
+  await page.click('[data-act="wnext"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => document.querySelectorAll('.b-wl-row').length === 1 && /Why it works/.test(document.querySelector('.b-watchlog').textContent)), 'the log keeps every decision');
+  await page.click('[data-act="wtake"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => !Odd.bones.watching && !document.querySelector('.b-watchbar')), 'Take over hands it back');
+  await page.screenshot({ path: path.join(out, 'bones-watch.png'), fullPage: true });
   await page.click('[data-act="studio"]');
   await page.waitForTimeout(400);
   ok(await page.evaluate(() => document.body.dataset.screen === 'studio' && !Odd.transport.playing && getComputedStyle(document.querySelector('#bones')).display === 'none'), 'Studio switches to the sheet, booth and shelf');

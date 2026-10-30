@@ -1636,13 +1636,18 @@
     if (dir === 'beat' || dir === 'drums') return (o.swing ? 'swung' + (o.detail ? ' · ' : '') : '') + (o.detail || (o.swing ? '' : Math.round(o.off * 100) + '% off grid'));
     return o.bpm + ' BPM' + (o.swing && o.swing > 0.5 ? ' · swung' : '');
   }
+  /** where option i sits among the three: when two tie at an end, only the outermost counts as that end */
   function rankOf(opts, i) {
     const as = opts.map((o) => o.a);
-    return as[i] === minOf(as) ? 'low' : as[i] === maxOf(as) ? 'high' : 'mid';
+    if (as[i] === minOf(as) && as.indexOf(as[i]) === i) return 'low';
+    if (as[i] === maxOf(as) && as.lastIndexOf(as[i]) === i) return 'high';
+    return 'mid';
   }
-  /** Bobby on the option just heard, set against the other two */
-  function comment(dir, opts, i) {
-    const o = opts[i], rk = rankOf(opts, i);
+  /** what everything else is fitted against, in words */
+  function leadOf(idea) { return { melody: 'the melody', groove: 'the bass', riff: 'the riff' }[pathOf(idea)]; }
+  /** Bobby on the option just heard, set against the other two (idea: what it's for; a melody when not given) */
+  function comment(dir, opts, i, idea) {
+    const o = opts[i], rk = rankOf(opts, i), lead = idea ? leadOf(idea) : 'the melody';
     if (dir === 'seed1') {
       const r = o.mel.r, m = MODE[o.mel.scale];
       const sc = m.name + ', so it sounds ' + m.mood + '.' + (meterNote(o.mel) ? ' In ' + meterNote(o.mel) + '.' : '');
@@ -1665,7 +1670,7 @@
       return t;
     }
     if (dir === 'bass') return rk === 'high' ? 'Locks onto the melody: they hit together, so it sounds heavier.' : rk === 'low' ? 'Waits for the melody to breathe, then answers in the gaps. Call and response.' : o.tag + '. Holds the floor without crowding the melody.';
-    if (dir === 'perc') return rk === 'low' ? 'Barely there. The melody still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
+    if (dir === 'perc') return rk === 'low' ? 'Barely there. ' + cap(lead) + ' still does the talking.' : rk === 'high' ? 'This one drives: ' + o.n + ' hits in two bars. Motion under the long notes.' : o.tag + '. Just enough to nod along.';
     if (dir === 'beat') return rk === 'low' ? 'Right on the grid. Solid, dance-floor straight.' : rk === 'high' ? 'Leans against the grid: kicks land between the beats. More swagger.' : o.tag + '. Somewhere between steady and loose.';
     if (dir === 'pads') return rk === 'low' ? 'Barely there. A shadow, nothing more.' : rk === 'high' ? 'Full and wide. Everything else floats on top.' : o.tag + '. Fills in without taking over.';
     if (dir === 'pocket') return (rk === 'low' ? 'Right on the grid at ' + o.bpm + '. Solid, easy to trust.' : rk === 'high' ? 'Leans against the grid: hits land between the beats. ' + o.bpm + ' BPM of swagger.' : o.tag + ' at ' + o.bpm + '. Somewhere between steady and loose.') + (o.swing ? ' Swung, too.' : '');
@@ -1683,7 +1688,8 @@
     const t = o.name + ' at ' + o.bpm + '. ' + cap(o.why) + '.';
     return rk === 'low' ? t + ' Calmest of the three.' : rk === 'high' ? t + ' Most energy of the three.' : t;
   }
-  function whyText(dir, o) {
+  function whyText(dir, o, idea) {
+    const lead = idea ? leadOf(idea) : 'the melody';
     if (dir === 'seed1') {
       const mt = meterOf(o.mel);
       const t = MODE[o.mel.scale].why + ' And the rhythm: ' + o.mel.r.off + ' of its ' + o.mel.r.n + ' notes land between the beats. That lean against the pulse is called syncopation.';
@@ -1693,10 +1699,10 @@
     if (dir === 'seed2') return 'Where a tune stops decides how finished it feels. This one lands on the ' + IV[o.land] + ', so it sounds ' + landFeel(o.land) + '. ' + (o.end > 0 ? 'Ending higher than it started makes it a question.' : o.end < 0 ? 'Ending lower makes it an answer.' : 'Staying near home keeps it calm.') + (o.size === 0 ? ' It only moves a step or two, so repeated notes and rhythm make the hook.' : o.size === 2 ? ' It travels a long way, so the tune itself is the hook. Too many of those and a song gets tiring.' : '');
     if (dir === 'chords') { const col = o.chords.find((c) => c.colour); return 'Each chord was picked so the melody’s long, strong notes are notes of the chord: ' + o.fit + '% of the melody sits on them. ' + (col ? chordName(col) + ' is borrowed from outside the scale; it works because the melody note above it belongs to it.' : 'Minor chords under the same notes sound darker, major ones brighter.'); }
     if (dir === 'bass') return o.lock > 0.6 ? 'When bass and melody hit together, both sound heavier and the rhythm gets louder.' : o.lock < 0.3 ? 'The bass plays when the melody rests. They take turns, call and response, so each stays clear.' : 'Roots on the strong beats tell your ear which chord you are on, without getting in the melody’s way.';
-    if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight the melody. ' + (o.voices <= 1.2 ? 'One quiet voice adds depth without crowding.' : 'More voices fill the space around the melody, so it floats on top.');
-    if (dir === 'perc') return 'Claps on the melody’s accents make those notes jump out. A steady shaker gives a pulse the melody can lean against.';
+    if (dir === 'pads') return 'Pads only use notes from the chords or the scale, so they can’t fight ' + lead + '. ' + (o.voices <= 2 ? 'A voice or two adds depth without crowding.' : 'More voices fill the space around ' + lead + ', so it floats on top.');
+    if (dir === 'perc') return 'Claps on ' + lead + '’s accents make those notes jump out. A steady shaker gives a pulse ' + lead + ' can lean against.';
     if (dir === 'pocket') return 'A groove is mostly where the hits sit and how fast they come. The same kick and snare at 72 and at 120 are different grooves, so the speed is picked with the beat.' + (o.swing ? ' Swing plays each off-beat a little late, which gives the bounce.' : '');
-    if (dir === 'gbass') return 'In a groove the bass decides the harmony. ' + (o.move === 'stay' ? 'Staying on one chord keeps all the attention on the rhythm.' : 'Moving between ' + chordLine(o.chords) + ' gives it somewhere to go without a tune.') + ' ' + (o.lock > 0.6 ? 'Hitting with the kick makes them one big low sound.' : o.lock < 0.3 ? 'Playing between the kicks keeps the low end busy without crowding.' : '');
+    if (dir === 'gbass') return 'In a groove the bass decides the harmony. ' + (o.move === 'stay' ? 'Staying on one chord keeps all the attention on the rhythm.' : 'Moving between ' + chordLine(o.chords) + ' gives it somewhere to go without a tune.') + (o.lock > 0.6 ? ' Hitting with the kick makes them one big low sound.' : o.lock < 0.3 ? ' Playing between the kicks keeps the low end busy without crowding.' : '');
     if (dir === 'keys') return o.none ? 'No chords leaves room. The bass already says where the harmony is.' : 'These play the chords the bass implies, so they can’t clash with it. ' + (o.n > 8 ? 'Short, choppy chords become part of the rhythm.' : 'Long chords give the groove a floor to sit on.');
     if (dir === 'hook') return 'A hook in a groove works best where the bass and kick leave space. Notes that land in the gaps get heard; notes on top of the kick get swallowed.';
     if (dir === 'rrhythm') return 'A riff is a rhythm first. The accents, the hard hits, decide how it feels: on the beat it sounds solid; off the beat it pulls.' + (o.r.fam === 'threes' ? ' Accents in threes cross the beat, so the riff seems to turn over itself.' : '') + ' The rests do as much as the notes.';
@@ -2090,7 +2096,7 @@
     more(S) { return flow.next(S); },
     /** a request re-rolls the three with a steer; "why" only explains. Returns the new state; play the middle one */
     request(S, rq) {
-      if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel]) : S.line });
+      if (rq.why) return Object.assign({}, S, { line: S.sel >= 0 ? whyText(S.round.dir, flow.options(S)[S.sel], S.idea) : S.line });
       const steer = Object.assign({}, S.round.steer);
       if (rq.p) steer.p = Math.max(-2, Math.min(2, (steer.p || 0) + rq.p));
       // shapes can get flatter one step further than the other rounds' -2
@@ -2153,7 +2159,7 @@
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
     makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
-    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, comment, whyText, directions,
+    steerPool, deckOf, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, climbSeq, lineage, ideaName, toParts, flow,
   };
 })(globalThis.Odd = globalThis.Odd || {});

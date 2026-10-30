@@ -132,6 +132,26 @@ Above the lifted card are requests for Bobby: **Busier**, **Darker scale**,
 steer, from a narrower deck; **Why does that work?** has him explain. When something is playing and you pick another card, it stops, its
 card lowers, and Bobby gives your ears two seconds before the next one plays.
 
+### Watch Bobby build one
+
+Under the three opening cards, **Or watch Bobby build one** hands him the
+controls. He starts from a brief, a mood set on five qualities (dark or
+bright, calm or driving, airy or full, straight or loose, light or heavy),
+and picks a path. Every round he says what he's listening for, asks for what
+the brief wants (**Darker scale**, **Slower**, **Swing it**, sometimes
+**Another meter**), plays the three cards with a word on each, and takes the
+one at the end of the round's range the brief points to (or the middle one).
+Then he says why it works, and that the two he passed over fit too. He
+doesn't rank the cards: the brief does the choosing. Sometimes he deals three
+more from further into the deck first, and with a brief that wants air he may
+take a round's own way out (no chords, the plain walk).
+
+**Pause** (`Space`), **Back** and **Next** (`←` `→`) move through his steps;
+**Take over** stops him and leaves you in the same spot with everything live.
+Below the cards, **How Bobby built it** lists each decision with its reason,
+the theory and the cards passed over; **Copy as text** copies it. At the end,
+**Watch Bobby build another** runs again (any path, or Groove, Melody, Riff).
+
 **That's the idea** (available once the opening rounds are done) shows how it got
 here: **Play the climb** plays the bones, then the melody (or the pocket, or the
 riff's rhythm and notes), then each layer as
@@ -577,7 +597,8 @@ WAV export always renders at full quality.
 ## Keyboard
 
 On the home screen: `Esc` closes Bobby's menu. In Bones to Gold: on the opening choice `1` `2` `3` hear Groove, Melody and
-Riff; in a round they hear options A, B, C; `Space` plays or stops;
+Riff; in a round they hear options A, B, C; while watching Bobby, `Space`
+pauses and `←` `→` step back and on; `Space` plays or stops;
 `Esc` stops. In the Song Builder: `Space` plays the song from the playhead
 or stops it; `C` flips between the option you're hearing and the section as
 it is; on the timeline `←` `→` move the playhead a bar and `Home`

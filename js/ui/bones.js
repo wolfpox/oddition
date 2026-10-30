@@ -7,6 +7,10 @@
  * switching away from something playing stops it, lowers its card, and gives
  * two seconds of quiet (Bobby says a line) before the next one lifts and plays.
  *
+ * Watch Bobby: from the opener he can build one himself (Odd.watch plans
+ * the run), playing each card and saying why he takes the one he takes.
+ * While he works, the screen only listens: Pause, Back, Next and Take over.
+ *
  * Odd.bones.mount(el, host) once; host = { toStudio, toHome, stopStudio, saveIdea, toast }.
  * Odd.bones.show(on) when the screen changes; Odd.bones.open(bones, ideaId)
  * reopens a saved idea at its gold stage.
@@ -56,6 +60,9 @@
   let built = '';
   let lastAnim = -1, lastHid = -1, reqKey = '';
   let raf = 0, saveTimer = 0, sliding = false;
+  // Bobby building one himself: the planned steps, where he is, and the timer to the next
+  let W = null;
+  const WATCH_ACTS = { wpause: 1, wnext: 1, wprev: 1, wtake: 1, wcopy: 1, home: 1, studio: 1 };
 
   // ---------------------------------------------------------------- state
 
@@ -257,6 +264,7 @@
   }
 
   function restart() {
+    if (W) { clearTimeout(W.timer); W = null; }
     const prev = S;
     step(() => Object.assign(F.fresh(), { anim: prev.anim + 1 }));
     if (host.toast && prev.phase !== 'start') {
@@ -281,7 +289,73 @@
     if (id) set(Object.assign({}, S, { saved: id, line: L.saved }));
   }
 
+  // ---------------------------------------------------------------- watch Bobby
+
+  const passMs = (q) => (q ? (q.length / (A.STEP_TICKS * 4)) * (60000 / q.bpm) : 0);
+  const readMs = (text) => Math.min(14000, 1400 + 38 * String(text || '').length);
+
+  /** Bobby builds one: on a path, or one he picks */
+  function watch(path) {
+    halt();
+    P.src = '';
+    const run = Odd.watch.plan({ seed: (Date.now() % 1e9) + Math.floor(Math.random() * 1e6), path: A.PATHS[path] ? path : null });
+    // offsets keep this run's screens from matching an earlier run's
+    W = { steps: run.steps, i: -1, paused: false, timer: 0, brief: run.brief, path: run.path, seq: S.seq + 1, anim: S.anim + 1 };
+    goStep(0);
+  }
+  function goStep(i) {
+    if (!W) return;
+    clearTimeout(W.timer);
+    if (i >= W.steps.length) { endWatch(); return; }
+    W.i = Math.max(0, i);
+    const st = W.steps[W.i];
+    set(Object.assign({}, st.S, { line: st.say, seq: st.S.seq + W.seq, anim: st.S.anim + W.anim }));
+    const key = st.hear == null ? '' : st.hear === 'all' ? 'all' : curKey(st.hear);
+    let ms = readMs(st.say);
+    const a = key ? audioFor(key) : null; // paused, Back and Next still play the step; it just doesn't move on
+    if (a) {
+      const q = a.seq();
+      if (!(P.playing && P.src === key)) { halt(); run(q); P.src = key; P.heard = key; }
+      ms = Math.max(ms, passMs(q) + 300);
+    } else if (!key) halt();
+    render();
+    if (!W.paused) W.timer = setTimeout(() => goStep(W.i + 1), ms);
+  }
+  function pauseWatch() {
+    if (!W) return;
+    if (W.paused) { W.paused = false; goStep(W.i); return; }
+    W.paused = true;
+    clearTimeout(W.timer);
+    halt();
+    render();
+  }
+  function endWatch() {
+    if (!W) return;
+    clearTimeout(W.timer);
+    W = null;
+    halt();
+    render();
+  }
+  /** stop watching and carry on from here, everything live again */
+  function takeOver() {
+    if (!W) return;
+    clearTimeout(W.timer);
+    W = null;
+    set(Object.assign({}, S, { line: 'Your turn. Everything’s live again: pick, ask, go back.' }));
+  }
+  function copyLog() {
+    const txt = Odd.watch.transcript(S.watch);
+    const done = () => { if (host.toast) host.toast('Copied how Bobby built it.'); };
+    try { navigator.clipboard.writeText(txt).then(done, () => { if (host.toast) host.toast('Couldn’t copy here.', { kind: 'warn' }); }); } catch (e) { if (host.toast) host.toast('Couldn’t copy here.', { kind: 'warn' }); }
+  }
+
   const ACTS = {
+    watch: (el) => watch(el.dataset.path),
+    wpause: () => pauseWatch(),
+    wnext: () => goStep(W ? W.i + 1 : 0),
+    wprev: () => goStep(W ? W.i - 1 : 0),
+    wtake: () => takeOver(),
+    wcopy: () => copyLog(),
     peek: (el) => peek(el.dataset.path),
     begin: (el) => begin(el.dataset.path),
     hear: (el) => hear(el.dataset.key),
@@ -307,6 +381,7 @@
   function onClick(e) {
     const el = e.target.closest('[data-act]');
     if (!el || !root.contains(el) || el.disabled) return;
+    if (W && !WATCH_ACTS[el.dataset.act]) return; // he's working: the screen only listens
     const fn = ACTS[el.dataset.act];
     if (fn) fn(el);
   }
@@ -315,6 +390,13 @@
   function onKey(e) {
     if (!shown || e.ctrlKey || e.metaKey || e.altKey) return false;
     const k = e.key;
+    if (W) {
+      if (k === ' ' && e.target && e.target.closest && e.target.closest('button') && e.target.closest('#bones')) return false;
+      if (k === ' ' || k === 'Escape') { e.preventDefault(); if (k === ' ' || !W.paused) pauseWatch(); return true; }
+      if (k === 'ArrowRight') { e.preventDefault(); goStep(W.i + 1); return true; }
+      if (k === 'ArrowLeft') { e.preventDefault(); goStep(W.i - 1); return true; }
+      return false;
+    }
     if (k === 'Escape') { stop(); return true; }
     if (k === ' ') {
       if (e.target && e.target.closest && e.target.closest('button') && e.target.closest('#bones')) return false; // the button handles it
@@ -484,6 +566,7 @@
   const BOBBY_SVG = Odd.brand.BOBBY;
 
   function bobby(opts) {
+    if (W && S.line) return S.line;
     if (S.phase === 'start') return S.peek ? A.line(L.peek[S.peek], (P.ex[S.peek] || 1) - 1) : S.line || L.start;
     if (P.src === 'climb' && P.playing && P.climb >= 0) return A.climbLines(S.idea)[P.climb] || 'That’s gold.';
     if (S.line) return S.line;
@@ -495,7 +578,7 @@
     if (S.phase === 'next') return A.line(path === 'melody' ? L.next : L.nextBy[path], S.seq);
     if (S.phase === 'gold') return A.line(path === 'melody' ? L.gold : L.goldBy[path], S.hid);
     if (S.msg === 'more' || S.msg === 'prev' || S.msg === 'shuffled') return A.line(L[S.msg], S.seq);
-    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel);
+    if (S.sel >= 0 && P.heard === curKey(S.sel) && opts[S.sel]) return A.comment(S.round.dir, opts, S.sel, S.idea);
     return A.line(L.entry[S.round.dir], S.seq);
   }
 
@@ -592,6 +675,8 @@
         '<button type="button" class="b-ghost" data-act="save" data-label="save">Save to Ideas</button>' +
         '<button type="button" class="b-ghost" data-act="restart">Start a new idea</button>' +
       '</div>' +
+      (S.watch && !W ? '<div class="b-again"><span>Watch Bobby build another:</span>' +
+        ['', 'groove', 'melody', 'riff'].map((p) => '<button type="button" class="b-ghost" data-act="watch"' + (p ? ' data-path="' + p + '"' : '') + '>' + (p ? A.PATHS[p].label : 'Any') + '</button>').join('') + '</div>' : '') +
       '<span class="b-lin-title">How it got here</span>' +
       '<div class="b-lineage">' + lin + '</div>' +
     '</div>';
@@ -630,7 +715,44 @@
         '<button type="button" class="b-primary b-big-go" data-act="begin" data-path="' + p + '">Start with a ' + esc(name) + '</button>' +
       '</div>';
     }).join('');
-    return '<div class="b-open">' + cards + '</div><p class="b-hint b-open-hint">Tap a card to hear an example of it. Each time is a new one.</p>';
+    return '<div class="b-open">' + cards + '</div><p class="b-hint b-open-hint">Tap a card to hear an example of it. Each time is a new one.</p>' +
+      (W ? '' : '<button type="button" class="b-link" data-act="watch">Or watch Bobby build one, and hear why he picks what he picks</button>');
+  }
+
+  /** while he works: what he's going for, where he is, and the controls */
+  function watchBar() {
+    if (!W) return '';
+    const B = Odd.watch.BRIEFS[W.brief];
+    return '<div class="b-watchbar" role="region" aria-label="Watching Bobby">' +
+      '<div class="b-wb-what"><b>Watching Bobby build a ' + esc(A.PATHS[W.path].label.toLowerCase()) + '</b><span>Brief: ' + esc(B.label) + ' · ' + esc(B.line) + '</span></div>' +
+      '<div class="b-wb-ctl">' +
+        '<span class="b-wb-step"></span>' +
+        '<button type="button" class="b-ghost" data-act="wprev" title="Back a step (←)">Back</button>' +
+        '<button type="button" class="b-ghost" data-act="wpause" data-label="wpause" title="Space">Pause</button>' +
+        '<button type="button" class="b-ghost" data-act="wnext" title="Next step (→)">Next</button>' +
+        '<button type="button" class="b-primary" data-act="wtake" title="Stop watching and carry on from here yourself">Take over</button>' +
+      '</div>' +
+      '<i class="b-wb-bar"><i></i></i>' +
+    '</div>';
+  }
+
+  /** every decision so far, in order: the pick, why, why it works, and the ones passed over */
+  function watchLog() {
+    const w = S.watch;
+    if (!w || !w.log.length) return '';
+    const B = Odd.watch.BRIEFS[w.brief];
+    const rows = w.log.map((e, n) =>
+      '<li class="b-wl-row">' +
+        '<div class="b-wl-head"><span class="b-wl-n">' + (n + 1) + '</span><i class="b-dot-c" style="background:' + col(e.dir) + '"></i><b>' + esc(e.label) + '</b><span class="b-wl-pick">' + esc(e.pick) + '</span>' + (e.stat ? '<span class="b-wl-stat">' + esc(e.stat) + '</span>' : '') + '</div>' +
+        (e.asked && e.asked.length ? '<p class="b-wl-asked">Asked for: ' + esc(e.asked.join(', ')) + '</p>' : '') +
+        '<p>' + esc(e.reason) + '</p>' +
+        '<p class="b-wl-why"><b>Why it works:</b> ' + esc(e.why) + '</p>' +
+        (e.others ? '<p class="b-wl-others">' + esc(e.others) + '</p>' : '') +
+      '</li>').join('');
+    return '<section class="b-watchlog" aria-label="How Bobby built it">' +
+      '<div class="b-h-title"><span>How Bobby built it · brief: ' + esc(B ? B.label : w.brief) + '</span>' +
+        '<button type="button" class="b-link" data-act="wcopy">Copy as text</button></div>' +
+      '<ol>' + rows + '</ol></section>';
   }
 
   function full() {
@@ -641,20 +763,22 @@
     else if (S.phase === 'next') body = nextHtml(animate);
     else body = goldHtml(animate);
     root.innerHTML =
-      '<div class="b2g' + (animate ? ' b-animate' : '') + '">' +
+      '<div class="b2g' + (animate ? ' b-animate' : '') + (W ? ' b-watching' : '') + '">' +
         '<header class="b-top">' +
           '<div class="b-brand">' + Odd.brand.homeButton() + '<span>Bones to Gold</span></div>' +
           '<nav class="b-chips" aria-label="Your idea so far">' + chipsHtml() + '</nav>' +
           '<div class="b-top-r">' +
             (S.phase === 'start' ? '' : '<span class="b-meta">' + esc(A.metaOf(S.idea)) + '</span>') +
-            (F.canFinish(S) ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
-            (S.phase === 'round' || S.phase === 'next' ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
+            (F.canFinish(S) && !W ? '<button type="button" class="b-primary" data-act="finish">That’s the idea</button>' : '') +
+            ((S.phase === 'round' || S.phase === 'next') && !W ? '<button type="button" class="b-ghost" data-act="restart" title="Back to Groove, Melody or Riff">New idea</button>' : '') +
             '<button type="button" class="b-ghost" data-act="studio" title="The song sheet, booth and shelf">Studio</button>' +
           '</div>' +
         '</header>' +
         '<main class="b-stage">' +
           '<section class="b-bobby">' + BOBBY_SVG + '<div class="b-bubble"><span class="b-who">Bobby Beatdown</span><span class="b-say" aria-live="polite"></span></div></section>' +
+          watchBar() +
           body +
+          watchLog() +
           historyHtml() +
         '</main>' +
       '</div>';
@@ -701,6 +825,16 @@
         if (inCard) inCard.innerHTML = html;
       }
     }
+    const st = W ? W.steps[W.i] : null;
+    root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && (st.kind === 'choose' || st.kind === 'why') && st.i === Number(el.dataset.i)));
+    if (W) {
+      const n = root.querySelector('.b-wb-step');
+      if (n) n.textContent = 'Step ' + (W.i + 1) + ' of ' + W.steps.length;
+      const pb = root.querySelector('[data-label="wpause"]');
+      if (pb) pb.textContent = W.paused ? 'Play' : 'Pause';
+      const bar = root.querySelector('.b-wb-bar i');
+      if (bar) bar.style.width = (100 * (W.i + 1) / W.steps.length).toFixed(1) + '%';
+    }
     root.querySelectorAll('[data-label="all"]').forEach((b) => { b.textContent = P.playing && P.src === 'all' ? 'Stop' : 'Play the idea so far'; });
     const cb = root.querySelector('[data-label="climb"] span');
     if (cb) cb.textContent = climbing ? 'Stop the climb' : 'Play the climb';
@@ -710,7 +844,7 @@
 
   function render() {
     if (!root || !shown) return;
-    const key = [S.phase, S.seq, S.hid, S.anim, S.round ? S.round.dir : '', S.idea.order.join(',')].join('|');
+    const key = [S.phase, S.seq, S.hid, S.anim, S.round ? S.round.dir : '', S.idea.order.join(','), W ? 'w' : '', S.watch ? S.watch.log.length + S.watch.brief : ''].join('|');
     if (key !== built) { built = key; full(); }
     patch();
   }
@@ -730,13 +864,18 @@
 
   function show(on) {
     shown = !!on;
-    if (!shown) { halt(); return; }
+    if (!shown) {
+      if (W && !W.paused) { W.paused = true; clearTimeout(W.timer); }
+      halt();
+      return;
+    }
     built = '';
     render();
   }
 
   /** reopen a saved idea at its gold stage */
   function open(bones, ideaId) {
+    if (W) { clearTimeout(W.timer); W = null; }
     halt();
     P.src = '';
     const ns = F.repair(Object.assign(F.fresh(), { phase: 'gold', idea: clone(bones), anim: (S ? S.anim : 0) + 1, saved: ideaId || null }));
@@ -747,5 +886,6 @@
     mount, show, open, onKey,
     get state() { return S; },
     get playing() { return P.playing; },
+    get watching() { return W ? { i: W.i, steps: W.steps.length, paused: W.paused, brief: W.brief, path: W.path, kind: W.steps[W.i].kind } : null; },
   };
 })(globalThis.Odd = globalThis.Odd || {});
