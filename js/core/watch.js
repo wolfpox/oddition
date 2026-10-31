@@ -9,10 +9,15 @@
  * brief points to, or the middle one when the brief doesn't lean. Every pick
  * comes with a reason, and the two he passed over stay valid choices.
  *
+ * A round goes the same way every time, at a steady pace: he says what he's
+ * listening for (and asks for anything the brief wants, in the same breath),
+ * hears each of the three once, then takes one and says why. No detours to
+ * look busy: what he'd ask for, he asks for up front.
+ *
  * step = { kind, S, say, hear, i }
- *   kind  brief | enter | request | more | hear | choose | why | ways | done
+ *   kind  brief | enter | hear | choose | ways | done
  *   hear  a card index on S's screen, 'all' (the idea so far), or null
- *   i     the card a choose/why step is about (-1: the round's own way out)
+ *   i     the card a choose step is about (-1: the round's own way out)
  * S.watch = { brief, path, log } grows as he decides:
  *   log entry = { dir, label, pick, stat, reason, why, others, asked }
  */
@@ -158,17 +163,15 @@
 
     /** one round, from what he listens for to the card he takes; returns the state after the pick */
     const round = () => {
-      const dir = S.round.dir, tr = AXIS[dir], v = t[tr], asked = [];
-      push('enter', S, intent(S, t));
+      const dir = S.round.dir, tr = AXIS[dir], v = t[tr], asked = [], said = [];
       const reqs = A.REQS[dir] || [];
-      const ask = (rq, say) => { S = F.request(S, rq); asked.push(rq.label); push('request', S, say); };
-      // now and then, out of 4/4
+      // what he'd ask for, he asks for before he listens, in the same breath as what he's after
       if (FIRST[dir] && R() < 0.3) {
         const rq = reqs.find((q) => q.m);
         const n = R() < 0.5 ? 1 : 2;
         for (let k = 0; k < n; k++) { S = F.request(S, rq); }
         asked.push(rq.label + (n > 1 ? ' (twice)' : ''));
-        push('request', S, 'Not 4/4 this time. ' + S.line);
+        said.push('Not 4/4 this time: ' + Odd.theory.meter(S.round.steer.m).id + '.');
       }
       (ASKS[dir] || []).forEach(([trait, sides]) => {
         const side = t[trait], label = side && sides[side];
@@ -177,23 +180,14 @@
         const rq = reqs.find((q) => q.label === label);
         if (!rq) return;
         if (rq.x === 'swing' && Odd.theory.meter(S.round.steer.m).compound) return;
-        ask(rq, label + ': the brief is ' + word(trait, side) + '. ' + (rq.reply || ''));
+        S = F.request(S, rq);
+        asked.push(rq.label);
+        said.push('I asked for ' + quote(label) + ': the brief is ' + word(trait, side) + '.');
       });
-      const listen = () => {
-        const opts = F.options(S);
-        opts.forEach((_, i) => push('hear', Object.assign({}, S, { sel: i }), A.comment(dir, opts, i, S.idea), i));
-      };
-      S = Object.assign({}, S, { sel: -1 });
-      listen();
-      const inf = F.info(S);
-      // now and then, three more from somewhere further into the deck
-      if (inf.batches > 1 && R() < 0.3) {
-        const b = 1 + Math.floor(R() * (inf.batches - 1));
-        S = Object.assign(F.to(S, b), { sel: -1 });
-        push('more', S, 'Let me hear three more before I choose, from further into the deck. ' + inf.total + ' cards fit this round; the first three are just the clearest.');
-        listen();
-      }
+      S = Object.assign({}, S, { sel: -1, line: null });
+      push('enter', S, intent(S, t) + (said.length ? ' ' + said.join(' ') : ''));
       const opts = F.options(S);
+      opts.forEach((_, i) => push('hear', Object.assign({}, S, { sel: i }), A.comment(dir, opts, i, S.idea), i));
       // the round's own way out, when the brief asks for less
       const ownNow = (dir === 'keys' && t.space < 0 && t.energy <= 0 && R() < 0.6) || (dir === 'seed2' && A.pathOf(S.idea) === 'melody' && bid === 'plain' && R() < 0.35);
       const i = ownNow ? -1 : target(opts, v);
@@ -219,8 +213,8 @@
       const entry = { dir, label: roundLabel(S, dir), pick: ownNow ? A.ownLabel(dir) : A.ABC.charAt(i) + ' · ' + A.tagOf(dir, opts[i]), stat: ownNow ? '' : A.statOf(dir, opts[i]), reason, why, others: othersLine, asked };
       log = log.concat([entry]);
       const at = Object.assign({}, S, { sel: i });
-      push('choose', at, reason + (othersLine ? ' ' + othersLine : ''), ownNow ? null : i, i);
-      push('why', at, 'Why it works: ' + why, ownNow ? null : i, i);
+      // one step: the pick, and why it works; the ones passed over go in the log
+      push('choose', at, reason + ' Why it works: ' + why, ownNow ? null : i, i);
       const before = S;
       S = ownNow ? F.own(S) : F.pick(S, i);
       S = Object.assign({}, S, { watch: watch() });

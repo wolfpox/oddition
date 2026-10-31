@@ -127,12 +127,12 @@ again from there.
    drone or slow chords; or **Nothing under it**), **Percussion** and
    **Sound and feel** (stoner, metal, post-punk, funk, surf, ...).
 
-### Keep it, pass on it, or ask
+### Keep it, pass on it, or tweak it
 
 The card that's playing lifts, and under it are three buttons:
 
 - **✓** keeps it and builds on it (`Enter`).
-- **?** has Bobby say what it is next to the other two, and why it works (`?`).
+- **Tweak** (the sliders) asks *what if?* and opens the card's own dials (`T`).
 - **✗** passes on it (`X`). Bobby asks *Why didn't that one make the cut?*
   and you tick one or more reasons: **Speed**, **Instrument**, **Rhythm**,
   **Pitch**, **Range**, **Density**, **Note length**, **Thickness**, **Mood**
@@ -148,6 +148,43 @@ The card that's playing lifts, and under it are three buttons:
     out (*anything 110 BPM or faster*), never leaving fewer than three, and
     deals again. **Bring them back** under the deck undoes it.
   - **Neither** leaves it marked where it is.
+
+### Tweak it: what if it were…
+
+**Tweak** opens dials on the card that's playing, each named by its two
+ends. A dial changes the card itself, never which card it is: the rhythm
+grown again from its own seed, the same steps in another scale, the same
+shape stretched. Which dials depend on the round:
+
+- **Rhythm and scale:** **Dark** to **Bright** (the scale, among ones with
+  as many notes), **Sparse** to **Busy**, **On the beat** to **Off the
+  beat** (notes pushed just ahead of the beat, or pulled onto it), **With
+  the count** to **Across the count** (the same notes, accented in another
+  grouping: 3+3+2, the backbeat, a hemiola).
+- **Shape:** **Narrow** to **Wide** (the same ups and downs, stretched; it
+  still lands on the same note), Dark to Bright, Sparse to Busy, On to Off
+  the beat. A hook keeps the groove's scale, so its Dark to Bright is greyed.
+- **A riff's rhythm:** Sparse to Busy, On to Off the beat.
+- **A pocket, and every sound:** **Slow** to **Quick**, **Tight** to **Swingy**.
+
+The other rounds have nothing to tweak yet; Tweak says so.
+
+Every card shares the same scales, so cards come already turned: a Dorian
+rhythm sits a little dark, a six-note one toward sparse. The knob starts
+where the card is, the line across is the middle, and the two words mirror
+each other (the one the knob leans to lights up as the other fades). The
+bright part of a track is as far as the card goes and stays itself: a
+rhythm grown busier while it keeps three quarters of its notes and no more
+than doubles, sparser while what's left is mostly its own; up to a third of
+the notes moved off or onto the beat; a shape stretched while its ups and
+downs stay; tempo 15% either way. Ticks are the spots it can go, and a ring
+marks where it came. Drag a knob, or use the arrow keys for one spot at a
+time; the card changes and plays at once, and Bobby says what moved (*Busier:
+15 notes instead of 11. Every note it came with is still there.*). Turn every
+dial back, or press **Back to how it came**, and it's the very card it was.
+**Let Bobby turn one** has him turn the dial with the most room on the side
+the card doesn't lean to, as far as it goes. Keeping a tweaked card keeps it
+as it sounds.
 
 Bobby doesn't describe a card unless asked. While one plays he says *I can
 talk about this one* or *We can explore that*, and his bubble holds the
@@ -171,14 +208,15 @@ highs, so you listen as if in an audition booth.
 Under the three opening cards, **Or watch Bobby build one** hands him the
 controls. He starts from a brief, a mood set on five qualities (dark or
 bright, calm or driving, airy or full, straight or loose, light or heavy),
-and picks a path. Every round he says what he's listening for, asks for what
-the brief wants (**Darker scale**, **Slower**, **Swing it**, sometimes
-**Another meter**), plays the three cards with a word on each, and takes the
-one at the end of the round's range the brief points to (or the middle one).
-Then he says why it works, and that the two he passed over fit too. He
-doesn't rank the cards: the brief does the choosing. Sometimes he deals three
-more from further into the deck first, and with a brief that wants air he may
-take a round's own way out (no chords, the plain walk).
+and picks a path. Every round goes the same way, at a steady pace: he says what he's
+listening for and, in the same breath, asks for what the brief wants
+(**Darker scale**, **Slower**, **Swing it**, sometimes **Another meter**);
+he plays each of the three cards once with a word on each; then he takes the
+one at the end of the round's range the brief points to (or the middle one)
+and says why it works. He doesn't rank the cards: the brief does the
+choosing, and the two he passed over are in the log as fitting too. With a
+brief that wants air he may take a round's own way out (no chords, the plain
+walk). A step with sound lasts one pass of it, two at most.
 
 **Pause** (`Space`), **Back** and **Next** (`←` `→`) move through his steps;
 **Take over** stops him and leaves you in the same spot with everything live.

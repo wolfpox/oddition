@@ -65,15 +65,18 @@ test('Another meter goes round the list and back to 4/4, with Bobby counting it 
   assert.strictEqual(S.round.steer.m, undefined, 'back in 4/4 the steer is as it was');
 });
 
-test('round 1 in each meter: three rhythms inside two bars, strong notes on its strong beats', () => {
+test('round 1 in each meter: three rhythms inside two bars, accents where their grouping puts them', () => {
   for (const id of A.METER_ORDER) {
     const m = T.meter(id), S = inMeter(id), opts = F.options(S);
     assert.strictEqual(opts.length, 3, id);
     for (const o of opts) {
       assert.strictEqual(A.meterOf(o.mel).id, id);
+      // with the count: accents on the group starts; across it: on the grouping's own steps
+      const g = A.accentsOf(m).find((a) => a.id === o.mel.r.acc);
+      assert.ok(g, id + ' a known accent grouping');
       for (const h of o.mel.r.hits) {
         assert.ok(h[0] >= 0 && h[0] + h[1] <= 2 * m.steps, id + ' note inside the two bars');
-        if (m.groupStarts.indexOf(h[0] % m.steps) >= 0) assert.strictEqual(h[2], 2, id + ' accent on a group start');
+        if (g.s ? g.s.indexOf(h[0]) >= 0 : m.groupStarts.indexOf(h[0] % m.steps) >= 0) assert.strictEqual(h[2], 2, id + ' accent where its grouping says');
       }
       if (id !== '4/4') assert.match(A.statOf('seed1', o), new RegExp(id));
     }

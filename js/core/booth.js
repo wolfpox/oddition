@@ -1,11 +1,12 @@
-/* Oddition — the audition booth: listen, then keep a card, pass on it, or ask about it.
+/* Oddition — the audition booth: listen, then keep a card, pass on it, or tweak it.
  *
  * Cards say little; Bobby knows the rest. This module measures what a card
  * actually plays (its tempo, notes, range, instrument...), turns a "no"
  * into reasons with the numbers behind them, finds a version of the card
- * changed on those reasons, or filters the deck of cards like it. It also
- * holds Bobby's encyclopedia: questions a card raises, and his answers,
- * each ending in directions the deck can be steered in.
+ * changed on those reasons, or filters the deck of cards like it. Tweak
+ * turns the card's own dials (Odd.tweak): what if it were brighter, busier?
+ * It also holds Bobby's encyclopedia: questions a card raises, and his
+ * answers, each ending in directions the deck can be steered in.
  *
  * Pure: everything takes the flow state (Odd.audition.flow) or a card and
  * gives back words or a new state.
@@ -134,13 +135,13 @@
       words: (m) => 'It sits around ' + noteName(m.avg) + ', ' + regWord(m.avg) + '.' },
     { id: 'range', label: 'Range', val: (m) => m.range, eps: 0.5, up: 'wider', down: 'narrower', show: (v) => semis(Math.round(v)),
       words: (m) => (m.range ? 'From ' + noteName(m.lo) + ' up to ' + noteName(m.hi) + ': ' + semis(m.range) + ', ' + intervalName(m.range) + '.' : 'One note, ' + noteName(m.lo) + ': no range at all.') },
-    { id: 'density', label: 'Density', val: (m) => m.n, eps: 0.5, up: 'busier', down: 'sparser', show: (v, dir, m) => Math.round(v) + ' ' + unitOf(dir, m),
+    { id: 'density', label: 'Density', val: (m) => m.n, eps: 0.5, up: 'busier', down: 'sparser', show: (v, dir, m) => Math.round(v) + ' ' + (Math.round(v) === 1 ? unitOf(dir, m).replace(/s$/, '') : unitOf(dir, m)),
       words: (m, dir) => m.n + ' ' + unitOf(dir, m) + ' in two bars, about ' + r1(m.n / 2) + ' a bar.' },
     { id: 'length', label: 'Note length', val: (m) => m.len, eps: 0.03, up: 'longer', down: 'shorter', show: (v) => beatsWord(v),
       words: (m) => 'Its notes last ' + beatsWord(m.len) + ' on average: ' + lenWord(m.len) + '.' },
     { id: 'thick', label: 'Thickness', val: (m) => m.thick, eps: 0.05, up: 'thicker', down: 'thinner', show: (v) => (v < 1.15 ? 'one note at a time' : 'about ' + r1(v) + ' notes at once'),
       words: (m) => (m.thick < 1.15 ? 'One note at a time.' : 'About ' + r1(m.thick) + ' notes sounding at once.') },
-    { id: 'mood', label: 'Mood', val: (m) => m.mood, eps: 0.02, up: 'brighter', down: 'darker', show: (v) => (v < 0 ? 'darker' : 'brighter'),
+    { id: 'mood', label: 'Mood', val: (m) => m.mood, eps: 0.02, up: 'brighter', down: 'darker', show: (v) => moodWord(v).split(':')[0],
       words: (m) => A.cap(moodWord(m.mood)) + '.' + (m.scale && A.MODE[m.scale] ? ' Its scale is ' + A.MODE[m.scale].name + ', which sounds ' + A.MODE[m.scale].mood + '.' : '') },
   ];
   const FAC = {};
@@ -279,6 +280,26 @@
   }
   function isOut(S, o) { return !!(S.round && S.round.rej && o && S.round.rej.indexOf(fp(o)) >= 0); }
 
+  // ---------------------------------------------------------------- tweaks: what if it were...
+  //
+  // The dials change the card itself, not which card it is (Odd.tweak has
+  // the dials and how far each reaches); these read them off the round.
+
+  /** whether this round's cards can be tweaked at all */
+  function canTweak(S, i) { const o = F.options(S)[i]; return !!o && Odd.tweak.has(S.round.dir, o); }
+  /** the dials for the card in slot i */
+  function dials(S, i) { const o = F.options(S)[i]; return o ? Odd.tweak.dialsFor(S.round.dir, o, S.idea) : []; }
+  /** Bobby's turn of a dial on the card in slot i: { id, pos, line } or null */
+  function nudge(S, i, last) { const o = F.options(S)[i]; return o ? Odd.tweak.nudge(S.round.dir, o, S.idea, last) : null; }
+  function isTweaked(S, i) { return Odd.tweak.tweaked(F.options(S)[i]); }
+  /** a card takes slot i of the batch on screen, and lifts there */
+  function swap(S, i, card) {
+    const b = F.info(S).batch;
+    const subs = Object.assign({}, S.round.subs);
+    subs[b] = Object.assign({}, subs[b], { [i]: card });
+    return Object.assign({}, S, { round: Object.assign({}, S.round, { subs }), seq: S.seq + 1, sel: i, msg: null, line: null, kind: 'pop' });
+  }
+
   // ---------------------------------------------------------------- flow: pure steps
 
   const flow = {
@@ -294,11 +315,26 @@
     change(S, i, ids) {
       const c = changed(S, i, ids);
       if (!c) return null;
-      const inf = F.info(S), b = inf.batch;
-      const subs = Object.assign({}, S.round.subs);
-      subs[b] = Object.assign({}, subs[b], { [i]: c.card });
-      const ns = Object.assign({}, S, { round: Object.assign({}, S.round, { subs }), seq: S.seq + 1, sel: i, msg: null, line: null, kind: 'pop' });
-      return { S: ns, text: c.text };
+      return { S: swap(S, i, c.card), text: c.text };
+    },
+    /**
+     * One dial turned on the card in slot i: the card itself, tweaked, takes
+     * its place. { S, text, limit }; { S, same, text, limit } when the dial
+     * was already there (limit: asked past where it stays itself); null
+     * when it can't turn.
+     */
+    tune(S, i, fid, pos) {
+      const o = F.options(S)[i];
+      const r = o ? Odd.tweak.turn(S.round.dir, o, S.idea, fid, pos) : null;
+      if (!r) return null;
+      if (r.same) return { S, same: true, text: r.text, limit: r.limit };
+      return { S: swap(S, i, r.card), text: r.text, limit: r.limit };
+    },
+    /** every dial back: the card as it came. { S, text } or null when it wasn't tweaked */
+    untweak(S, i) {
+      const o = F.options(S)[i];
+      if (!o || !o.tw) return null;
+      return { S: swap(S, i, Odd.tweak.reset(o)), text: 'Back to how it came.' };
     },
     /** filter the deck of cards like it, and deal again: { S, text, gone, left } or null */
     cut(S, i, ids) {
@@ -595,6 +631,7 @@
   Odd.booth = {
     FACTORS, TOPICS, TOPIC: T, READY, ASK_WHY, OWN,
     measure, reasonsFor, facts, changed, cutsFor, keep, fp, isOut, poolOf,
+    canTweak, dials, nudge, isTweaked,
     questions, answer, explain, ready, intervalName, noteName,
     flow,
   };

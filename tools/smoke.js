@@ -72,12 +72,10 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   b = await bones();
   ok(b.playing && b.sel === 2, 'then the next one lifts and plays');
   // the booth: Bobby is ready to talk, and only says more when asked
-  ok(Odd_ready(await page.textContent('.b-say')) && (await page.$$('.b-talk .b-q')).length >= 2 && (await page.$$('.b-card.lifted .b-bx')).length === 3, 'under the playing card: ✗ ? ✓; Bobby offers questions');
+  ok(Odd_ready(await page.textContent('.b-say')) && (await page.$$('.b-talk .b-q')).length >= 2 && (await page.$$('.b-card.lifted .b-bx')).length === 3 && !!(await page.$('.b-card.lifted .b-bx.tweak')), 'under the playing card: ✗, Tweak, ✓; Bobby offers questions');
   const q0 = await page.textContent('.b-talk .b-q');
   await page.click('.b-talk .b-q >> nth=0');
   ok((await page.textContent('.b-say')).length > 60 && !(await page.$$eval('.b-talk .b-q', (els) => els.map((e) => e.textContent))).includes(q0), 'a question gets an answer');
-  await page.click('.b-card.lifted [data-act="explain"]');
-  ok(/scale|minor|major|Dorian|Lydian|Phrygian|Mixolydian|Pentatonic/i.test(await page.textContent('.b-say')) && (await page.$$('.b-talk .b-steer')).length >= 3, '? explains it, with ways to steer');
   await page.click('.b-card.lifted [data-act="nope"]');
   ok(/make the cut/.test(await page.textContent('.b-say')) && (await page.$$('.b-why')).length >= 5 && await page.isDisabled('[data-act="whydone"]'), '✗ asks why, and needs a reason');
   await page.click('.b-why[data-f="density"]');
@@ -98,6 +96,53 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.click('[data-act="uncut"]');
   await page.waitForTimeout(200);
   ok(!(await page.$('.b-cutnote')), 'and they can all come back');
+  // Tweak: the playing card's own dials, only once asked, each starting where the card sits
+  await page.click('.b-cards .b-card[data-i="0"] .b-hit');
+  await page.waitForTimeout(500);
+  ok((await page.$$('.b-fader')).length === 0, 'no dials until Tweak');
+  await page.click('.b-card.lifted [data-act="tweak"]');
+  const dialIds = await page.$$eval('.b-card.lifted .b-fader', (els) => els.map((e) => e.dataset.f));
+  const live = await page.$$eval('.b-card.lifted .b-fader:not(.fixed)', (els) => els.map((e) => e.dataset.f));
+  const want = await page.evaluate(() => Odd.booth.dials(Odd.bones.state, 0).map((d) => d.id + ':' + d.pos.toFixed(3)).join());
+  const shown = await page.$$eval('.b-card.lifted .b-fader', (els) => els.map((e) => e.dataset.f + ':' + Number(e.dataset.p).toFixed(3)).join());
+  ok(dialIds.length >= 3 && live.length >= 2 && shown === want && /What if/.test(await page.textContent('.b-say')) && (await page.getAttribute('.b-card.lifted .b-bx.tweak', 'aria-expanded')) === 'true', 'Tweak opens the card’s own dials, each where the card already sits: ' + shown);
+  await page.screenshot({ path: path.join(out, 'bones-tweak.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
+  const tuneBefore = await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]));
+  const seedOf = () => page.evaluate(() => { const o = Odd.audition.flow.options(Odd.bones.state)[0]; return (o.mel || o).r.seed; });
+  const seedBefore = await seedOf();
+  const tr = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[0] + '"] .b-ftrack', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, top: r.y, bottom: r.y + r.height }; });
+  const startPos = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[0] + '"]', (el) => Number(el.dataset.p));
+  const toY = startPos > 0.5 ? tr.bottom - 2 : tr.top + 2;
+  await page.mouse.move(tr.x, tr.bottom - startPos * (tr.bottom - tr.top));
+  await page.mouse.down();
+  await page.mouse.move(tr.x, toY, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  b = await bones();
+  const tuneAfter = await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]));
+  ok(b.playing && b.sel === 0 && tuneBefore !== tuneAfter && (await seedOf()) === seedBefore && /instead of|ahead of the beat|onto the beat|accented/.test(await page.textContent('.b-say')), 'dragging a dial changes this card, not which card, and it plays at once: ' + (await page.textContent('.b-say')));
+  ok((await page.$$('.b-card.lifted .b-fader')).length === dialIds.length && (await page.$$('.b-card.lifted .b-fhome')).length === 1 && !!(await page.$('.b-card.lifted [data-act="untweak"]')), 'the panel stays open on it, with a ring where it came and a way back');
+  await page.focus('.b-card.lifted .b-fader[data-f="' + live[1] + '"] .b-ftrack');
+  const p1 = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[1] + '"]', (el) => ({ p: Number(el.dataset.p), top: Math.max.apply(null, el.querySelector('.b-ftrack').dataset.stops.split(',').map(Number)) }));
+  await page.keyboard.press(p1.p < p1.top - 1e-4 ? 'ArrowUp' : 'ArrowDown');
+  await page.waitForTimeout(700);
+  ok(tuneAfter !== (await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))) && (await bones()).sel === 0 && await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('role') === 'slider'), 'arrow keys step a dial to its next spot, and keep focus');
+  await page.click('.b-card.lifted [data-act="untweak"]');
+  await page.waitForTimeout(400);
+  ok((await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))) === tuneBefore && /how it came/.test(await page.textContent('.b-say')), 'back to how it came: the very card it was');
+  if (dialIds.length > live.length) {
+    await page.click('.b-card.lifted .b-fader.fixed .b-ftrack', { force: true });
+    ok(/scale|seed|threes|accents|any further/.test(await page.textContent('.b-say')), 'a greyed dial says why: ' + (await page.textContent('.b-say')));
+  }
+  await page.click('.b-card.lifted [data-act="nudge"]');
+  await page.waitForTimeout(900);
+  ok(/leans|middle|turned it/.test(await page.textContent('.b-say')) && (await bones()).sel === 0 && tuneBefore !== (await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))), 'Bobby turns one himself: ' + (await page.textContent('.b-say')));
+  await page.screenshot({ path: path.join(out, 'bones-tweak-turned.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
+  await page.click('.b-card.lifted [data-act="tweak"]');
+  await page.waitForTimeout(150);
+  ok((await page.$$('.b-fader')).length === 0, 'Tweak again puts the dials away');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
   // the dev menu: blind mode leaves just the card, and the EQ plays in it
   await page.click('.b-dev .b-dev-tab');
   await page.click('.b-dev input[data-blind]');

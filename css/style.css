@@ -2087,11 +2087,42 @@ span.sg-rname { cursor: default; color: var(--muted); }
 .b-bx:hover { transform: translateY(-2px); }
 .b-bx.no { background: #d8423a; border-color: #d8423a; color: #fff; width: 66px; }
 .b-bx.no:hover { filter: brightness(1.08); }
-.b-bx.ask:hover { border-color: var(--b-bone2); }
+.b-bx.tweak:hover { border-color: var(--b-bone2); }
+.b-bx.tweak.on { border-color: var(--b-gold); color: var(--b-gold); background: color-mix(in srgb, var(--b-gold) 12%, var(--raised)); }
+.b-bx.tweak.off { opacity: 0.45; }
+.b-bx.tweak.off:hover { transform: none; }
 .b-bx.yes { background: var(--b-gold); border-color: var(--b-gold); color: var(--b-on-gold); }
 .b-bx.yes:hover { filter: brightness(1.06); }
 .b-card.b-nope:not(.lifted) { opacity: 0.42; }
 .b-card.b-nope::after { content: '✕'; position: absolute; top: -12px; left: 12px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #d8423a; color: #fff; font-size: 13px; font-weight: 800; }
+/* Tweak: the lifted card's own dials, a word at each end. The two words
+ * mirror each other: the one the knob leans to lights up as the other
+ * fades. Every card shares the scale, so a card comes already turned; the
+ * line across is the middle of it. The bright band is as far as the card
+ * reaches and stays itself, a tick each spot it can go, the ring where it came. */
+.b-tune:empty { display: none; }
+.b-tune { position: relative; z-index: 2; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); animation: b-fadeup 0.25s ease-out backwards; }
+.b-faders { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 12px; }
+.b-fader { --trk: 96px; --end: 30px; position: relative; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.b-fader::before { content: ''; position: absolute; left: 4px; right: 4px; top: calc(var(--end) + 6px + var(--trk) / 2); height: 1px; background: color-mix(in srgb, var(--ink) 24%, transparent); pointer-events: none; }
+.b-fend { height: var(--end); width: 100%; display: flex; justify-content: center; text-align: center; font-size: 11.5px; line-height: 14px; font-weight: 700; color: var(--ink); transition: opacity 0.2s; }
+.b-fend.hi { align-items: flex-end; opacity: calc(0.3 + 0.7 * var(--p)); }
+.b-fend.lo { align-items: flex-start; opacity: calc(1 - 0.7 * var(--p)); }
+.b-ftrack { position: relative; width: 30px; height: var(--trk); border-radius: 9px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 5%, transparent) 0 4px, transparent 4px 8px); touch-action: none; cursor: ns-resize; outline-offset: 3px; }
+.b-ftrack:focus-visible { outline: 2px solid var(--b-gold); }
+.b-freach { position: absolute; left: 0; right: 0; border-radius: 8px; background: color-mix(in srgb, var(--ink) 13%, var(--panel)); pointer-events: none; }
+.b-fmark { position: absolute; left: 9px; right: 9px; height: 1px; background: color-mix(in srgb, var(--ink) 38%, transparent); pointer-events: none; }
+.b-fhome { position: absolute; left: 50%; width: 8px; height: 8px; margin: 0 0 -4px -4px; border-radius: 50%; border: 1.5px solid var(--b-bone2); box-sizing: border-box; pointer-events: none; }
+.b-ffill { position: absolute; left: 13px; width: 4px; bottom: var(--fb); height: var(--fh); border-radius: 2px; background: var(--b-gold); pointer-events: none; transition: bottom 0.35s cubic-bezier(.2,.8,.2,1), height 0.35s cubic-bezier(.2,.8,.2,1); }
+.b-fknob { position: absolute; left: 1px; right: 1px; height: 12px; bottom: calc(var(--p) * 100% - 6px); border-radius: 4px; background: var(--b-gold); box-shadow: 0 2px 6px rgba(0,0,0,.35); pointer-events: none; transition: bottom 0.35s cubic-bezier(.2,.8,.2,1); }
+.b-fader.drag .b-fknob, .b-fader.drag .b-ffill { transition: none; }
+.b-fader.fixed { opacity: 0.4; }
+.b-fader.fixed .b-ftrack { cursor: help; }
+.b-fader.fixed .b-fknob { background: var(--muted); }
+.b-tune-do { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.b-tune-do .b-link { font-size: 13px; padding: 6px 2px; }
+.b-watching .b-tune { display: none; }
+
 .b-cutnote { margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
 .b-cutnote .b-link { margin: 0; }
 

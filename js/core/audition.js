@@ -277,23 +277,94 @@
     hits[0][2] = 2;
     return hits;
   }
+  /**
+   * Every rhythm for a meter. Each keeps what it grew from (seed, density d,
+   * push y), so it can be grown again busier or sparser and still be itself,
+   * and its accents (acc, from the seed: most go with the count, some across
+   * it). Near twins, rhythms sharing almost every note, are left out; seeds
+   * are tried until the deck has 80 or the meter runs out of new ones.
+   */
   function rhythmPool(mid) {
     const m = Odd.theory.meter(mid);
     return cached('rpool' + m.id, () => {
       const seen = {}, out = [];
       const DS = [0.05, 0.3, 0.55, 0.8, 1], YS = [0, 0.35, 0.7, 1];
-      for (let i = 0; i < 80; i++) {
-        const hits = makeRhythm(1009 + i * 7919, DS[i % 5], YS[Math.floor(i / 5) % 4], m.id);
-        if (!hits) continue;
-        const key = JSON.stringify(hits);
-        if (seen[key]) continue;
+      for (let i = 0; i < 240 && out.length < 80; i++) {
+        const seed = 1009 + i * 7919, d = DS[i % 5], y = YS[Math.floor(i / 5) % 4];
+        const grown = makeRhythm(seed, d, y, m.id);
+        if (!grown) continue;
+        const key = JSON.stringify(grown);
+        if (seen[key] || out.some((r) => twins(r.hits, grown))) continue;
         seen[key] = 1;
-        const r = { id: 'r' + i, hits, n: hits.length, off: offCount(m, hits) };
+        const acc = accentFor(seed, m), hits = accentHits(grown, m, acc);
+        const r = { id: 'r' + i, hits, n: hits.length, off: offCount(m, hits), seed, d, y, acc };
         if (m.id !== '4/4') Object.assign(r, { id: 'r' + i + '@' + m.id, m: m.id });
         out.push(r);
       }
       return out;
     });
+  }
+  /** two rhythms that share almost every note */
+  function twins(a, b) {
+    const at = {};
+    a.forEach((h) => { at[h[0]] = 1; });
+    const both = b.filter((h) => at[h[0]]).length;
+    return both / (a.length + b.length - both) >= 0.85;
+  }
+
+  // ---------------------------------------------------------------- accents
+  // Where a rhythm leans hardest. With the count, the accents fall on the
+  // meter's strong beats (and long notes). Across it, they fall in another
+  // grouping over the same notes: 3+3+2 in 4/4, three big beats over two
+  // bars of 3/4. The notes stay; what you'd tap your foot to moves.
+  // Steps run across both bars; at: how far across the count it is (0 to 1).
+
+  const ACCENTS = {
+    '4/4': [
+      { id: 'beat', at: 0, name: 'on the strong beats' },
+      { id: 'back', at: 0.35, name: 'on 2 and 4, the backbeat', s: [4, 12, 20, 28] },
+      { id: '332', at: 0.7, name: 'in a 3+3+2 across each bar', s: [0, 6, 12, 16, 22, 28] },
+      { id: '33334', at: 1, name: 'in threes, 3+3+3+3+4, against the count', s: [0, 3, 6, 9, 12, 16, 19, 22, 25, 28] },
+    ],
+    '3/4': [
+      { id: 'beat', at: 0, name: 'on the first beat of each bar' },
+      { id: 'six', at: 0.55, name: 'in two per bar, like 6/8', s: [0, 6, 12, 18] },
+      { id: 'hemi', at: 1, name: 'as three big beats over two bars (a hemiola)', s: [0, 8, 16] },
+    ],
+    '6/8': [
+      { id: 'beat', at: 0, name: 'on the two big beats of each bar' },
+      { id: 'hemi', at: 0.6, name: 'in three per bar, like 3/4 (a hemiola)', s: [0, 4, 8, 12, 16, 20] },
+      { id: 'wide', at: 1, name: 'as three big beats over two bars', s: [0, 8, 16] },
+    ],
+    '5/4': [
+      { id: 'beat', at: 0, name: 'as 3+2, the way it counts' },
+      { id: '23', at: 0.5, name: 'as 2+3, the count turned round', s: [0, 8, 20, 28] },
+      { id: 'threes', at: 1, name: 'in threes, across the count', s: [0, 6, 12, 20, 26, 32] },
+    ],
+    '7/8': [
+      { id: 'beat', at: 0, name: 'as 2+2+3, the way it counts' },
+      { id: '232', at: 0.5, name: 'as 2+3+2', s: [0, 4, 10, 14, 18, 24] },
+      { id: '322', at: 1, name: 'as 3+2+2', s: [0, 6, 10, 14, 20, 24] },
+    ],
+  };
+  function accentsOf(m) { return ACCENTS[m.id] || ACCENTS['4/4']; }
+  /** a rhythm's accents from its seed: most go with the count */
+  function accentFor(seed, m) {
+    const as = accentsOf(m), R = rng(seedOf('acc' + seed));
+    if (R() < 0.62) return 'beat';
+    return as[1 + Math.floor(R() * (as.length - 1))].id;
+  }
+  /** a copy of the hits with weights for accents acc: 2 accented, 1 on the beat, 0 between */
+  function accentHits(hits, m, acc) {
+    const g = accentsOf(m).find((a) => a.id === acc);
+    const out = hits.map((h) => h.slice());
+    if (!g || !g.s) {
+      out.forEach((h) => { const x = mod(h[0], m.steps); h[2] = m.groupStarts.indexOf(x) >= 0 ? 2 : onPulse(m, x) ? 1 : h[1] >= 3 ? 2 : 0; });
+      if (out.length) out[0][2] = 2;
+      return out;
+    }
+    out.forEach((h) => { h[2] = g.s.indexOf(h[0]) >= 0 ? 2 : onPulse(m, h[0]) ? 1 : 0; });
+    return out;
   }
   function rhythmTag(r) {
     const w = r.n <= 6 ? 'Spare' : r.n <= 10 ? 'Relaxed' : r.n <= 16 ? 'Moving' : r.n <= 21 ? 'Busy' : 'Packed';
@@ -1071,20 +1142,27 @@
     const m = Odd.theory.meter(mid);
     return cached('riffs' + m.id, () => {
       const seen = {}, out = [];
-      const add = (x, i) => {
+      const add = (x, i, from) => {
         if (!x) return;
         const key = JSON.stringify(x.hits);
         if (seen[key]) return;
         seen[key] = 1;
-        const acc = x.hits.filter((h) => h[2] === 2);
-        const off = acc.filter((h) => !onPulse(m, h[0])).length / Math.max(1, acc.length);
-        out.push({ id: 'rf' + i + '@' + m.id, m: m.id, hits: x.hits, n: x.hits.length, off: Math.round(off * 100) / 100, fam: x.fam, turn: x.turn });
+        out.push(Object.assign({ id: 'rf' + i + '@' + m.id, m: m.id, hits: x.hits, n: x.hits.length, off: riffOff(m, x.hits), fam: x.fam, turn: x.turn }, from));
       };
+      // each keeps what it grew from, so it can be grown again (Odd.tweak)
       const DS = [0.1, 0.4, 0.7, 1], YS = [0, 0.5, 1], RS = [0, 0.4, 0.8];
-      for (let i = 0; i < 72; i++) add(makeRiff(4001 + i * 6007, DS[i % 4], YS[Math.floor(i / 4) % 3], RS[Math.floor(i / 12) % 3], m.id), i);
-      for (let i = 0; i < 8; i++) add(makeThrees(9001 + i * 31, [0.2, 0.5, 0.75, 0.9][i % 4], m.id), 100 + i);
+      for (let i = 0; i < 72; i++) {
+        const seed = 4001 + i * 6007, d = DS[i % 4], y = YS[Math.floor(i / 4) % 3], rest = RS[Math.floor(i / 12) % 3];
+        add(makeRiff(seed, d, y, rest, m.id), i, { seed, d, y, rest });
+      }
+      for (let i = 0; i < 8; i++) { const seed = 9001 + i * 31, d = [0.2, 0.5, 0.75, 0.9][i % 4]; add(makeThrees(seed, d, m.id), 100 + i, { seed, d }); }
       return out;
     });
+  }
+  /** the share of a riff's accents that land off the beat */
+  function riffOff(m, hits) {
+    const acc = hits.filter((h) => h[2] === 2);
+    return Math.round(100 * acc.filter((h) => !onPulse(m, h[0])).length / Math.max(1, acc.length)) / 100;
   }
   function riffTag(r) { return RIFF_TAG[r.fam] || 'Riff'; }
   /**
@@ -2044,8 +2122,11 @@
      * there starts over what was built on it (it stays in the history).
      */
     pick(S, i, own) {
-      const r = S.round, o = own || flow.options(S)[i];
+      const r = S.round;
+      let o = own || flow.options(S)[i];
       if (!r || !o) return S;
+      // a tweaked card goes in as it sounds; what it was tweaked from stays behind
+      if (o.tw) { o = Object.assign({}, o); delete o.tw; }
       const path = pathOf(S.idea), open = PATHS[path].open, d = r.dir;
       const idea = { path, melody: S.idea.melody, riff: S.idea.riff || null, layers: Object.assign({}, S.idea.layers), order: S.idea.order.slice() };
       const note = own ? (OWN[d] ? OWN[d][1] : 'Kept it') : 'Picked ' + ABC.charAt(i) + ': ' + tagOf(d, o);
@@ -2174,7 +2255,7 @@
     pocketStyles, grooveBass, keysStyles, hookStyles, riffPool, riffTag, threesOf, riffNotes, riffNoteStyles, weightStyles, riffKits, underStyles,
     riffVoices, riffPitch, chordLine, climbLines, metaOf, example, pickedLine, NO_CHORDS,
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
-    makeRhythm, rhythmPool, rhythmTag, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
+    makeRhythm, rhythmPool, rhythmTag, makeRiff, makeThrees, accentRiff, riffOff, offCount, onPulse, ACCENTS, accentsOf, accentHits, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
     steerPool, deckOf, fullDeck, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, cap, KEY_WORD, UNDER_INST, PAD_INST, BASS_WORD, KIT_WORD, VOICE_WORD, climbSeq, lineage, ideaName, toParts, flow,

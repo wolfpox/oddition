@@ -428,6 +428,38 @@ from sound it stops, lowers the card, waits `PAUSE_MS` (2 s) with a Bobby
 line, then lifts and plays. Its state autosaves to `localStorage`
 (`oddition.bones.v1`), apart from the workspace.
 
+`Odd.booth` (pure) measures what a card plays (`measure`: BPM, hits, pitch,
+range, note length, thickness, mood) and drives the ✗ / Tweak / ✓ booth.
+`canTweak`, `dials`, `nudge` and `flow.tune` / `flow.untweak` read the
+round's state and hand the card in slot i to `Odd.tweak`; a tweaked card
+takes the slot through `round.subs`.
+
+`Odd.tweak` (pure, `js/core/tweak.js`) changes a card itself. `DIALS` each
+have `lo`/`hi` words, the rounds they're on (`dirs`), `stops(ctx)` (every
+value with its `pos` 0–1 on a scale shared by all cards, `ok` while the card
+is still itself) and `why(ctx)` when it can't move. Dials: `range` (shape
+`amp`, ok while ≥ 80% of its ups and downs keep their direction), `mood` (a
+scale with as many notes, `BRIGHT` positions), `density` (the rhythm's own
+seed regrown at another density: `makeRhythm` / `makeRiff` / `makeThrees`
+draw the same randoms at any density, so notes accumulate; ok while it
+keeps ¾ of its notes and no more than doubles, or what's left is ¾ its own
+and at least half), `rhythm` (`shove`: k notes pushed a 16th ahead of the
+beat or pulled onto it, |k| ≤ n/3), `accent` (`A.accentHits` with another
+grouping from `A.ACCENTS`), `speed` (±15%), `swing`. A tweaked card is
+`{ ...base, tw: { base, set } }`, always rebuilt from the base by `build`
+in a fixed order (density, accent, rhythm, mood, range, speed, swing); when
+every setting is back to the card's own, `build` returns the base object
+itself. `dialsFor(dir, o, idea)` → `{ id, lo, hi, pos, home, stops, reach,
+fixed, why }`; `turn(...)` snaps to the nearest ok stop; `nudge` takes the
+dial with most room on the side it doesn't lean to. `flow.pick` drops `tw`,
+so a kept card goes in as it sounds.
+
+Rhythm decks keep what each card grew from: `rhythmPool` rhythms carry
+`seed`, `d`, `y` and `acc` (accents from the seed: about 6 in 10 with the
+count, the rest across it), near twins (≥ 85% of onsets shared) are left
+out, and seeds are tried until there are 80 (6/8 used to stop at 57).
+`riffPool` riffs carry `seed`, `d`, `y`, `rest`.
+
 ## Song Builder (`Odd.songmaker`, `Odd.song`)
 
 `Odd.songmaker` is pure (Node-testable) and renders through the real engine

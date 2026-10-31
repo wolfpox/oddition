@@ -9,8 +9,9 @@
  *
  * The booth: the card playing lifts, and under it are three answers: ✗ not
  * it (Bobby asks why, says what the card has on each reason, and offers it
- * changed or the deck filtered), ? (he explains it) and ✓ (keep it and build
- * on it). Bobby's bubble holds the questions a card raises (Odd.booth).
+ * changed or the deck filtered), Tweak (what if? the card's own dials, from
+ * where it sits to as far as it stays itself: Odd.tweak) and ✓ (keep it and
+ * build on it). Bobby's bubble holds the questions a card raises (Odd.booth).
  * A dev menu on the left edge hides what the cards show, one kind at a
  * time; with the piano roll hidden a card shows the sound's EQ instead.
  *
@@ -77,11 +78,13 @@
   // Bobby building one himself: the planned steps, where he is, and the timer to the next
   let W = null;
   const WATCH_ACTS = { wpause: 1, wnext: 1, wprev: 1, wtake: 1, wcopy: 1, home: 1, studio: 1 };
-  // talking about the lifted card: ready, answer, explain, why (the reasons for a no), facts (what it has)
+  // talking about the lifted card: ready, answer, why (the reasons for a no), facts (what it has)
   let T = { key: '', mode: 'ready' };
   let talkKey = '';
   // a line that stays with the card it came with (a request's reply, what changed)
   let held = { key: '', text: '' };
+  // tweaking: the panel open (on the card in slot), the panel last drawn, a dial to focus after a turn, the dial Bobby turned last, a drag in progress
+  const TU = { open: false, slot: '', key: '', focus: '', last: '', drag: null, timer: 0 };
   let dev = { open: false, hide: {} };
   let devEl = null;
   const EQ = { buf: null, lv: [], pk: [], colors: null };
@@ -360,17 +363,173 @@
     T = { key: '', mode: 'ready', why: [] };
     set(Object.assign({}, S, { sel: -1, line: 'Noted. It stays where it is, marked, in case you change your mind. Try another.' }));
   }
-  function explain(i) {
-    if (!talking() || S.sel !== i) return;
-    const ex = B.explain(S, i);
-    Object.assign(talk(), { mode: 'explain', said: ex.text, acts: ex.acts, topic: '' });
-    render();
-  }
   function ask(id) {
     if (!talking()) return;
     const an = B.answer(S, S.sel, id);
     Object.assign(talk(), { mode: 'answer', said: an.text, acts: an.acts, topic: id });
     render();
+  }
+
+  // ---------------------------------------------------------------- tweak: the lifted card's own dials
+
+  const TWEAK_HELLO = 'What if? Each dial starts where this card already sits. Turn one and you hear this card changed, not another card. The bright part of a track is as far as it goes and stays itself.';
+  /** the slot the panel belongs to: it closes when another card lifts */
+  const slotKey = () => (S.round && S.sel >= 0 ? [S.round.dir, F.info(S).batch, S.sel].join('|') : '');
+  function tweakOpen() { return TU.open && TU.slot === slotKey() && talking() && !W; }
+  /** Tweak: open the dials on the card that's playing, or close them */
+  function tweakIt(i) {
+    if (!talking() || S.sel !== i) return;
+    talk().mode = 'ready';
+    if (!B.canTweak(S, i)) {
+      held = { key: curKey(i), text: 'Nothing to tweak on ' + (NOUN[S.round.dir] || 'these') + ' yet. Pick by ear, or pass on it.' };
+      render();
+      return;
+    }
+    TU.open = !tweakOpen();
+    TU.slot = slotKey();
+    held = TU.open ? { key: curKey(i), text: TWEAK_HELLO } : { key: '', text: '' };
+    render();
+  }
+
+  /** the knob at p, the fill from the middle line to it */
+  function faderStyle(p) {
+    return '--p:' + p.toFixed(3) + ';--fb:' + (Math.min(p, 0.5) * 100).toFixed(1) + '%;--fh:' + (Math.abs(p - 0.5) * 100).toFixed(1) + '%';
+  }
+  function leanText(d, p) {
+    const a = Math.abs(p - 0.5) * 2, end = (p > 0.5 ? d.hi : d.lo).toLowerCase();
+    if (a < 0.12) return 'in the middle';
+    return a < 0.55 ? 'a little ' + end : a < 0.95 ? end : 'all the way ' + end;
+  }
+  function tuneHtml() {
+    const ds = B.dials(S, S.sel);
+    if (!ds.length) return '';
+    const faders = ds.map((d) => {
+      const stops = d.stops.map((m) => '<i class="b-fmark" style="bottom:' + (m * 100).toFixed(1) + '%"></i>').join('');
+      // the reach: as far as it goes and stays itself; the home mark: where the card came
+      const reach = d.fixed ? '' : '<i class="b-freach" style="bottom:calc(' + (d.reach[0] * 100).toFixed(1) + '% - 7px);height:calc(' + ((d.reach[1] - d.reach[0]) * 100).toFixed(1) + '% + 14px)"></i>';
+      const home = d.fixed || Math.abs(d.home - d.pos) < 1e-6 ? '' : '<i class="b-fhome" style="bottom:' + (d.home * 100).toFixed(1) + '%" title="Where it came"></i>';
+      return '<div class="b-fader' + (d.fixed ? ' fixed' : '') + '" data-f="' + d.id + '" data-p="' + d.pos.toFixed(3) + '" data-start="' + d.pos.toFixed(3) + '" style="' + faderStyle(d.pos) + '">' +
+        '<span class="b-fend hi">' + esc(d.hi) + '</span>' +
+        '<div class="b-ftrack" role="slider" tabindex="0" aria-orientation="vertical" aria-label="' + esc(d.lo + ' to ' + d.hi) + '"' +
+          ' aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(d.pos * 100) + '" aria-valuetext="' + esc(d.fixed ? d.why : leanText(d, d.pos)) + '"' +
+          (d.fixed ? ' aria-disabled="true" title="' + esc(d.why) + '"' : '') + ' data-stops="' + d.stops.join(',') + '">' +
+          reach + stops + home + '<i class="b-ffill"></i><i class="b-fknob"></i>' +
+        '</div>' +
+        '<span class="b-fend lo">' + esc(d.lo) + '</span>' +
+      '</div>';
+    }).join('');
+    const back = B.isTweaked(S, S.sel) ? '<button type="button" class="b-link" data-act="untweak">Back to how it came</button>' : '';
+    return '<div class="b-faders">' + faders + '</div>' +
+      '<div class="b-tune-do"><button type="button" class="b-link" data-act="nudge">Let Bobby turn one</button>' + back + '</div>';
+  }
+  function setFader(fader, p) {
+    fader.dataset.p = p.toFixed(3);
+    fader.setAttribute('style', faderStyle(p));
+    const tr = fader.querySelector('.b-ftrack');
+    tr.setAttribute('aria-valuenow', String(Math.round(p * 100)));
+    const d = { lo: fader.querySelector('.b-fend.lo').textContent, hi: fader.querySelector('.b-fend.hi').textContent };
+    tr.setAttribute('aria-valuetext', leanText(d, p));
+  }
+  /** a dial that can't move here: Bobby says why */
+  function dialWhy(fid) {
+    const d = B.dials(S, S.sel).find((x) => x.id === fid);
+    if (!d) return;
+    talk().mode = 'ready';
+    held = { key: curKey(S.sel), text: d.lo + ' to ' + d.hi + ': ' + d.why };
+    render();
+  }
+  /** turn a dial: the card itself changes and plays at once */
+  function tuneTo(fid, pos, by) {
+    if (S.phase !== 'round' || !talking()) return;
+    const r = B.flow.tune(S, S.sel, fid, pos);
+    if (!r || r.same) {
+      talk().mode = 'ready';
+      const text = (by ? by + ' ' : '') + (r && r.text ? r.text : '');
+      if (text.trim()) held = { key: curKey(S.sel), text: text.trim() };
+      TU.key = '';
+      render();
+      return;
+    }
+    hearSwap(r.S, (by ? by + ' ' : '') + r.text);
+  }
+  /** the tweaked (or untweaked) card in its slot, heard at once, the panel staying open on it */
+  function hearSwap(ns, line) {
+    halt();
+    set(ns);
+    TU.slot = slotKey();
+    held = { key: curKey(ns.sel), text: line };
+    hear(curKey(ns.sel), line, false);
+  }
+  function untweak() {
+    if (!talking()) return;
+    const r = B.flow.untweak(S, S.sel);
+    if (r) hearSwap(r.S, r.text);
+  }
+  function nudge() {
+    if (!talking()) return;
+    const n = B.nudge(S, S.sel, TU.last);
+    if (!n) { held = { key: curKey(S.sel), text: 'Every dial here is as far as it goes. Pass on it, or keep it.' }; render(); return; }
+    TU.last = n.id;
+    const fader = root.querySelector('.b-card.lifted .b-fader[data-f="' + n.id + '"]');
+    if (fader) setFader(fader, n.pos);
+    clearTimeout(TU.timer);
+    // long enough to see the knob travel before the card changes
+    TU.timer = setTimeout(() => tuneTo(n.id, n.pos, n.line), 450);
+  }
+  function trackAt(e) {
+    const tr = e.target && e.target.closest ? e.target.closest('.b-ftrack') : null;
+    return tr && root.contains(tr) && !W ? tr : null;
+  }
+  function yPos(tr, y) {
+    const r = tr.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (r.bottom - y) / r.height));
+  }
+  function dialDown(e) {
+    const tr = trackAt(e);
+    if (!tr || (e.button != null && e.button > 0)) return;
+    const fader = tr.closest('.b-fader');
+    if (tr.getAttribute('aria-disabled') === 'true') { dialWhy(fader.dataset.f); return; }
+    e.preventDefault();
+    try { tr.setPointerCapture(e.pointerId); } catch (x) { /* capture is a nicety */ }
+    tr.focus({ preventScroll: true });
+    clearTimeout(TU.timer);
+    TU.drag = { id: e.pointerId, fader, fid: fader.dataset.f, start: Number(fader.dataset.start) };
+    fader.classList.add('drag');
+    setFader(fader, yPos(tr, e.clientY));
+  }
+  function dialMove(e) {
+    const g = TU.drag;
+    if (!g || e.pointerId !== g.id) return;
+    setFader(g.fader, yPos(g.fader.querySelector('.b-ftrack'), e.clientY));
+  }
+  function dialUp(e) {
+    const g = TU.drag;
+    if (!g || e.pointerId !== g.id) return;
+    TU.drag = null;
+    g.fader.classList.remove('drag');
+    const p = Number(g.fader.dataset.p);
+    // a tap on the knob is not a turn
+    if (e.type === 'pointercancel' || Math.abs(p - g.start) < 0.04) { setFader(g.fader, g.start); return; }
+    TU.focus = g.fid;
+    tuneTo(g.fid, p);
+  }
+  /** ↑ → one step toward the top word, ↓ ← toward the bottom one, Home and End as far as it goes: a step is the next spot it can go */
+  function dialKey(e) {
+    const tr = trackAt(e);
+    if (!tr) return;
+    const k = e.key, up = k === 'ArrowUp' || k === 'ArrowRight', down = k === 'ArrowDown' || k === 'ArrowLeft';
+    if (!up && !down && k !== 'Home' && k !== 'End') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const fader = tr.closest('.b-fader');
+    if (tr.getAttribute('aria-disabled') === 'true') { dialWhy(fader.dataset.f); return; }
+    const cur = Number(fader.dataset.p), stops = tr.dataset.stops.split(',').map(Number);
+    const next = k === 'Home' ? stops[0] : k === 'End' ? stops[stops.length - 1] : up ? stops.find((m) => m > cur + 1e-4) : stops.slice().reverse().find((m) => m < cur - 1e-4);
+    if (next == null) return;
+    setFader(fader, next);
+    clearTimeout(TU.timer);
+    // a run of presses is one turn
+    TU.timer = setTimeout(() => { TU.focus = fader.dataset.f; tuneTo(fader.dataset.f, next); }, 350);
   }
 
   function step(fn) {
@@ -430,8 +589,9 @@
 
   // ---------------------------------------------------------------- watch Bobby
 
+  // a steady pace: a step with sound lasts one pass of it (two at most, when he has more to say); one without, long enough to read
   const passMs = (q) => (q ? (q.length / (A.STEP_TICKS * 4)) * (60000 / q.bpm) : 0);
-  const readMs = (text) => Math.min(14000, 1400 + 38 * String(text || '').length);
+  const readMs = (text) => 1000 + 28 * String(text || '').length;
 
   /** Bobby builds one: on a path, or one he picks */
   function watch(path) {
@@ -450,12 +610,12 @@
     const st = W.steps[W.i];
     set(Object.assign({}, st.S, { line: st.say, seq: st.S.seq + W.seq, anim: st.S.anim + W.anim }));
     const key = st.hear == null ? '' : st.hear === 'all' ? 'all' : curKey(st.hear);
-    let ms = readMs(st.say);
+    let ms = Math.min(6000, readMs(st.say));
     const a = key ? audioFor(key) : null; // paused, Back and Next still play the step; it just doesn't move on
     if (a) {
-      const q = a.seq();
+      const q = a.seq(), pass = passMs(q) + 250;
       if (!(P.playing && P.src === key)) { halt(); run(q); P.src = key; P.heard = key; }
-      ms = Math.max(ms, passMs(q) + 300);
+      ms = Math.max(pass, Math.min(readMs(st.say), 2 * pass));
     } else if (!key) halt();
     render();
     if (!W.paused) W.timer = setTimeout(() => goStep(W.i + 1), ms);
@@ -500,7 +660,7 @@
     hear: (el) => hear(el.dataset.key),
     promote: (el) => promote(Number(el.dataset.i)),
     nope: (el) => nope(Number(el.dataset.i)),
-    explain: (el) => explain(Number(el.dataset.i)),
+    tweak: (el) => tweakIt(Number(el.dataset.i)),
     ask: (el) => ask(el.dataset.t),
     why: (el) => toggleWhy(el.dataset.f),
     whydone: () => whyDone(),
@@ -509,6 +669,8 @@
     cutit: () => cutIt(),
     pass: () => passIt(),
     uncut: () => { halt(); P.src = ''; set(B.flow.uncut(S)); },
+    untweak: () => untweak(),
+    nudge: () => nudge(),
     own: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
     next: () => slide(F.next),
@@ -561,10 +723,10 @@
       if (F.options(S)[i]) hear(curKey(i));
       return true;
     }
-    // the booth: x pass, ? ask, Enter keep, on the card that's lifted
-    if (S.phase === 'round' && talking() && !(e.target && e.target.closest && e.target.closest('button, input, textarea, select'))) {
+    // the booth: x pass, T tweak, Enter keep, on the card that's lifted
+    if (S.phase === 'round' && talking() && !(e.target && e.target.closest && e.target.closest('button, input, textarea, select, [role="slider"]'))) {
       if (k === 'x' || k === 'X' || k === 'Delete' || k === 'Backspace') { e.preventDefault(); nope(S.sel); return true; }
-      if (k === '?' || k === '/') { e.preventDefault(); explain(S.sel); return true; }
+      if (k === 't' || k === 'T') { e.preventDefault(); tweakIt(S.sel); return true; }
       if (k === 'Enter') { e.preventDefault(); promote(S.sel); return true; }
     }
     if ((k === 'ArrowRight' || k === 'ArrowLeft') && S.phase === 'round') {
@@ -729,6 +891,7 @@
   }
 
   const X_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M6.5 6.5l13 13M19.5 6.5l-13 13" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>';
+  const TWEAK_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M6.5 4.5v17M13 4.5v17M19.5 4.5v17" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/><rect x="3.5" y="13" width="6" height="3.6" rx="1.4" fill="currentColor"/><rect x="10" y="7" width="6" height="3.6" rx="1.4" fill="currentColor"/><rect x="16.5" y="15.5" width="6" height="3.6" rx="1.4" fill="currentColor"/></svg>';
   const OK_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M5.5 13.5l5 5L20.5 7" stroke="currentColor" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function card(dir, o, idea, x) {
@@ -736,16 +899,17 @@
     const facts = headFacts(dir, o, idea).map((f) => '<span class="b-f' + (/ alt$/.test(f[0]) ? ' alt' : '') + '" data-x="' + f[0].replace(/ alt$/, '') + '">' + esc(f[1]) + '</span>').join('');
     const head = '<div class="b-head">' + (x.letter ? '<span class="b-letter" data-x="letter">' + x.letter + '</span>' : '') + '<span class="b-tag" data-x="words">' + esc(tag) + '</span><span class="b-stat">' + facts + '</span></div>';
     const label = (x.letter ? 'option ' + x.letter + ': ' : '') + tag;
-    // under the lifted card: not it, ask, keep
+    // under the lifted card: not it, tweak it, keep
     const booth = x.i != null ? '<div class="b-booth">' +
       '<button type="button" class="b-bx no" data-act="nope" data-i="' + x.i + '" title="Not it (X)" aria-label="Not it: pass on this one">' + X_SVG + '</button>' +
-      '<button type="button" class="b-bx ask" data-act="explain" data-i="' + x.i + '" title="What is it? (?)" aria-label="Ask Bobby what this one is">?</button>' +
+      '<button type="button" class="b-bx tweak' + (x.tweak ? '' : ' off') + '" data-act="tweak" data-i="' + x.i + '" title="' + (x.tweak ? 'Tweak it: what if? (T)' : 'Nothing to tweak here yet') + '" aria-label="Tweak it: what if it were…" aria-expanded="false">' + TWEAK_SVG + '</button>' +
       '<button type="button" class="b-bx yes" data-act="promote" data-i="' + x.i + '" title="' + esc((x.promote || 'Keep it') + ' (Enter)') + '" aria-label="' + esc(x.promote || 'Keep it') + '">' + OK_SVG + '</button>' +
     '</div>' : '';
     return '<div class="b-card' + (x.cls ? ' ' + x.cls : '') + '" data-key="' + x.key + '"' + (x.i != null ? ' data-i="' + x.i + '"' : '') + (x.style ? ' style="' + x.style + '"' : '') + '>' +
       '<button type="button" class="b-hit" data-act="hear" data-key="' + x.key + '" aria-label="Listen to ' + esc(label) + '"></button>' +
       head +
       '<div class="b-vis" aria-hidden="true">' + vis(dir, o, idea) + '</div>' +
+      (x.i != null ? '<div class="b-tune" role="group" aria-label="Tune it"></div>' : '') +
       booth +
       '</div>';
   }
@@ -767,7 +931,7 @@
       const t = talk();
       if (t.mode === 'why') return B.ASK_WHY;
       if (t.mode === 'facts') return 'Here’s what you passed on.';
-      if (t.mode === 'answer' || t.mode === 'explain') return t.said;
+      if (t.mode === 'answer') return t.said;
       if (held.key === curKey(S.sel)) return held.text;
       return S.line || B.ready(S.seq + S.sel);
     }
@@ -789,7 +953,7 @@
     const t = talk(), dir = S.round.dir, reqs = A.REQS[dir] || [];
     const qs = (skip) => B.questions(S, S.sel).filter((q) => q.id !== skip).slice(0, 3).map((q) => '<button type="button" class="b-q" data-act="ask" data-t="' + q.id + '">' + esc(q.q) + '</button>').join('');
     if (t.mode === 'ready') return '<div class="b-qs">' + qs() + '</div>';
-    if (t.mode === 'answer' || t.mode === 'explain') {
+    if (t.mode === 'answer') {
       const acts = (t.acts || []).map((k) => '<button type="button" class="b-steer" data-act="req" data-i="' + k + '">' + esc(reqs[k].label) + '</button>').join('');
       return (acts ? '<div class="b-steers"><span>Hear the deck go:</span>' + acts + '</div>' : '') + '<div class="b-qs">' + qs(t.topic) + '</div>';
     }
@@ -858,7 +1022,7 @@
       if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
       const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Keep it: that’s the hook' : (PROMOTE[dir] || 'Keep it: add it').replace(/^Promote/, 'Keep it');
-      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style });
+      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style, tweak: B.canTweak(S, i) });
     }).join('');
     const last = inf.batch >= inf.batches - 1;
     const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
@@ -882,7 +1046,7 @@
       '<div class="b-actions">' +
         (A.ownLabel(dir) ? '<button type="button" class="b-ghost" data-act="own">' + esc(A.ownLabel(dir)) + '</button>' : '') +
         (A.isOpening(S.idea, dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">' + esc(A.SKIP_LABEL[dir] || 'Not now') + '</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), ? what is it (?), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), the sliders to tweak it, what if it were brighter, busier… (T), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 
@@ -1026,6 +1190,7 @@
     lastAnim = S.anim;
     lastHid = S.hid;
     talkKey = '';
+    TU.key = '';
     EQ.colors = null;
   }
 
@@ -1056,11 +1221,31 @@
       const el = root.querySelector('.b-talk');
       if (el) el.innerHTML = talkHtml();
     }
+    // the dials on the lifted card, once Tweak opens them
+    const open = tweakOpen();
+    if (!open && TU.open && talking() && TU.slot !== slotKey()) TU.open = false; // another card lifted: the panel shuts
+    root.querySelectorAll('.b-bx.tweak').forEach((el) => {
+      const on = open && Number(el.dataset.i) === S.sel;
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
+    const tuk = open ? [S.seq, S.sel].join('|') : '';
+    if (tuk !== TU.key) {
+      TU.key = tuk;
+      root.querySelectorAll('.b-tune').forEach((el) => { if (el.innerHTML) el.innerHTML = ''; });
+      const el = tuk ? root.querySelector('.b-cards .b-card[data-i="' + S.sel + '"] .b-tune') : null;
+      if (el) {
+        el.innerHTML = tuneHtml();
+        const f = TU.focus && el.querySelector('.b-fader[data-f="' + TU.focus + '"] .b-ftrack');
+        if (f) f.focus({ preventScroll: true });
+        TU.focus = '';
+      }
+    }
     // the ones passed on stay where they are, marked
     root.querySelectorAll('.b-cards .b-card[data-i]').forEach((el) => el.classList.toggle('b-nope', B.isOut(S, opts[Number(el.dataset.i)])));
     root.querySelectorAll('.b-eq').forEach((c) => { if (!c.closest('.is-playing') && c.dataset.on) { delete c.dataset.on; c.getContext('2d').clearRect(0, 0, c.width, c.height); } });
     const st = W ? W.steps[W.i] : null;
-    root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && (st.kind === 'choose' || st.kind === 'why') && st.i === Number(el.dataset.i)));
+    root.querySelectorAll('.b-card[data-i]').forEach((el) => el.classList.toggle('b-chosen', !!st && st.kind === 'choose' && st.i === Number(el.dataset.i)));
     if (W) {
       const n = root.querySelector('.b-wb-step');
       if (n) n.textContent = 'Step ' + (W.i + 1) + ' of ' + W.steps.length;
@@ -1137,6 +1322,11 @@
     S = load();
     dev = loadDev();
     root.addEventListener('click', onClick);
+    root.addEventListener('pointerdown', dialDown);
+    root.addEventListener('pointermove', dialMove);
+    root.addEventListener('pointerup', dialUp);
+    root.addEventListener('pointercancel', dialUp);
+    root.addEventListener('keydown', dialKey);
     if (typeof document !== 'undefined' && document.body) mountDev();
     applyDev();
     if (Odd.transport && Odd.transport.on) {
