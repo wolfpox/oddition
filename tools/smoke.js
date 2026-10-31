@@ -96,51 +96,81 @@ function ok(cond, msg) { if (!cond) { console.log('FAIL:', msg); process.exitCod
   await page.click('[data-act="uncut"]');
   await page.waitForTimeout(200);
   ok(!(await page.$('.b-cutnote')), 'and they can all come back');
-  // Tweak: the playing card's own dials, only once asked, each starting where the card sits
+  // Tweak: everything the playing card can do, one slide at a time, only once asked
   await page.click('.b-cards .b-card[data-i="0"] .b-hit');
   await page.waitForTimeout(500);
-  ok((await page.$$('.b-fader')).length === 0, 'no dials until Tweak');
+  ok((await page.$$('.b-car')).length === 0, 'nothing to turn until Tweak');
   await page.click('.b-card.lifted [data-act="tweak"]');
-  const dialIds = await page.$$eval('.b-card.lifted .b-fader', (els) => els.map((e) => e.dataset.f));
-  const live = await page.$$eval('.b-card.lifted .b-fader:not(.fixed)', (els) => els.map((e) => e.dataset.f));
-  const want = await page.evaluate(() => Odd.booth.dials(Odd.bones.state, 0).map((d) => d.id + ':' + d.pos.toFixed(3)).join());
-  const shown = await page.$$eval('.b-card.lifted .b-fader', (els) => els.map((e) => e.dataset.f + ':' + Number(e.dataset.p).toFixed(3)).join());
-  ok(dialIds.length >= 3 && live.length >= 2 && shown === want && /What if/.test(await page.textContent('.b-say')) && (await page.getAttribute('.b-card.lifted .b-bx.tweak', 'aria-expanded')) === 'true', 'Tweak opens the card’s own dials, each where the card already sits: ' + shown);
+  await page.waitForTimeout(150);
+  const slot0 = () => page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]));
+  const car = () => page.$eval('.b-card.lifted .b-car', (el) => ({ kind: el.dataset.kind, id: el.dataset.f, p: Number(el.querySelector('.b-hf').dataset.p), name: el.querySelector('.b-car-name b').textContent, count: el.querySelector('.b-car-count').textContent, ticks: el.querySelectorAll('.b-ctick').length, tried: !!el.querySelector('.b-hf.try') }));
+  const want = await page.evaluate(() => { const S = Odd.bones.state; return { dials: Odd.booth.dials(S, 0).filter((d) => !d.fixed), moves: Odd.booth.moves(S, 0).length }; });
+  let c = await car();
+  ok(c.kind === 'dial' && c.id === want.dials[0].id && Math.abs(c.p - want.dials[0].pos) < 1e-3 && c.ticks === want.dials.length + want.moves && want.moves >= 2 && c.count === '1 of ' + c.ticks &&
+    /What if/.test(await page.textContent('.b-say')) && (await page.getAttribute('.b-card.lifted .b-bx.tweak', 'aria-expanded')) === 'true',
+  'Tweak opens one slide at a time: ' + c.ticks + ' in all, the dials first, each where the card sits (' + c.name + ' ' + c.p.toFixed(2) + ')');
   await page.screenshot({ path: path.join(out, 'bones-tweak.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
-  const tuneBefore = await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]));
+  const tuneBefore = await slot0();
   const seedOf = () => page.evaluate(() => { const o = Odd.audition.flow.options(Odd.bones.state)[0]; return (o.mel || o).r.seed; });
   const seedBefore = await seedOf();
-  const tr = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[0] + '"] .b-ftrack', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, top: r.y, bottom: r.y + r.height }; });
-  const startPos = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[0] + '"]', (el) => Number(el.dataset.p));
-  const toY = startPos > 0.5 ? tr.bottom - 2 : tr.top + 2;
-  await page.mouse.move(tr.x, tr.bottom - startPos * (tr.bottom - tr.top));
+  // drag the dial toward its other end
+  const tr = await page.$eval('.b-card.lifted .b-htrack', (el) => { const r = el.getBoundingClientRect(); return { left: r.x, right: r.x + r.width, y: r.y + r.height / 2 }; });
+  await page.mouse.move(tr.left + c.p * (tr.right - tr.left), tr.y);
   await page.mouse.down();
-  await page.mouse.move(tr.x, toY, { steps: 6 });
+  await page.mouse.move(c.p > 0.5 ? tr.left + 2 : tr.right - 2, tr.y, { steps: 6 });
   await page.mouse.up();
   await page.waitForTimeout(500);
   b = await bones();
-  const tuneAfter = await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]));
-  ok(b.playing && b.sel === 0 && tuneBefore !== tuneAfter && (await seedOf()) === seedBefore && /instead of|ahead of the beat|onto the beat|accented/.test(await page.textContent('.b-say')), 'dragging a dial changes this card, not which card, and it plays at once: ' + (await page.textContent('.b-say')));
-  ok((await page.$$('.b-card.lifted .b-fader')).length === dialIds.length && (await page.$$('.b-card.lifted .b-fhome')).length === 1 && !!(await page.$('.b-card.lifted [data-act="untweak"]')), 'the panel stays open on it, with a ring where it came and a way back');
-  await page.focus('.b-card.lifted .b-fader[data-f="' + live[1] + '"] .b-ftrack');
-  const p1 = await page.$eval('.b-card.lifted .b-fader[data-f="' + live[1] + '"]', (el) => ({ p: Number(el.dataset.p), top: Math.max.apply(null, el.querySelector('.b-ftrack').dataset.stops.split(',').map(Number)) }));
-  await page.keyboard.press(p1.p < p1.top - 1e-4 ? 'ArrowUp' : 'ArrowDown');
-  await page.waitForTimeout(700);
-  ok(tuneAfter !== (await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))) && (await bones()).sel === 0 && await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('role') === 'slider'), 'arrow keys step a dial to its next spot, and keep focus');
+  const tuneAfter = await slot0();
+  ok(b.playing && b.sel === 0 && tuneBefore !== tuneAfter && (await seedOf()) === seedBefore && /instead of|ahead of the beat|onto the beat|accented/.test(await page.textContent('.b-say')), 'dragging a dial changes this card, not which card, and it plays on: ' + (await page.textContent('.b-say')));
+  ok((await car()).id === c.id && (await page.$$('.b-card.lifted .b-hhome')).length === 1 && !!(await page.$('.b-card.lifted [data-act="untweak"]')), 'the slide stays up, with a ring where it came and a way back');
   await page.click('.b-card.lifted [data-act="untweak"]');
   await page.waitForTimeout(400);
-  ok((await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))) === tuneBefore && /how it came/.test(await page.textContent('.b-say')), 'back to how it came: the very card it was');
-  if (dialIds.length > live.length) {
-    await page.click('.b-card.lifted .b-fader.fixed .b-ftrack', { force: true });
-    ok(/scale|seed|threes|accents|any further/.test(await page.textContent('.b-say')), 'a greyed dial says why: ' + (await page.textContent('.b-say')));
+  ok((await slot0()) === tuneBefore && /how it came/.test(await page.textContent('.b-say')), 'back to how it came: the very card it was');
+  await page.focus('.b-card.lifted .b-htrack');
+  const p1 = await page.$eval('.b-card.lifted .b-htrack', (el) => ({ p: Number(el.closest('.b-hf').dataset.p), top: Math.max.apply(null, el.dataset.stops.split(',').map(Number)) }));
+  await page.keyboard.press(p1.p < p1.top - 1e-4 ? 'ArrowRight' : 'ArrowLeft');
+  await page.waitForTimeout(700);
+  ok(tuneBefore !== (await slot0()) && (await bones()).sel === 0 && await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('role') === 'slider'), 'arrow keys step it to its next spot, and keep focus');
+  await page.click('.b-card.lifted [data-act="untweak"]');
+  await page.waitForTimeout(400);
+  // through the slides to the first move: it's tried in the card's place at once, not put in the slot
+  const deal = await page.evaluate(() => Odd.audition.flow.info(Odd.bones.state).batch);
+  await page.focus('.b-card.lifted .b-car-go[data-go="1"]');
+  for (let k = 0; k < want.dials.length; k++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
+  await page.waitForTimeout(600);
+  c = await car();
+  const spots = await page.$$eval('.b-card.lifted .b-spot', (els) => els.map((e) => e.classList.contains('on')));
+  ok(c.kind === 'move' && c.tried && spots.length >= 1 && spots.every(Boolean) && /Trying it/.test(await page.textContent('.b-say')) && (await slot0()) === tuneBefore && (await bones()).playing &&
+    (await page.evaluate(() => Odd.audition.flow.info(Odd.bones.state).batch)) === deal && await page.evaluate(() => document.activeElement && document.activeElement.dataset.go === '1'),
+  '→ on the carousel goes through the slides (not the deck); a move is tried at once, marked where it goes: ' + c.name + ' on ' + spots.length);
+  await page.screenshot({ path: path.join(out, 'bones-tweak-move.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
+  const firstMove = c.id;
+  await page.click('.b-card.lifted .b-car-go[data-go="1"]');
+  await page.waitForTimeout(600);
+  c = await car();
+  ok(c.id !== firstMove && (await slot0()) === tuneBefore && (c.kind !== 'move' || c.tried), 'swiping past it changes nothing; the next one is tried instead');
+  if (c.kind === 'move') {
+    // a tap on the knob keeps it
+    const kn = await page.$eval('.b-card.lifted .b-hknob', (el) => { const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await page.mouse.click(kn.x, kn.y);
+    await page.waitForTimeout(500);
+    const kept = await page.evaluate(() => { const o = Odd.audition.flow.options(Odd.bones.state)[0]; return JSON.stringify((o.mel || o).mv || (o.r && o.r.mv) || null); });
+    ok(/Kept/.test(await page.textContent('.b-say')) && kept.includes('"' + c.id + '"') && !(await car()).tried && (await bones()).playing, 'touching its slider keeps it: ' + (await page.textContent('.b-say')));
+    const marks = await page.$$('.b-card.lifted .b-spot.on');
+    if (marks.length >= 2) {
+      await marks[0].click();
+      await page.waitForTimeout(500);
+      ok(/Left that (note|hit) out/.test(await page.textContent('.b-say')) && (await page.$$('.b-card.lifted .b-spot.on')).length === marks.length - 1, 'tapping a mark leaves that one out: ' + (await page.textContent('.b-say')));
+    }
+    await page.screenshot({ path: path.join(out, 'bones-tweak-kept.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
   }
   await page.click('.b-card.lifted [data-act="nudge"]');
   await page.waitForTimeout(900);
-  ok(/leans|middle|turned it/.test(await page.textContent('.b-say')) && (await bones()).sel === 0 && tuneBefore !== (await page.evaluate(() => JSON.stringify(Odd.audition.flow.options(Odd.bones.state)[0]))), 'Bobby turns one himself: ' + (await page.textContent('.b-say')));
-  await page.screenshot({ path: path.join(out, 'bones-tweak-turned.png'), clip: await page.$eval('.b-card.lifted', (el) => { const r = el.getBoundingClientRect(); return { x: r.x - 20, y: r.y + scrollY - 20, width: r.width + 40, height: r.height + 110 }; }) });
+  ok(/leans|middle|turned it/.test(await page.textContent('.b-say')) && (await bones()).sel === 0 && (await car()).kind === 'dial', 'Bobby turns a dial himself, and its slide comes up: ' + (await page.textContent('.b-say')));
   await page.click('.b-card.lifted [data-act="tweak"]');
   await page.waitForTimeout(150);
-  ok((await page.$$('.b-fader')).length === 0, 'Tweak again puts the dials away');
+  ok((await page.$$('.b-car')).length === 0, 'Tweak again puts it away');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
   // the dev menu: blind mode leaves just the card, and the EQ plays in it

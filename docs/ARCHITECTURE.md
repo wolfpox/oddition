@@ -454,6 +454,32 @@ fixed, why }`; `turn(...)` snaps to the nearest ok stop; `nudge` takes the
 dial with most room on the side it doesn't lean to. `flow.pick` drops `tw`,
 so a kept card goes in as it sounds.
 
+Moves (`Odd.moves`, pure, `js/core/moves.js`) are the small named things a
+line can do at the spots that allow them, like a chess piece's legal moves:
+`repeat` (long notes), `short` (clipped) and `tie` (held into the gap; the
+two exclude each other), `grace` (into accented notes, from the side the
+line comes from; tunes only), `accent` (plain notes louder), `ghost` (soft
+ones softer), `pickup` (stepping up into a note after a rest). A line's
+moves are `mv = { id: { a, skip } }`: the amount (an index into the move's
+`stops`) and the onsets left out; a move plays at every spot `spots(id,
+notes, cx)` allows except those. `apply(notes, mv, cx)` never moves a note
+the line came with or changes its pitch; it changes lengths and loudness
+(`n.v`) and adds short notes marked `orn`. Moves live on the line
+(`mel.mv`, a riff rhythm's `r.mv`), and `A.melodyNotes` / `A.riffNotes`
+play them, so they reach every round after, the climb and export
+(`withMoves` carries them from rhythm to shape). In `Odd.tweak` they are
+one more setting (`set.mv`): `movesFor` lists the moves with somewhere to
+go (`a` -1 is off), `setMove`, `toggleSpot` and `tryMove` rebuild the card,
+and dials and moves keep each other when either changes.
+
+The booth's Tweak panel (`Odd.bones`) shows every non-fixed dial, then
+every move, one slide at a time. Landing on a move that's off tries it at
+its usual amount: the card heard and drawn in the slot is `TU.pv.card`
+(`slotCard`), swapped into the playing loop with `Odd.transport.update`,
+and nothing goes into `round.subs` until the slider is touched; moving to
+another slide or closing the panel drops it, and ✓ keeps what's heard.
+Marks under the roll are a move's spots: tapping one toggles it.
+
 Rhythm decks keep what each card grew from: `rhythmPool` rhythms carry
 `seed`, `d`, `y` and `acc` (accents from the seed: about 6 in 10 with the
 count, the rest across it), near twins (≥ 85% of onsets shared) are left

@@ -132,7 +132,7 @@ again from there.
 The card that's playing lifts, and under it are three buttons:
 
 - **✓** keeps it and builds on it (`Enter`).
-- **Tweak** (the sliders) asks *what if?* and opens the card's own dials (`T`).
+- **Tweak** (the sliders) asks *what if?* and opens everything the card can do, one slide at a time: its dials, then its moves (`T`).
 - **✗** passes on it (`X`). Bobby asks *Why didn't that one make the cut?*
   and you tick one or more reasons: **Speed**, **Instrument**, **Rhythm**,
   **Pitch**, **Range**, **Density**, **Note length**, **Thickness**, **Mood**
@@ -151,40 +151,66 @@ The card that's playing lifts, and under it are three buttons:
 
 ### Tweak it: what if it were…
 
-**Tweak** opens dials on the card that's playing, each named by its two
-ends. A dial changes the card itself, never which card it is: the rhythm
-grown again from its own seed, the same steps in another scale, the same
-shape stretched. Which dials depend on the round:
+**Tweak** opens everything the playing card can do, one slide at a time.
+Go through them with the arrows beside the name (or ← → anywhere in the
+panel). The dots under the slider are every slide: round ones are dials,
+diamonds are moves, and filled ones are turned. Nothing changes which card
+it is.
+
+**Dials** come first: one quality with a word at each end.
 
 - **Rhythm and scale:** **Dark** to **Bright** (the scale, among ones with
-  as many notes), **Sparse** to **Busy**, **On the beat** to **Off the
-  beat** (notes pushed just ahead of the beat, or pulled onto it), **With
-  the count** to **Across the count** (the same notes, accented in another
-  grouping: 3+3+2, the backbeat, a hemiola).
+  as many notes), **Sparse** to **Busy** (the rhythm grown again from its own
+  seed), **On the beat** to **Off the beat** (notes pushed just ahead of the
+  beat, or pulled onto it), **With the count** to **Across the count** (the
+  same notes, accented in another grouping: 3+3+2, the backbeat, a hemiola).
 - **Shape:** **Narrow** to **Wide** (the same ups and downs, stretched; it
   still lands on the same note), Dark to Bright, Sparse to Busy, On to Off
-  the beat. A hook keeps the groove's scale, so its Dark to Bright is greyed.
+  the beat. A hook keeps the groove's scale, so it has no Dark to Bright.
 - **A riff's rhythm:** Sparse to Busy, On to Off the beat.
 - **A pocket, and every sound:** **Slow** to **Quick**, **Tight** to **Swingy**.
 
-The other rounds have nothing to tweak yet; Tweak says so.
-
 Every card shares the same scales, so cards come already turned: a Dorian
 rhythm sits a little dark, a six-note one toward sparse. The knob starts
-where the card is, the line across is the middle, and the two words mirror
-each other (the one the knob leans to lights up as the other fades). The
-bright part of a track is as far as the card goes and stays itself: a
-rhythm grown busier while it keeps three quarters of its notes and no more
-than doubles, sparser while what's left is mostly its own; up to a third of
-the notes moved off or onto the beat; a shape stretched while its ups and
-downs stay; tempo 15% either way. Ticks are the spots it can go, and a ring
-marks where it came. Drag a knob, or use the arrow keys for one spot at a
-time; the card changes and plays at once, and Bobby says what moved (*Busier:
-15 notes instead of 11. Every note it came with is still there.*). Turn every
-dial back, or press **Back to how it came**, and it's the very card it was.
-**Let Bobby turn one** has him turn the dial with the most room on the side
-the card doesn't lean to, as far as it goes. Keeping a tweaked card keeps it
-as it sounds.
+where the card is and the line down the middle is neutral. The lighter part
+of a track is as far as the card goes and stays itself: a rhythm grown
+busier while it keeps three quarters of its notes and no more than doubles,
+sparser while what's left is mostly its own; up to a third of the notes
+moved off or onto the beat; a shape stretched while its ups and downs stay;
+tempo 15% either way. Ticks are the spots it can go, and a ring marks where
+it came. A dial a card can't turn isn't shown.
+
+**Moves** come next: the small things a tune or a riff's rhythm can do at
+the spots that allow them, like the legal moves of a chess piece.
+
+- **Repeats** (each long note broken into repeats: twice, in eighths, in
+  sixteenths), **Clipped** (notes cut short) or **Tied over** (each note held
+  into the next; never both).
+- **Grace notes** (a quick flick into each accented note, from the side the
+  tune comes from; tunes only) and **Accents** (leaning on the notes on the
+  beat).
+- **Ghost notes** (the notes between the beats, barely there) and
+  **Pickups** (stepping up into a note after a rest, one to three notes).
+
+A move never changes when the card's own notes start or which pitch they
+are, and it never touches the note it lands on. Only moves with somewhere
+to go are listed. Landing on one tries it at once, in the card's place, and
+the loop plays on with it (its knob is hollow while it's being tried). Go on
+to the next slide and it's gone; touch its slider (a tap on the knob keeps
+it as it is) and it's kept. Marks under the picture show where it plays,
+and the notes it adds are drawn in gold. Tap a mark to leave that note out,
+again to put it back. Moves stay with the tune into the rounds after:
+a rhythm's grace notes are still there in every shape on offer.
+
+Drag a knob, or use the arrow keys on it for one spot at a time; the card
+changes and plays on, and Bobby says what moved (*Busier: 15 notes instead
+of 11. Every note it came with is still there.* / *Grace notes, quick, on
+three notes.*). Turn everything back, or press **Back to how it came**, and
+it's the very card it was. **Let Bobby turn one** has him turn the dial with
+the most room on the side the card doesn't lean to, as far as it goes.
+Keeping a card keeps it as it sounds, including a move being tried.
+
+The other rounds have nothing to tweak yet; Tweak says so.
 
 Bobby doesn't describe a card unless asked. While one plays he says *I can
 talk about this one* or *We can explore that*, and his bubble holds the

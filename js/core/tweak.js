@@ -16,12 +16,21 @@
  *   swingier or tighter the off-beats later or back on the grid
  * Turn every dial back and the card comes back exactly (the same object).
  *
- *   dialsFor(dir, o, idea) -> [{ id, lo, hi, pos, home, stops, reach, fixed, why }]
+ * Moves (Odd.moves) are the small things a tune or a riff's rhythm can do
+ * at the spots that allow them: repeats, grace notes, pickups... A move
+ * plays at every legal spot unless that spot is left out. They sit on the
+ * line (mel.mv, r.mv), so they go on with it into the rounds after.
+ *
+ *   dialsFor(dir, o, idea) -> [{ id, name, line, lo, hi, pos, home, stops, reach, fixed, why }]
  *   turn(dir, o, idea, id, pos) -> { card, text, limit } | { same, limit, text } | null
+ *   movesFor(dir, o, idea) -> [{ id, name, line, stops, def, a, home, spots: [{ s, on }] }]  (a -1: off)
+ *   setMove(dir, o, idea, id, a) -> { card, text } | null      (a -1 turns it off)
+ *   toggleSpot(dir, o, idea, id, s) -> { card, text } | null   (leave one spot out, or put it back)
+ *   tryMove(dir, o, idea, id) -> { card, text } | null         (the move at its usual amount, when it's off)
  *   reset(o) -> the card as it came
  *   nudge(dir, o, idea, last) -> { id, pos, line } | null
  *
- * A tweaked card carries o.tw = { base, set: { dialId: value } }, and is
+ * A tweaked card carries o.tw = { base, set: { dialId: value, mv } }, and is
  * always rebuilt from the base, so turns never pile up.
  */
 (function (Odd) {
@@ -153,18 +162,22 @@
     if (id === 'range') return mel && mel.shape ? mel.shape.amp : null;
     if (id === 'speed') return base.bpm;
     if (id === 'swing') return base.swing || 0;
+    if (id === 'mv') return normMv(mvOf(dir, base));
     return null;
   }
 
+  // the dials that rebuild the line itself (the rest only set a number on the card)
+  const LINE_DIALS = /^(density|rhythm|accent|mood|range)$/;
+
   /** the card rebuilt from its base with every setting in set, in a fixed order */
   function build(dir, base, set, idea) {
-    const keys = Object.keys(set).filter((id) => set[id] !== own(id, dir, base));
+    const keys = Object.keys(set).filter((id) => (id === 'mv' ? !sameMv(set.mv, own('mv', dir, base)) : set[id] !== own(id, dir, base)));
     if (!keys.length) return base;
     const s = {};
     keys.forEach((id) => { s[id] = set[id]; });
     let o = Object.assign({}, base);
     const r0 = rhythmOf(dir, base);
-    if (r0) {
+    if (r0 && keys.some((id) => LINE_DIALS.test(id))) {
       const m = T.meter(r0.m || null);
       let r = r0, hits = r0.hits;
       if (s.density != null) {
@@ -211,6 +224,15 @@
     }
     if (s.speed != null) o.bpm = s.speed;
     if (s.swing != null) o.swing = s.swing;
+    // the moves go on the line as it now stands: its own, or the ones set here
+    const line = dir === 'rrhythm' ? o.r : melOf(dir, o);
+    if (line && MV_DIRS.test(dir)) {
+      const mv = 'mv' in s ? normMv(s.mv) : own('mv', dir, base), t = Object.assign({}, line);
+      if (mv) t.mv = mv;
+      else delete t.mv;
+      if (dir === 'rrhythm') o.r = t;
+      else o.mel = t;
+    }
     o.tw = { base, set: s };
     return o;
   }
@@ -228,7 +250,7 @@
    */
   const DIALS = [
     {
-      id: 'range', lo: 'Narrow', hi: 'Wide', up: 'wider', down: 'narrower', dirs: /^seed2$/, still: 'this shape',
+      id: 'range', name: 'Range', line: 'How far the tune travels, same ups and downs.', lo: 'Narrow', hi: 'Wide', up: 'wider', down: 'narrower', dirs: /^seed2$/, still: 'this shape',
       why: () => '',
       stops(c) {
         const mel = c.cur.mel, sh = mel.shape, hits = mel.r.hits, n = hits.length;
@@ -257,7 +279,7 @@
       say: (c, a, b) => 'it travels ' + plural(b.range, 'step') + ' instead of ' + a.range + ', with the same ups and downs.',
     },
     {
-      id: 'mood', lo: 'Dark', hi: 'Bright', up: 'brighter', down: 'darker', dirs: /^(seed1|seed2)$/, still: 'this tune',
+      id: 'mood', name: 'Mood', line: 'The same steps in a darker or brighter scale.', lo: 'Dark', hi: 'Bright', up: 'brighter', down: 'darker', dirs: /^(seed1|seed2)$/, still: 'this tune',
       why(c) {
         if (A.pathOf(c.idea) !== 'melody') return 'The groove under it set the scale, so the tune keeps it.';
         if (!familyOf(c.cur.mel.scale)) return A.MODE[c.cur.mel.scale].name + ' has no darker or brighter twin with as many notes.';
@@ -269,7 +291,7 @@
       say: (c, a, b) => A.MODE[b.v].name + ' instead of ' + A.MODE[a.v].name + '. ' + (c.dir === 'seed1' ? 'Same rhythm, walking a ' + (b.pos > a.pos ? 'brighter' : 'darker') + ' scale.' : 'Same rhythm, same ups and downs.'),
     },
     {
-      id: 'density', lo: 'Sparse', hi: 'Busy', up: 'busier', down: 'sparser', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
+      id: 'density', name: 'Density', line: 'Fewer notes or more, grown from the same seed.', lo: 'Sparse', hi: 'Busy', up: 'busier', down: 'sparser', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
       why(c) {
         const r = rhythmOf(c.dir, c.base);
         return r && r.seed != null && r.d != null ? '' : 'This rhythm came without its seed, so it can’t be grown again. Pick it again from the deck to tweak it.';
@@ -313,7 +335,7 @@
       },
     },
     {
-      id: 'rhythm', lo: 'On the beat', hi: 'Off the beat', up: 'further off the beat', down: 'closer to the beat', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
+      id: 'rhythm', name: 'Push', line: 'Notes just ahead of the beat, or right on it.', lo: 'On the beat', hi: 'Off the beat', up: 'further off the beat', down: 'closer to the beat', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
       why(c) {
         const r = rhythmOf(c.dir, c.base);
         if (r.fam === 'threes') return 'Its accents fall in threes across the beat. Moving notes would undo them.';
@@ -339,7 +361,7 @@
       },
     },
     {
-      id: 'accent', lo: 'With the count', hi: 'Across the count', up: 'further across the count', down: 'closer to the count', dirs: /^(seed1|hook)$/, still: 'this rhythm',
+      id: 'accent', name: 'Grouping', line: 'Accents with the count, or across it.', lo: 'With the count', hi: 'Across the count', up: 'further across the count', down: 'closer to the count', dirs: /^(seed1|hook)$/, still: 'this rhythm',
       why(c) {
         return this.stops(c).length < 2 ? 'Its notes fall where any accents would, so there’s nothing to move.' : '';
       },
@@ -358,7 +380,7 @@
       say: (c, a, b) => 'the same notes, accented ' + b.name + '.',
     },
     {
-      id: 'speed', lo: 'Slow', hi: 'Quick', up: 'quicker', down: 'slower', dirs: /^(pocket|sound)$/, still: 'this groove',
+      id: 'speed', name: 'Speed', line: 'The same groove, slower or quicker.', lo: 'Slow', hi: 'Quick', up: 'quicker', down: 'slower', dirs: /^(pocket|sound)$/, still: 'this groove',
       why: () => '',
       stops(c) {
         const v0 = own('speed', c.dir, c.base), cur = c.set.speed != null ? c.set.speed : v0;
@@ -372,7 +394,7 @@
       say: (c, a, b) => b.v + ' BPM instead of ' + a.v + '.',
     },
     {
-      id: 'swing', lo: 'Tight', hi: 'Swingy', up: 'swingier', down: 'tighter', dirs: /^(pocket|sound)$/, still: 'this groove',
+      id: 'swing', name: 'Swing', line: 'The off-beats later, or back on the grid.', lo: 'Tight', hi: 'Swingy', up: 'swingier', down: 'tighter', dirs: /^(pocket|sound)$/, still: 'this groove',
       why: (c) => (c.m.compound ? 'It moves in threes, so there’s no off-beat to swing.' : ''),
       stops(c) {
         const v0 = own('swing', c.dir, c.base), cur = c.set.swing != null ? c.set.swing : v0;
@@ -419,7 +441,7 @@
     return DIALS.filter((d) => d.dirs.test(dir) && (d.id !== 'range' || (o.mel && o.mel.shape))).map((d) => {
       const c = ctxOf(dir, o, idea, d.id);
       const why = d.why(c);
-      const out = { id: d.id, lo: d.lo, hi: d.hi, pos: 0.5, home: 0.5, stops: [], reach: [0.5, 0.5], fixed: !!why, why };
+      const out = { id: d.id, name: d.name, line: d.line, lo: d.lo, hi: d.hi, pos: 0.5, home: 0.5, stops: [], reach: [0.5, 0.5], fixed: !!why, why };
       if (why) return out;
       const st = d.stops(c), v = valueOf(c, d.id), v0 = own(d.id, dir, c.base);
       const ok = st.filter((x) => x.ok);
@@ -460,6 +482,107 @@
     return { card, text, limit };
   }
 
+  // ---------------------------------------------------------------- moves: the small things it can do at one spot
+
+  const MV_DIRS = /^(seed1|seed2|hook|rrhythm)$/;
+  function mvOf(dir, o) { const t = dir === 'rrhythm' ? o && o.r : melOf(dir, o); return (t && t.mv) || null; }
+  /** a line's moves in one form, so two that play the same compare the same (null: none) */
+  function normMv(mv) {
+    if (!mv || !Odd.moves) return null;
+    const ids = Odd.moves.LIST.map((x) => x.id).filter((id) => mv[id]);
+    if (!ids.length) return null;
+    const out = {};
+    ids.forEach((id) => { out[id] = { a: mv[id].a | 0, skip: (mv[id].skip || []).slice().sort((x, y) => x - y) }; });
+    return out;
+  }
+  function sameMv(a, b) { return JSON.stringify(normMv(a)) === JSON.stringify(normMv(b)); }
+  /** the line moves play on: the card with every dial set, before any move */
+  function bareNotes(dir, o) {
+    if (dir === 'rrhythm') return A.riffNotes({ r: Object.assign({}, o.r, { mv: null }) });
+    return A.melodyNotes(Object.assign({}, o.mel, { mv: null }), dir === 'seed1');
+  }
+  function cxOf(dir, o) { return dir === 'rrhythm' ? A.riffCx(o.r) : A.melCx(o.mel); }
+  const unitOf = (dir) => (dir === 'rrhythm' ? 'hit' : 'note');
+  /** a riff's rhythm has hits, not notes */
+  const asHits = (t) => t.replace(/(N|n)ote(s?)/g, (w, c, pl) => (c === 'N' ? 'H' : 'h') + 'it' + pl);
+  function lineFor(L, dir) { return dir !== 'rrhythm' ? L.line : L.hitLine || asHits(L.line); }
+  function stopsFor(L, dir) { return dir !== 'rrhythm' ? L.stops : L.stops.map(asHits); }
+  function canMove(dir, o) { return !!(o && Odd.moves && MV_DIRS.test(dir) && (dir === 'rrhythm' ? o.r : o.mel)); }
+
+  /** every move this card can make, and where: the ones with nowhere to go aren't listed */
+  function movesFor(dir, o) {
+    if (!canMove(dir, o)) return [];
+    const base = o.tw ? o.tw.base : o, cur = normMv(mvOf(dir, o)) || {}, home = normMv(mvOf(dir, base)) || {};
+    const ns = bareNotes(dir, o), cx = cxOf(dir, o);
+    return Odd.moves.LIST.map((L) => {
+      const sp = Odd.moves.spots(L.id, ns, cx);
+      if (!sp.length) return null;
+      const m = cur[L.id], h = home[L.id];
+      return {
+        id: L.id, name: L.name, line: lineFor(L, dir), stops: stopsFor(L, dir), def: L.def, a: m ? m.a : -1, home: h ? h.a : -1,
+        spots: sp.map((s) => ({ s, on: !!m && m.skip.indexOf(s) < 0 })),
+      };
+    }).filter(Boolean);
+  }
+
+  function withMv(dir, o, idea, mv) {
+    const base = o.tw ? o.tw.base : o, set = o.tw ? o.tw.set : {};
+    return build(dir, base, Object.assign({}, set, { mv: Object.keys(mv).length ? mv : null }), idea);
+  }
+  function moveSay(dir, card, id) {
+    const L = Odd.moves.MOVE[id], x = movesFor(dir, card).find((m) => m.id === id);
+    if (!x || x.a < 0) return L.name + ': off.';
+    return L.name + ', ' + x.stops[x.a].toLowerCase() + ', on ' + count(x.spots.filter((p) => p.on).length, unitOf(dir)) + '.';
+  }
+
+  /** a move at amount a (an index into its stops), or off (a -1) */
+  function setMove(dir, o, idea, id, a) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L) return null;
+    const cur = Object.assign({}, normMv(mvOf(dir, o)) || {}), was = cur[id];
+    let off = '';
+    if (a < 0) {
+      if (!was) return null;
+      delete cur[id];
+    } else {
+      const to = Math.max(0, Math.min(L.stops.length - 1, a | 0));
+      if (was && was.a === to) return null;
+      cur[id] = { a: to, skip: was ? was.skip : [] };
+      if (L.not && cur[L.not]) { delete cur[L.not]; off = Odd.moves.MOVE[L.not].name; }
+    }
+    const card = withMv(dir, o, idea, cur);
+    let text = moveSay(dir, card, id);
+    if (off) text += ' ' + off + ' is off: a ' + unitOf(dir) + ' can’t be both.';
+    if (!card.tw) text += ' That’s how it came.';
+    return { card, text };
+  }
+
+  /** leave one spot out of a move, or put it back; leaving out the last turns it off */
+  function toggleSpot(dir, o, idea, id, s) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L) return null;
+    const cur = Object.assign({}, normMv(mvOf(dir, o)) || {}), m = cur[id];
+    if (!m) return null;
+    const sp = Odd.moves.spots(id, bareNotes(dir, o), cxOf(dir, o));
+    if (sp.indexOf(s) < 0) return null;
+    const back = m.skip.indexOf(s) >= 0, skip = back ? m.skip.filter((x) => x !== s) : m.skip.concat([s]);
+    const left = sp.filter((x) => skip.indexOf(x) < 0).length, unit = unitOf(dir);
+    if (left) cur[id] = { a: m.a, skip };
+    else delete cur[id];
+    const card = withMv(dir, o, idea, cur);
+    let text = !left ? L.name + ': off. That was the last ' + unit + ' it was on.'
+      : (back ? 'Back on that ' + unit + '. ' : 'Left that ' + unit + ' out. ') + L.name + ' on ' + left + ' of ' + plural(sp.length, unit) + '.';
+    if (!card.tw) text += ' That’s how it came.';
+    return { card, text };
+  }
+
+  /** a move that's off, tried at its usual amount */
+  function tryMove(dir, o, idea, id) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L || (normMv(mvOf(dir, o)) || {})[id]) return null;
+    return setMove(dir, o, idea, id, L.def);
+  }
+
   /** the card as it came, before any dial was turned */
   function reset(o) { return o && o.tw ? o.tw.base : o; }
   function tweaked(o) { return !!(o && o.tw); }
@@ -493,5 +616,5 @@
     return { id: d.id, pos, line };
   }
 
-  Odd.tweak = { DIALS, DIAL, BRIGHT, has, dialsFor, turn, reset, tweaked, nudge, build, shove, regrow };
+  Odd.tweak = { DIALS, DIAL, BRIGHT, has, dialsFor, turn, movesFor, setMove, toggleSpot, tryMove, reset, tweaked, nudge, build, shove, regrow };
 })(globalThis.Odd = globalThis.Odd || {});

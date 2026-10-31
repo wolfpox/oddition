@@ -451,14 +451,25 @@
   }
   function shapeSteps(kind, n, amp, hits) { return shapeOf(kind, n, hits).map((h) => Math.round(h * amp)); }
 
-  /** the melody's notes: { s, d, w, deg, m }. walk = round 1 (rhythm and scale only) */
+  /**
+   * The melody's notes: { s, d, w, deg, m }, with its moves played (mel.mv,
+   * Odd.moves: added notes carry orn, a changed loudness v). walk = round 1
+   * (rhythm and scale only).
+   */
   function melodyNotes(mel, walk) {
     const hs = mel.r.hits, n = hs.length;
     let steps, start = 0;
     if (walk || !mel.shape) steps = hs.map((_, i) => (i === n - 1 ? 0 : WALK[i % 8]));
     else { steps = shapeSteps(mel.shape.kind, n, mel.shape.amp, hs); start = mel.shape.start; }
-    return hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
+    const ns = hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
+    return mel.mv && Odd.moves ? Odd.moves.apply(ns, mel.mv, melCx(mel)) : ns;
   }
+  const MEL_VEL = [64, 90, 115];
+  /** what a move needs to know about a melody: its length, its loudness, its scale */
+  function melCx(mel) { return { T: stepsOf(mel), vel: MEL_VEL, step: (n, k) => ({ deg: n.deg + k, m: degMidi(mel.scale, n.deg + k) }) }; }
+  /** ... and about a riff's rhythm, which has one pitch per hit until it gets notes */
+  function riffCx(r) { return { T: 2 * Odd.theory.meter(r.m || null).steps, vel: RIFF_VEL, step: null }; }
+  const velOf = (n, table) => (n.v != null ? n.v : table[n.w]);
 
   // ---------------------------------------------------------------- chords, worked out from the melody
 
@@ -1172,7 +1183,8 @@
    */
   function riffNotes(riff) {
     const ms = riff.notes ? riff.notes.ms : null;
-    return riff.r.hits.map((h, i) => ({ s: h[0], d: h[2] === 2 ? h[1] : h[2] === 1 ? Math.min(h[1], 2) : 1, w: h[2], x: ms ? ms[i] : 0, m: 48 + (ms ? ms[i] : 0) }));
+    const ns = riff.r.hits.map((h, i) => ({ s: h[0], d: h[2] === 2 ? h[1] : h[2] === 1 ? Math.min(h[1], 2) : 1, w: h[2], x: ms ? ms[i] : 0, m: 48 + (ms ? ms[i] : 0) }));
+    return riff.r.mv && Odd.moves ? Odd.moves.apply(ns, riff.r.mv, riffCx(riff.r)) : ns;
   }
 
   const RIFF_SCALES = ['phrygian', 'harmonic', 'minor', 'blues', 'mpenta', 'dorian', 'mixolydian', 'penta', 'major']; // dark to bright
@@ -1657,12 +1669,15 @@
   }
   const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
+  /** a tune keeps the moves it was given (Tweak) into the rounds after */
+  function withMoves(mel, from) { if (from && from.mv) mel.mv = from.mv; return mel; }
+
   /** a shape candidate as an option: it starts where it lands on the note its direction wants */
   function shapeOpt(mel, st, c) {
     const sc = SCALES[mel.scale];
     const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
     const start = startFor(mel.scale, c.s, land);
-    return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
+    return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: withMoves({ r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } }, mel) };
   }
 
   /** the scale step a shape starts on so that it lands on `target` semitones above home */
@@ -1691,7 +1706,7 @@
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
   function walkOption(mel) {
-    return { a: 0, land: 0, leap: 1, range: 4, end: 0, size: 1, walk: true, mel: { r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } } };
+    return { a: 0, land: 0, leap: 1, range: 4, end: 0, size: 1, walk: true, mel: withMoves({ r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } }, mel) };
   }
 
   // ---------------------------------------------------------------- words
@@ -1875,12 +1890,12 @@
     if (mel) {
       const up = (sound && sound.up) || 0;
       track('mel', P.lead, MIX.mel * lead);
-      melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, [64, 90, 115][n.w], 14));
+      melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, velOf(n, MEL_VEL), 14));
     }
     if (riff) {
       const vs = riffVoices(riff);
       vs.forEach((v) => { const k = v.part === 'low' ? 'rlo' : 'rhi'; track(k, sound ? (v.part === 'low' ? P.bass : P.lead) : v.patch, MIX[k] * lead); });
-      riffNotes(riff).forEach((n) => vs.forEach((v) => note(TRACK[v.part === 'low' ? 'rlo' : 'rhi'], n.s, n.d, riffPitch(v, n.x, riff.scale), RIFF_VEL[n.w], 12)));
+      riffNotes(riff).forEach((n) => vs.forEach((v) => note(TRACK[v.part === 'low' ? 'rlo' : 'rhi'], n.s, n.d, riffPitch(v, n.x, riff.scale), velOf(n, RIFF_VEL), 12)));
       if (!kit && (!riff.weight || itself)) {
         track('tik', P.kit, MIX.tik);
         beatsOf(m).forEach((b) => hit(TRACK.tik, b.s, DRUM.hat, b.k === 0 ? 50 : 34));
@@ -2042,10 +2057,10 @@
     const out = [];
     const up = (sound && sound.up) || 0;
     const tune = path === 'melody' ? idea.melody : hookOf(idea);
-    if (tune) out.push({ label: path === 'melody' ? 'Melody' : 'Hook', part: pitched('lead', (path === 'melody' ? 'Melody: ' : 'Hook: ') + ideaName(idea), 60 + up, melodyNotes(tune).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
+    if (tune) out.push({ label: path === 'melody' ? 'Melody' : 'Hook', part: pitched('lead', (path === 'melody' ? 'Melody: ' : 'Hook: ') + ideaName(idea), 60 + up, melodyNotes(tune).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: velOf(n, MEL_VEL) }))) });
     if (path === 'riff') {
       const r = idea.riff, vs = riffVoices(r), ns = riffNotes(r);
-      const of = (part) => [].concat.apply([], ns.map((n) => vs.filter((v) => v.part === part).map((v) => ({ s: n.s, d: n.d, m: riffPitch(v, n.x, r.scale), v: RIFF_VEL[n.w] }))));
+      const of = (part) => [].concat.apply([], ns.map((n) => vs.filter((v) => v.part === part).map((v) => ({ s: n.s, d: n.d, m: riffPitch(v, n.x, r.scale), v: velOf(n, RIFF_VEL) }))));
       if (vs.some((v) => v.part === 'high')) out.push({ label: 'Riff', part: pitched('lead', 'Riff: ' + ideaName(idea), 48, of('high')) });
       if (vs.some((v) => v.part === 'low')) out.push({ label: 'Riff, low', part: pitched('bass', 'Riff (low): ' + ideaName(idea), 36, of('low')) });
     }
@@ -2134,7 +2149,7 @@
       const onward = (dir) => Object.assign(ns, { phase: 'round', round: { dir, batch: 0, steer: { p: 0, s: 0, x: null } }, sel: 1, kind: 'rise', added: null });
       const done = (added) => Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added });
       const clear = () => { idea.layers = {}; idea.order = []; };
-      if (d === 'seed1') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'seed1') { idea.melody = withMoves({ r: o.mel.r, scale: o.mel.scale, shape: null }, o.mel); return onward('seed2'); }
       if (d === 'seed2') {
         idea.melody = o.mel;
         if (path === 'melody') { clear(); return done('seed2'); }
@@ -2143,7 +2158,7 @@
         if (idea.order.indexOf('hook') < 0) idea.order.push('hook');
         return done('hook');
       }
-      if (d === 'hook') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'hook') { idea.melody = withMoves({ r: o.mel.r, scale: o.mel.scale, shape: null }, o.mel); return onward('seed2'); }
       if (d === 'rrhythm') { idea.riff = { r: o.r, scale: null, notes: null, weight: null }; clear(); return onward('rnotes'); }
       if (d === 'rnotes') { idea.riff = Object.assign({}, idea.riff, { scale: o.scale, notes: o, weight: null }); clear(); return onward('weight'); }
       if (d === 'weight') { idea.riff = Object.assign({}, idea.riff, { weight: o }); return done('weight'); }
@@ -2255,7 +2270,7 @@
     pocketStyles, grooveBass, keysStyles, hookStyles, riffPool, riffTag, threesOf, riffNotes, riffNoteStyles, weightStyles, riffKits, underStyles,
     riffVoices, riffPitch, chordLine, climbLines, metaOf, example, pickedLine, NO_CHORDS,
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
-    makeRhythm, rhythmPool, rhythmTag, makeRiff, makeThrees, accentRiff, riffOff, offCount, onPulse, ACCENTS, accentsOf, accentHits, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
+    makeRhythm, rhythmPool, rhythmTag, makeRiff, makeThrees, accentRiff, riffOff, offCount, onPulse, ACCENTS, accentsOf, accentHits, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, melCx, riffCx, MEL_VEL, RIFF_VEL, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
     steerPool, deckOf, fullDeck, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, cap, KEY_WORD, UNDER_INST, PAD_INST, BASS_WORD, KIT_WORD, VOICE_WORD, climbSeq, lineage, ideaName, toParts, flow,

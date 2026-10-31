@@ -8,7 +8,7 @@ const path = require('node:path');
 for (const f of [
   'core/rng', 'core/theory', 'gen/styles', 'gen/names', 'gen/drums', 'gen/perc', 'gen/bass', 'gen/chords', 'gen/pad',
   'gen/lead', 'gen/arp', 'gen/band', 'gen/index', 'core/shape', 'core/render', 'core/edit', 'core/model', 'core/idea',
-  'core/audition', 'core/watch', 'core/tweak', 'core/booth',
+  'core/audition', 'core/watch', 'core/moves', 'core/tweak', 'core/booth',
 ]) require(path.join(__dirname, '..', 'js', f + '.js'));
 
 const Odd = globalThis.Odd;
@@ -214,4 +214,126 @@ test('Bobby turns the dial with the most room on the side the card doesn’t lea
     const again = B.nudge(r.S, 0, n.id);
     if (again && free.length > 1) assert.notStrictEqual(again.id, n.id, dir);
   }
+});
+
+// ---------------------------------------------------------------- moves: the small things a line can do at one spot
+
+const MV = ['seed1', 'seed2', 'hook', 'rrhythm'];
+/** the line a card plays: a tune's notes, or a riff rhythm's hits, with its moves */
+const lineOf = (dir, o) => (dir === 'rrhythm' ? A.riffNotes({ r: o.r }) : A.melodyNotes(o.mel, dir === 'seed1'));
+const loopOf = (dir, o) => 2 * Odd.theory.meter((dir === 'rrhythm' ? o.r : o.mel.r).m || null).steps;
+
+test('every move keeps the line itself: its notes start where they did, on their pitches, and it lands where it did', () => {
+  let tried = 0;
+  for (const dir of MV) for (const i of [0, 1, 2]) {
+    const S = R[dir], o = F.options(S)[i], base = lineOf(dir, o), T = loopOf(dir, o);
+    const ms = B.moves(S, i);
+    assert.ok(ms.length >= 2, dir + ' it has moves: ' + ms.map((m) => m.id));
+    ms.forEach((m) => {
+      assert.ok(m.spots.length > 0 && m.a === -1, dir + ' ' + m.id + ' listed only where it has somewhere to go');
+      assert.ok(clean(m.name) && clean(m.line) && m.stops.every(clean), dir + ' ' + m.id);
+      if (dir === 'rrhythm') assert.ok(!/note/i.test(m.line + m.stops.join()), 'a riff rhythm has hits: ' + m.line);
+      m.stops.forEach((_, a) => {
+        const r = Odd.tweak.setMove(dir, o, S.idea, m.id, a);
+        assert.ok(r && r.card !== o && clean(r.text), dir + ' ' + m.id + ' ' + a);
+        tried++;
+        const ns = lineOf(dir, r.card);
+        // its own notes: same onsets, same pitches; added ones are marked
+        base.forEach((b) => assert.ok(ns.some((n) => !n.orn && n.s === b.s && n.m === b.m), dir + ' ' + m.id + ' keeps the note at ' + b.s));
+        assert.strictEqual(ns.filter((n) => !n.orn).length, base.length, dir + ' ' + m.id + ' adds only marked notes');
+        assert.strictEqual(ns[ns.length - 1].m, base[base.length - 1].m, dir + ' ' + m.id + ' lands where it did');
+        // inside the loop, and nothing rings into the note after it
+        ns.forEach((n, k) => {
+          assert.ok(n.s >= 0 && n.d > 0 && n.s + n.d <= T + 1e-9, dir + ' ' + m.id + ' inside its bars');
+          if (k > 0) assert.ok(ns[k - 1].s + ns[k - 1].d <= n.s + 1e-9, dir + ' ' + m.id + ' no overlap at ' + n.s);
+        });
+        const q = A.seq(S.idea, { dir, spec: r.card });
+        assert.ok(q.events.length > 0 && q.events.every((e) => e.t >= 0 && e.d > 0 && e.t + e.d <= q.length), dir + ' ' + m.id + ' it plays');
+        // and it's audible: something about the line changed
+        assert.notDeepStrictEqual(ns.map((n) => [n.s, n.d, n.v]), base.map((n) => [n.s, n.d, n.v]), dir + ' ' + m.id + ' changes what plays');
+      });
+    });
+  }
+  assert.ok(tried >= 100, 'moves tried: ' + tried);
+});
+
+test('a move plays at its spots, and a spot left out is left alone', () => {
+  const near = (ns, s) => ns.filter((n) => n.orn && n.s < s && n.s >= s - 3);
+  for (const dir of MV) {
+    const S = R[dir];
+    for (const i of [0, 1, 2]) {
+      const o = F.options(S)[i], base = lineOf(dir, o), at = (ns, s) => ns.find((n) => !n.orn && n.s === s);
+      B.moves(S, i).forEach((m) => {
+        const r = B.flow.move(S, i, m.id, m.def), ns = lineOf(dir, F.options(r.S)[i]);
+        m.spots.forEach((p) => {
+          const b = at(base, p.s), n = at(ns, p.s);
+          if (m.id === 'accent') assert.ok(n.v > (dir === 'rrhythm' ? A.RIFF_VEL : A.MEL_VEL)[b.w], dir + ' accented');
+          if (m.id === 'ghost') assert.ok(n.v < (dir === 'rrhythm' ? A.RIFF_VEL : A.MEL_VEL)[b.w], dir + ' ghosted');
+          if (m.id === 'short') assert.ok(n.d < b.d, dir + ' clipped');
+          if (m.id === 'tie') assert.ok(n.d > b.d, dir + ' tied over');
+          if (m.id === 'repeat') assert.ok(ns.filter((x) => x.orn === 'repeat' && x.s > p.s && x.s < p.s + b.d).length >= 1, dir + ' repeated');
+          if (m.id === 'grace' || m.id === 'pickup') assert.ok(near(ns, p.s).some((x) => x.orn === m.id), dir + ' ' + m.id + ' before ' + p.s);
+        });
+        // leave the first spot out: that note plays as it came
+        const s = m.spots[0].s, left = B.flow.spot(r.S, i, m.id, s);
+        assert.ok(left && clean(left.text), dir + ' ' + m.id + ' a spot left out');
+        const after = B.moves(left.S, i).find((x) => x.id === m.id);
+        if (m.spots.length === 1) { assert.strictEqual(after.a, -1, dir + ' leaving out the last one turns it off'); return; }
+        assert.ok(!after.spots.find((x) => x.s === s).on && after.spots.filter((x) => x.on).length === m.spots.length - 1, dir + ' ' + m.id + ' that one is out');
+        const ln = lineOf(dir, F.options(left.S)[i]), n = at(ln, s), b = at(base, s);
+        if (m.id !== 'tie' && m.id !== 'short' && m.id !== 'repeat') assert.ok(n.d === b.d || n.d < b.d, dir + ' ' + m.id + ' only shortened by what follows it');
+        if (m.id === 'accent' || m.id === 'ghost') assert.strictEqual(n.v, undefined, dir + ' ' + m.id + ' not louder or softer');
+        if (m.id === 'short' || m.id === 'tie') assert.ok(Math.abs(n.d - b.d) < 1e-9 || n.d < b.d, dir + ' ' + m.id + ' its own length');
+        if (m.id === 'grace' || m.id === 'pickup') assert.strictEqual(near(ln, s).filter((x) => x.orn === m.id).length, 0, dir + ' nothing added before it');
+        // and back on
+        const back = B.flow.spot(left.S, i, m.id, s);
+        assert.deepStrictEqual(B.moves(back.S, i).find((x) => x.id === m.id).spots, B.moves(r.S, i).find((x) => x.id === m.id).spots, dir + ' put back');
+      });
+    }
+  }
+});
+
+test('moves turn off, give the card back, sit with the dials, and go on with the tune', () => {
+  const S = R.seed1, o = F.options(S)[0], ms = B.moves(S, 0);
+  // on, then off: the card it came with
+  const on = B.flow.move(S, 0, ms[0].id, ms[0].def), off = B.flow.move(on.S, 0, ms[0].id, -1);
+  assert.strictEqual(F.options(off.S)[0], o, 'all moves off is the card itself');
+  assert.ok(/off/.test(off.text) && /how it came/.test(off.text), off.text);
+  assert.strictEqual(B.flow.untweak(on.S, 0).S.round.subs[F.info(S).batch][0], o, 'back to how it came');
+  // clipped and tied over can't both be on
+  for (const dir of MV) for (const i of [0, 1, 2]) {
+    const ids = B.moves(R[dir], i).map((m) => m.id);
+    if (ids.indexOf('short') < 0 || ids.indexOf('tie') < 0) continue;
+    const a = B.flow.move(R[dir], i, 'short', 1), b = B.flow.move(a.S, i, 'tie', 1);
+    const now = B.moves(b.S, i);
+    assert.ok(now.find((m) => m.id === 'tie').a === 1 && now.find((m) => m.id === 'short').a === -1, dir + ' tied over turns clipped off');
+    assert.ok(/can’t be both/.test(b.text), b.text);
+  }
+  // a dial turned keeps the moves, and the moves keep the dial
+  const acc = ms.find((m) => m.id === 'accent' || m.id === 'ghost') || ms[0];
+  const m1 = B.flow.move(S, 0, acc.id, acc.def);
+  const d = B.dials(m1.S, 0).find((x) => x.id === 'mood' && !x.fixed);
+  if (d) {
+    const t = B.flow.tune(m1.S, 0, 'mood', d.reach[d.pos > 0.5 ? 0 : 1]);
+    assert.ok(t && !t.same);
+    assert.strictEqual(B.moves(t.S, 0).find((m) => m.id === acc.id).a, acc.def, 'the move stays when a dial turns');
+    assert.notStrictEqual(F.options(t.S)[0].mel.scale, o.mel.scale);
+    const m2 = B.flow.move(t.S, 0, acc.id, -1);
+    assert.strictEqual(F.options(m2.S)[0].mel.scale, F.options(t.S)[0].mel.scale, 'the dial stays when the move goes');
+  }
+  // kept, the moves go on with the tune: into its shapes, and into the melody
+  const kept = F.pick(m1.S, 0);
+  assert.deepStrictEqual(kept.idea.melody.mv, F.options(m1.S)[0].mel.mv);
+  assert.ok(!JSON.stringify(kept.idea).includes('"tw"'), 'no tweak bookkeeping in the idea');
+  const shapes = F.options(kept);
+  assert.ok(shapes.every((x) => JSON.stringify(x.mel.mv) === JSON.stringify(kept.idea.melody.mv)), 'every shape plays them');
+  const melody = F.pick(kept, 0);
+  assert.deepStrictEqual(melody.idea.melody.mv, kept.idea.melody.mv, 'and the melody keeps them');
+  // a riff rhythm's moves go on into its notes and its weight
+  const rr = R.rrhythm, rm = B.moves(rr, 0).find((m) => m.id === 'pickup' || m.id === 'tie') || B.moves(rr, 0)[0];
+  const rt = B.flow.move(rr, 0, rm.id, rm.def), rk = F.pick(rt.S, 0);
+  assert.ok(rk.idea.riff.r.mv && rk.idea.riff.r.mv[rm.id], 'the riff keeps its moves');
+  const withNotes = A.riffNotes({ r: rk.idea.riff.r, notes: F.options(rk)[0] });
+  assert.ok(withNotes.length >= rk.idea.riff.r.hits.length, 'they play once it has notes');
+  assert.ok(A.seq(rk.idea, { dir: 'rnotes', spec: F.options(rk)[0] }).events.length > 0);
 });

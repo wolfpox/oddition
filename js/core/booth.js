@@ -4,7 +4,7 @@
  * actually plays (its tempo, notes, range, instrument...), turns a "no"
  * into reasons with the numbers behind them, finds a version of the card
  * changed on those reasons, or filters the deck of cards like it. Tweak
- * turns the card's own dials (Odd.tweak): what if it were brighter, busier?
+ * turns the card's own dials and moves (Odd.tweak): what if it were brighter, busier, with grace notes?
  * It also holds Bobby's encyclopedia: questions a card raises, and his
  * answers, each ending in directions the deck can be steered in.
  *
@@ -292,6 +292,10 @@
   /** Bobby's turn of a dial on the card in slot i: { id, pos, line } or null */
   function nudge(S, i, last) { const o = F.options(S)[i]; return o ? Odd.tweak.nudge(S.round.dir, o, S.idea, last) : null; }
   function isTweaked(S, i) { return Odd.tweak.tweaked(F.options(S)[i]); }
+  /** the moves the card in slot i can make (or card, when one is being tried in its place) */
+  function moves(S, i, card) { const o = card || F.options(S)[i]; return o ? Odd.tweak.movesFor(S.round.dir, o, S.idea) : []; }
+  /** the card in slot i with a move tried at its usual amount, without putting it in the slot: { card, text } or null */
+  function tryMove(S, i, id) { const o = F.options(S)[i]; return o ? Odd.tweak.tryMove(S.round.dir, o, S.idea, id) : null; }
   /** a card takes slot i of the batch on screen, and lifts there */
   function swap(S, i, card) {
     const b = F.info(S).batch;
@@ -329,6 +333,18 @@
       if (!r) return null;
       if (r.same) return { S, same: true, text: r.text, limit: r.limit };
       return { S: swap(S, i, r.card), text: r.text, limit: r.limit };
+    },
+    /** a move at amount a (-1: off) on the card in slot i: { S, text } or null when nothing changes */
+    move(S, i, id, a) {
+      const o = F.options(S)[i];
+      const r = o ? Odd.tweak.setMove(S.round.dir, o, S.idea, id, a) : null;
+      return r ? { S: swap(S, i, r.card), text: r.text } : null;
+    },
+    /** leave the move's spot at onset s out, or put it back: { S, text } or null */
+    spot(S, i, id, s) {
+      const o = F.options(S)[i];
+      const r = o ? Odd.tweak.toggleSpot(S.round.dir, o, S.idea, id, s) : null;
+      return r ? { S: swap(S, i, r.card), text: r.text } : null;
     },
     /** every dial back: the card as it came. { S, text } or null when it wasn't tweaked */
     untweak(S, i) {
@@ -631,7 +647,7 @@
   Odd.booth = {
     FACTORS, TOPICS, TOPIC: T, READY, ASK_WHY, OWN,
     measure, reasonsFor, facts, changed, cutsFor, keep, fp, isOut, poolOf,
-    canTweak, dials, nudge, isTweaked,
+    canTweak, dials, nudge, isTweaked, moves, tryMove,
     questions, answer, explain, ready, intervalName, noteName,
     flow,
   };

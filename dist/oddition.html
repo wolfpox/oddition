@@ -1557,6 +1557,7 @@ body:not([data-screen="song"]) #songb { display: none; }
 .b-blk.soft { background: color-mix(in srgb, var(--b-bone) 55%, transparent); }
 .b-blk.ghost { background: color-mix(in srgb, var(--r-lead) 28%, transparent); }
 .b-blk.half { opacity: 0.55; }
+.b-blk.orn { background: var(--b-gold); opacity: 0.85; }
 .b-blk.kick { filter: brightness(1.2); }
 .b-dot { width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--b-bone2); }
 .b-dot.land { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--b-gold); }
@@ -2088,7 +2089,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
 }
 
 /* ======================= the booth =======================
- * Under the card that's playing: ✗ not it, ? what is it, ✓ keep it.
+ * Under the card that's playing: ✗ not it, Tweak (what if?), ✓ keep it.
  * Bobby's bubble holds the questions a card raises and the reasons for a no. */
 .b-booth { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 12px); z-index: 2; justify-content: center; gap: 14px; animation: b-fadeup 0.25s ease-out backwards; }
 .b-card.lifted .b-booth { display: flex; }
@@ -2104,30 +2105,52 @@ span.sg-rname { cursor: default; color: var(--muted); }
 .b-bx.yes:hover { filter: brightness(1.06); }
 .b-card.b-nope:not(.lifted) { opacity: 0.42; }
 .b-card.b-nope::after { content: '✕'; position: absolute; top: -12px; left: 12px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #d8423a; color: #fff; font-size: 13px; font-weight: 800; }
-/* Tweak: the lifted card's own dials, a word at each end. The two words
- * mirror each other: the one the knob leans to lights up as the other
- * fades. Every card shares the scale, so a card comes already turned; the
- * line across is the middle of it. The bright band is as far as the card
- * reaches and stays itself, a tick each spot it can go, the ring where it came. */
+/* Tweak: everything the lifted card can do, one slide at a time. A dial's
+ * two words mirror each other and its middle line is neutral: every card
+ * shares the scale, so a card comes already turned. The lighter band is as
+ * far as it reaches and stays itself, a tick each spot it can go, the ring
+ * where it came. A move starts at Off, and while it's being tried its knob
+ * is hollow. The marks above sit under the notes a move plays on: tap one
+ * to leave it out. The dots below are every slide; filled ones are turned. */
 .b-tune:empty { display: none; }
-.b-tune { position: relative; z-index: 2; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); animation: b-fadeup 0.25s ease-out backwards; }
-.b-faders { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 12px; }
-.b-fader { --trk: 96px; --end: 30px; position: relative; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.b-fader::before { content: ''; position: absolute; left: 4px; right: 4px; top: calc(var(--end) + 6px + var(--trk) / 2); height: 1px; background: color-mix(in srgb, var(--ink) 24%, transparent); pointer-events: none; }
-.b-fend { height: var(--end); width: 100%; display: flex; justify-content: center; text-align: center; font-size: 11.5px; line-height: 14px; font-weight: 700; color: var(--ink); transition: opacity 0.2s; }
-.b-fend.hi { align-items: flex-end; opacity: calc(0.3 + 0.7 * var(--p)); }
-.b-fend.lo { align-items: flex-start; opacity: calc(1 - 0.7 * var(--p)); }
-.b-ftrack { position: relative; width: 30px; height: var(--trk); border-radius: 9px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 5%, transparent) 0 4px, transparent 4px 8px); touch-action: none; cursor: ns-resize; outline-offset: 3px; }
-.b-ftrack:focus-visible { outline: 2px solid var(--b-gold); }
-.b-freach { position: absolute; left: 0; right: 0; border-radius: 8px; background: color-mix(in srgb, var(--ink) 13%, var(--panel)); pointer-events: none; }
-.b-fmark { position: absolute; left: 9px; right: 9px; height: 1px; background: color-mix(in srgb, var(--ink) 38%, transparent); pointer-events: none; }
-.b-fhome { position: absolute; left: 50%; width: 8px; height: 8px; margin: 0 0 -4px -4px; border-radius: 50%; border: 1.5px solid var(--b-bone2); box-sizing: border-box; pointer-events: none; }
-.b-ffill { position: absolute; left: 13px; width: 4px; bottom: var(--fb); height: var(--fh); border-radius: 2px; background: var(--b-gold); pointer-events: none; transition: bottom 0.35s cubic-bezier(.2,.8,.2,1), height 0.35s cubic-bezier(.2,.8,.2,1); }
-.b-fknob { position: absolute; left: 1px; right: 1px; height: 12px; bottom: calc(var(--p) * 100% - 6px); border-radius: 4px; background: var(--b-gold); box-shadow: 0 2px 6px rgba(0,0,0,.35); pointer-events: none; transition: bottom 0.35s cubic-bezier(.2,.8,.2,1); }
-.b-fader.drag .b-fknob, .b-fader.drag .b-ffill { transition: none; }
-.b-fader.fixed { opacity: 0.4; }
-.b-fader.fixed .b-ftrack { cursor: help; }
-.b-fader.fixed .b-fknob { background: var(--muted); }
+.b-tune { position: relative; z-index: 2; margin-top: 2px; animation: b-fadeup 0.25s ease-out backwards; }
+.b-spots { position: relative; height: 15px; }
+.b-spot { position: absolute; top: 3px; width: 9px; height: 9px; margin-left: -4.5px; padding: 0; border: 1.5px solid var(--b-gold); border-radius: 2px; background: transparent; transform: rotate(45deg); box-sizing: border-box; cursor: pointer; }
+.b-spot.on { background: var(--b-gold); }
+.b-spot:disabled { border-color: color-mix(in srgb, var(--ink) 30%, transparent); cursor: default; }
+.b-spot:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.b-car { border-top: 1px solid var(--line); padding-top: 8px; }
+.b-car-top { display: flex; align-items: center; gap: 6px; }
+.b-car-go { flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); }
+.b-car-go:hover { border-color: var(--b-bone2); }
+.b-car-go:focus-visible { outline: 2px solid var(--b-gold); outline-offset: 1px; }
+.b-car-name { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.b-car-name b { font-size: 15px; }
+.b-car-val { font-family: var(--font-mono); font-size: 12px; color: var(--b-gold); }
+.b-car-line { margin: 4px 0 8px; min-height: 2.6em; text-align: center; font-size: 12px; line-height: 1.3; color: var(--muted); }
+.b-hf { --p: 0.5; --fl: 0%; --fw: 0%; position: relative; }
+.b-htrack { position: relative; height: 26px; margin: 0 7px; border-radius: 9px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 5%, transparent) 0 4px, transparent 4px 8px); touch-action: none; cursor: ew-resize; outline-offset: 3px; }
+.b-htrack:focus-visible { outline: 2px solid var(--b-gold); }
+.b-car[data-kind="move"] .b-htrack { background: color-mix(in srgb, var(--ink) 11%, var(--panel)); }
+.b-car[data-kind="dial"] .b-htrack::before { content: ''; position: absolute; left: 50%; top: 3px; bottom: 3px; width: 1px; background: color-mix(in srgb, var(--ink) 24%, transparent); pointer-events: none; }
+.b-hreach { position: absolute; top: 0; bottom: 0; border-radius: 8px; background: color-mix(in srgb, var(--ink) 13%, var(--panel)); pointer-events: none; }
+.b-hmark { position: absolute; top: 9px; bottom: 9px; width: 1px; background: color-mix(in srgb, var(--ink) 38%, transparent); pointer-events: none; }
+.b-hhome { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1.5px solid var(--b-bone2); box-sizing: border-box; pointer-events: none; }
+.b-hfill { position: absolute; top: 11px; height: 4px; left: var(--fl); width: var(--fw); border-radius: 2px; background: var(--b-gold); pointer-events: none; transition: left 0.35s cubic-bezier(.2,.8,.2,1), width 0.35s cubic-bezier(.2,.8,.2,1); }
+.b-hknob { position: absolute; top: 1px; bottom: 1px; width: 12px; left: calc(var(--p) * 100% - 6px); border-radius: 4px; background: var(--b-gold); box-shadow: 0 2px 6px rgba(0,0,0,.35); box-sizing: border-box; pointer-events: none; transition: left 0.35s cubic-bezier(.2,.8,.2,1); }
+.b-hf.try .b-hknob { background: var(--panel); border: 2px solid var(--b-gold); }
+.b-hf.try .b-hfill { opacity: 0.45; }
+.b-hf.drag .b-hknob, .b-hf.drag .b-hfill { transition: none; }
+.b-hends { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.b-car-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.b-car-strip { display: flex; flex-wrap: wrap; gap: 2px; }
+.b-ctick { padding: 3px 2px; border: 0; background: transparent; cursor: pointer; }
+.b-ctick i { display: block; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--ink) 35%, transparent); box-sizing: border-box; }
+.b-ctick.mv i { border-radius: 1.5px; transform: rotate(45deg) scale(0.9); }
+.b-ctick.set i { background: var(--b-bone2); border-color: var(--b-bone2); }
+.b-ctick.now i { border-color: var(--b-gold); }
+.b-ctick.now.set i { background: var(--b-gold); }
+.b-car-count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 .b-tune-do { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .b-tune-do .b-link { font-size: 13px; padding: 6px 2px; }
 .b-watching .b-tune { display: none; }
@@ -9602,14 +9625,25 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
   function shapeSteps(kind, n, amp, hits) { return shapeOf(kind, n, hits).map((h) => Math.round(h * amp)); }
 
-  /** the melody's notes: { s, d, w, deg, m }. walk = round 1 (rhythm and scale only) */
+  /**
+   * The melody's notes: { s, d, w, deg, m }, with its moves played (mel.mv,
+   * Odd.moves: added notes carry orn, a changed loudness v). walk = round 1
+   * (rhythm and scale only).
+   */
   function melodyNotes(mel, walk) {
     const hs = mel.r.hits, n = hs.length;
     let steps, start = 0;
     if (walk || !mel.shape) steps = hs.map((_, i) => (i === n - 1 ? 0 : WALK[i % 8]));
     else { steps = shapeSteps(mel.shape.kind, n, mel.shape.amp, hs); start = mel.shape.start; }
-    return hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
+    const ns = hs.map((h, i) => ({ s: h[0], d: h[1], w: h[2], deg: start + steps[i], m: degMidi(mel.scale, start + steps[i]) }));
+    return mel.mv && Odd.moves ? Odd.moves.apply(ns, mel.mv, melCx(mel)) : ns;
   }
+  const MEL_VEL = [64, 90, 115];
+  /** what a move needs to know about a melody: its length, its loudness, its scale */
+  function melCx(mel) { return { T: stepsOf(mel), vel: MEL_VEL, step: (n, k) => ({ deg: n.deg + k, m: degMidi(mel.scale, n.deg + k) }) }; }
+  /** ... and about a riff's rhythm, which has one pitch per hit until it gets notes */
+  function riffCx(r) { return { T: 2 * Odd.theory.meter(r.m || null).steps, vel: RIFF_VEL, step: null }; }
+  const velOf = (n, table) => (n.v != null ? n.v : table[n.w]);
 
   // ---------------------------------------------------------------- chords, worked out from the melody
 
@@ -10323,7 +10357,8 @@ span.sg-rname { cursor: default; color: var(--muted); }
    */
   function riffNotes(riff) {
     const ms = riff.notes ? riff.notes.ms : null;
-    return riff.r.hits.map((h, i) => ({ s: h[0], d: h[2] === 2 ? h[1] : h[2] === 1 ? Math.min(h[1], 2) : 1, w: h[2], x: ms ? ms[i] : 0, m: 48 + (ms ? ms[i] : 0) }));
+    const ns = riff.r.hits.map((h, i) => ({ s: h[0], d: h[2] === 2 ? h[1] : h[2] === 1 ? Math.min(h[1], 2) : 1, w: h[2], x: ms ? ms[i] : 0, m: 48 + (ms ? ms[i] : 0) }));
+    return riff.r.mv && Odd.moves ? Odd.moves.apply(ns, riff.r.mv, riffCx(riff.r)) : ns;
   }
 
   const RIFF_SCALES = ['phrygian', 'harmonic', 'minor', 'blues', 'mpenta', 'dorian', 'mixolydian', 'penta', 'major']; // dark to bright
@@ -10808,12 +10843,15 @@ span.sg-rname { cursor: default; color: var(--muted); }
   }
   const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
+  /** a tune keeps the moves it was given (Tweak) into the rounds after */
+  function withMoves(mel, from) { if (from && from.mv) mel.mv = from.mv; return mel; }
+
   /** a shape candidate as an option: it starts where it lands on the note its direction wants */
   function shapeOpt(mel, st, c) {
     const sc = SCALES[mel.scale];
     const land = st.x === 'home' || c.end < 0 ? 0 : c.end > 0 ? 7 : sc.indexOf(4) >= 0 ? 4 : 3;
     const start = startFor(mel.scale, c.s, land);
-    return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: { r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } } };
+    return { a: c.end + c.range * 0.01, b: c.range, land, leap: c.leap, range: c.range, end: c.end, size: c.size, mel: withMoves({ r: mel.r, scale: mel.scale, shape: { kind: c.kind, amp: c.amp, start } }, mel) };
   }
 
   /** the scale step a shape starts on so that it lands on `target` semitones above home */
@@ -10842,7 +10880,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
 
   /** round 2's extra choice: keep the melody exactly as it walked through its scale in round 1 */
   function walkOption(mel) {
-    return { a: 0, land: 0, leap: 1, range: 4, end: 0, size: 1, walk: true, mel: { r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } } };
+    return { a: 0, land: 0, leap: 1, range: 4, end: 0, size: 1, walk: true, mel: withMoves({ r: mel.r, scale: mel.scale, shape: { kind: 'walk', amp: 1, start: 0 } }, mel) };
   }
 
   // ---------------------------------------------------------------- words
@@ -11026,12 +11064,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (mel) {
       const up = (sound && sound.up) || 0;
       track('mel', P.lead, MIX.mel * lead);
-      melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, [64, 90, 115][n.w], 14));
+      melodyNotes(mel, aud && aud.dir === 'seed1').forEach((n) => note(TRACK.mel, n.s, n.d, n.m + up, velOf(n, MEL_VEL), 14));
     }
     if (riff) {
       const vs = riffVoices(riff);
       vs.forEach((v) => { const k = v.part === 'low' ? 'rlo' : 'rhi'; track(k, sound ? (v.part === 'low' ? P.bass : P.lead) : v.patch, MIX[k] * lead); });
-      riffNotes(riff).forEach((n) => vs.forEach((v) => note(TRACK[v.part === 'low' ? 'rlo' : 'rhi'], n.s, n.d, riffPitch(v, n.x, riff.scale), RIFF_VEL[n.w], 12)));
+      riffNotes(riff).forEach((n) => vs.forEach((v) => note(TRACK[v.part === 'low' ? 'rlo' : 'rhi'], n.s, n.d, riffPitch(v, n.x, riff.scale), velOf(n, RIFF_VEL), 12)));
       if (!kit && (!riff.weight || itself)) {
         track('tik', P.kit, MIX.tik);
         beatsOf(m).forEach((b) => hit(TRACK.tik, b.s, DRUM.hat, b.k === 0 ? 50 : 34));
@@ -11193,10 +11231,10 @@ span.sg-rname { cursor: default; color: var(--muted); }
     const out = [];
     const up = (sound && sound.up) || 0;
     const tune = path === 'melody' ? idea.melody : hookOf(idea);
-    if (tune) out.push({ label: path === 'melody' ? 'Melody' : 'Hook', part: pitched('lead', (path === 'melody' ? 'Melody: ' : 'Hook: ') + ideaName(idea), 60 + up, melodyNotes(tune).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: [64, 90, 115][n.w] }))) });
+    if (tune) out.push({ label: path === 'melody' ? 'Melody' : 'Hook', part: pitched('lead', (path === 'melody' ? 'Melody: ' : 'Hook: ') + ideaName(idea), 60 + up, melodyNotes(tune).map((n) => ({ s: n.s, d: n.d, m: n.m + up, v: velOf(n, MEL_VEL) }))) });
     if (path === 'riff') {
       const r = idea.riff, vs = riffVoices(r), ns = riffNotes(r);
-      const of = (part) => [].concat.apply([], ns.map((n) => vs.filter((v) => v.part === part).map((v) => ({ s: n.s, d: n.d, m: riffPitch(v, n.x, r.scale), v: RIFF_VEL[n.w] }))));
+      const of = (part) => [].concat.apply([], ns.map((n) => vs.filter((v) => v.part === part).map((v) => ({ s: n.s, d: n.d, m: riffPitch(v, n.x, r.scale), v: velOf(n, RIFF_VEL) }))));
       if (vs.some((v) => v.part === 'high')) out.push({ label: 'Riff', part: pitched('lead', 'Riff: ' + ideaName(idea), 48, of('high')) });
       if (vs.some((v) => v.part === 'low')) out.push({ label: 'Riff, low', part: pitched('bass', 'Riff (low): ' + ideaName(idea), 36, of('low')) });
     }
@@ -11285,7 +11323,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       const onward = (dir) => Object.assign(ns, { phase: 'round', round: { dir, batch: 0, steer: { p: 0, s: 0, x: null } }, sel: 1, kind: 'rise', added: null });
       const done = (added) => Object.assign(ns, { phase: 'next', round: null, sel: -1, kind: 'pop', added });
       const clear = () => { idea.layers = {}; idea.order = []; };
-      if (d === 'seed1') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'seed1') { idea.melody = withMoves({ r: o.mel.r, scale: o.mel.scale, shape: null }, o.mel); return onward('seed2'); }
       if (d === 'seed2') {
         idea.melody = o.mel;
         if (path === 'melody') { clear(); return done('seed2'); }
@@ -11294,7 +11332,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
         if (idea.order.indexOf('hook') < 0) idea.order.push('hook');
         return done('hook');
       }
-      if (d === 'hook') { idea.melody = { r: o.mel.r, scale: o.mel.scale, shape: null }; return onward('seed2'); }
+      if (d === 'hook') { idea.melody = withMoves({ r: o.mel.r, scale: o.mel.scale, shape: null }, o.mel); return onward('seed2'); }
       if (d === 'rrhythm') { idea.riff = { r: o.r, scale: null, notes: null, weight: null }; clear(); return onward('rnotes'); }
       if (d === 'rnotes') { idea.riff = Object.assign({}, idea.riff, { scale: o.scale, notes: o, weight: null }); clear(); return onward('weight'); }
       if (d === 'weight') { idea.riff = Object.assign({}, idea.riff, { weight: o }); return done('weight'); }
@@ -11406,7 +11444,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     pocketStyles, grooveBass, keysStyles, hookStyles, riffPool, riffTag, threesOf, riffNotes, riffNoteStyles, weightStyles, riffKits, underStyles,
     riffVoices, riffPitch, chordLine, climbLines, metaOf, example, pickedLine, NO_CHORDS,
     meterOf, stepsOf, slotsOf, kitsFor, meterLine,
-    makeRhythm, rhythmPool, rhythmTag, makeRiff, makeThrees, accentRiff, riffOff, offCount, onPulse, ACCENTS, accentsOf, accentHits, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, startFor,
+    makeRhythm, rhythmPool, rhythmTag, makeRiff, makeThrees, accentRiff, riffOff, offCount, onPulse, ACCENTS, accentsOf, accentHits, shapeOf, shapeSteps, shapeTag, sizeOf, melodyNotes, melCx, riffCx, MEL_VEL, RIFF_VEL, startFor,
     chordCands, chordPool, chordsFor, chordName, bassStyles, padStyles, percStyles, soundStyles,
     steerPool, deckOf, fullDeck, deckInfo, options, walkOption, tagOf, statOf, rankOf, leadOf, comment, whyText, directions,
     emptyIdea, upTo, seq, climb, cap, KEY_WORD, UNDER_INST, PAD_INST, BASS_WORD, KIT_WORD, VOICE_WORD, climbSeq, lineage, ideaName, toParts, flow,
@@ -11672,6 +11710,141 @@ span.sg-rname { cursor: default; color: var(--muted); }
   Odd.watch = { TRAITS, BRIEFS, BRIEF_ORDER, AXIS, plan, transcript, waysFor };
 })(globalThis.Odd = globalThis.Odd || {});
 
+/* js/core/moves.js */
+/* Oddition — moves: the small, named things a line can do at the spots that allow them.
+ *
+ * Like the moves of a chess piece, each one has a rule for where it's
+ * legal: repeats on the long notes, a grace note into the strong ones, a
+ * pickup into a note after a rest. A move never changes when the line's own
+ * notes start or which pitch they are, so the line stays itself. Moves only
+ * shape lengths and loudness, or add short notes around the line's own.
+ *
+ * A line's moves: mv = { [id]: { a, skip } }, a the amount (an index into
+ * the move's stops), skip the onsets (in steps) it leaves out. A move is
+ * played at every spot that allows it, except those.
+ *
+ *   spots(id, notes, cx) -> the onsets where it's legal
+ *   apply(notes, mv, cx) -> the notes with the moves played
+ *
+ * notes are { s, d, w, m, ... } in steps, sorted by s (a melody's carry
+ * deg, a riff's x). cx = { T: steps in the loop, vel: the velocity of each
+ * weight [ghost, plain, accent], step(n, k): the note k scale steps from n,
+ * as { deg, m }, or null on a line with one pitch (a riff's rhythm) }.
+ * Added notes carry orn: 'grace' | 'pickup' | 'repeat'; a changed loudness
+ * is n.v.
+ */
+(function (Odd) {
+  'use strict';
+
+  // in the order the carousel shows them: long notes, strong notes, the ones between, then the gaps
+  const LIST = [
+    { id: 'repeat', name: 'Repeats', line: 'Each long note broken into repeats.', stops: ['Twice', 'In eighths', 'In sixteenths'], def: 0 },
+    { id: 'short', name: 'Clipped', line: 'Notes cut short, detached.', stops: ['A bit', 'Half', 'Clipped'], def: 1, not: 'tie' },
+    { id: 'grace', name: 'Grace notes', line: 'A quick flick into each strong note.', stops: ['Quick', 'Lazy'], def: 0, pitched: true },
+    { id: 'accent', name: 'Accents', line: 'Leans on the notes on the beat.', stops: ['A touch', 'Firm', 'Hard'], def: 1 },
+    { id: 'ghost', name: 'Ghost notes', line: 'The notes between the beats, barely there.', stops: ['Softer', 'Ghostly', 'Barely there'], def: 1 },
+    { id: 'tie', name: 'Tied over', line: 'Each note held into the next.', stops: ['Halfway', 'All the way'], def: 1, not: 'short' },
+    { id: 'pickup', name: 'Pickups', line: 'Steps up into each note after a rest.', hitLine: 'A hit before each one after a rest.', stops: ['One note', 'Two', 'Three'], def: 0 },
+  ];
+  const MOVE = {};
+  LIST.forEach((x) => { MOVE[x.id] = x; });
+
+  const CLIP = [0.75, 0.5, 0.25], TIE = [0.5, 1], GRACE = [0.5, 1], LIFT = [10, 20, 32], HUSH = [0.75, 0.58, 0.4];
+
+  function amountOf(id, mv) { const L = MOVE[id], a = mv[id].a | 0; return Math.max(0, Math.min(L.stops.length - 1, a)); }
+  function velOf(n, cx) { return n.v != null ? n.v : cx.vel[n.w] || cx.vel[1]; }
+
+  /** where a move is legal on a line: the onsets of the notes it would play on */
+  function spots(id, ns, cx) {
+    const L = MOVE[id];
+    if (!L || (L.pitched && !cx.step)) return [];
+    const n = ns.length, T = cx.T, out = [];
+    const end = (i) => ns[i].s + ns[i].d;
+    const after = (i) => (i < n - 1 ? ns[i + 1].s : T) - end(i);
+    const before = (i) => ns[i].s - (i > 0 ? end(i - 1) : 0);
+    ns.forEach((x, i) => {
+      let ok = false;
+      if (id === 'repeat') ok = x.d >= 4;
+      // the last note keeps its length and its loudness: it's where the line lands
+      else if (id === 'short') ok = x.d >= 2 && i < n - 1;
+      else if (id === 'grace') ok = x.w === 2 && x.d >= 2 && x.s >= 1;
+      else if (id === 'accent') ok = x.w === 1;
+      else if (id === 'ghost') ok = x.w === 0 && i > 0 && i < n - 1;
+      else if (id === 'tie') ok = i < n - 1 && after(i) >= 1;
+      else if (id === 'pickup') ok = before(i) >= 2;
+      if (ok) out.push(x.s);
+    });
+    return out;
+  }
+
+  /** the line with its moves played; the notes it came with keep their onsets and pitches */
+  function apply(notes, mv, cx) {
+    if (!mv || !notes.length) return notes;
+    const ids = LIST.map((x) => x.id).filter((id) => mv[id] && (!MOVE[id].pitched || cx.step));
+    if (!ids.length) return notes;
+    const on = {};
+    ids.forEach((id) => {
+      const skip = mv[id].skip || [];
+      on[id] = {};
+      spots(id, notes, cx).forEach((s) => { if (skip.indexOf(s) < 0) on[id][s] = 1; });
+    });
+    const at = (id, s) => !!(on[id] && on[id][s]);
+    const ns = notes.map((n) => Object.assign({}, n));
+    ns.forEach((n, i) => {
+      // lengths: clipped or tied over (never both: clipped wins)
+      if (at('short', n.s)) n.d = Math.max(0.5, n.d * CLIP[amountOf('short', mv)]);
+      else if (at('tie', n.s)) {
+        const next = i < ns.length - 1 ? notes[i + 1].s : cx.T;
+        n.d += (next - (n.s + n.d)) * TIE[amountOf('tie', mv)];
+      }
+      // loudness
+      if (at('accent', n.s)) n.v = Math.min(127, velOf(n, cx) + LIFT[amountOf('accent', mv)]);
+      if (at('ghost', n.s)) n.v = Math.max(12, Math.round(velOf(n, cx) * HUSH[amountOf('ghost', mv)]));
+    });
+    const out = [];
+    ns.forEach((n, i) => {
+      const prev = i > 0 ? notes[i - 1] : null;
+      if (at('pickup', n.s)) {
+        // up into it by step, a sixteenth each, as many as the rest has room for
+        const room = Math.floor(n.s - (prev ? prev.s + prev.d : 0));
+        const k = Math.min(amountOf('pickup', mv) + 1, room);
+        for (let j = k; j >= 1; j--) {
+          const p = cx.step ? cx.step(n, -j) : null;
+          out.push(Object.assign({}, n, p, { s: n.s - j, d: 1, w: 0, v: Math.round(velOf(n, cx) * 0.72), orn: 'pickup' }));
+        }
+      }
+      if (at('grace', n.s)) {
+        // just before the beat, from the side the line comes from, in what room there is after the note before
+        const g = Math.min(GRACE[amountOf('grace', mv)], prev ? (n.s - prev.s) / 2 : n.s);
+        const side = prev && prev.m > n.m ? 1 : -1;
+        out.push(Object.assign({}, n, cx.step(n, side), { s: n.s - g, d: g, w: 0, v: Math.max(30, Math.round(velOf(n, cx) * 0.7)), orn: 'grace' }));
+      }
+      if (at('repeat', n.s)) {
+        const a = amountOf('repeat', mv), r = a === 0 ? n.d / 2 : a === 1 ? 2 : 1;
+        const k = Math.floor(n.d / r + 1e-6);
+        if (k >= 2) {
+          for (let j = 0; j < k; j++) {
+            const x = Object.assign({}, n, { s: n.s + j * r, d: j === k - 1 ? n.d - j * r : r });
+            if (j) Object.assign(x, { w: Math.min(n.w, 1), v: Math.round(velOf(n, cx) * 0.82), orn: 'repeat' });
+            out.push(x);
+          }
+          return;
+        }
+      }
+      out.push(n);
+    });
+    out.sort((a, b) => a.s - b.s);
+    // nothing rings into the note after it, and nothing leaves the loop
+    for (let i = 0; i < out.length - 1; i++) {
+      const room = out[i + 1].s - out[i].s;
+      if (out[i].d > room) out[i].d = Math.max(0.25, room);
+    }
+    return out.filter((n) => n.s >= 0 && n.s < cx.T).map((n) => { if (n.s + n.d > cx.T) n.d = cx.T - n.s; return n; });
+  }
+
+  Odd.moves = { LIST, MOVE, spots, apply };
+})(globalThis.Odd = globalThis.Odd || {});
+
 /* js/core/tweak.js */
 /* Oddition — tweaks: what if the card you're holding were brighter, busier, wider?
  *
@@ -11691,12 +11864,21 @@ span.sg-rname { cursor: default; color: var(--muted); }
  *   swingier or tighter the off-beats later or back on the grid
  * Turn every dial back and the card comes back exactly (the same object).
  *
- *   dialsFor(dir, o, idea) -> [{ id, lo, hi, pos, home, stops, reach, fixed, why }]
+ * Moves (Odd.moves) are the small things a tune or a riff's rhythm can do
+ * at the spots that allow them: repeats, grace notes, pickups... A move
+ * plays at every legal spot unless that spot is left out. They sit on the
+ * line (mel.mv, r.mv), so they go on with it into the rounds after.
+ *
+ *   dialsFor(dir, o, idea) -> [{ id, name, line, lo, hi, pos, home, stops, reach, fixed, why }]
  *   turn(dir, o, idea, id, pos) -> { card, text, limit } | { same, limit, text } | null
+ *   movesFor(dir, o, idea) -> [{ id, name, line, stops, def, a, home, spots: [{ s, on }] }]  (a -1: off)
+ *   setMove(dir, o, idea, id, a) -> { card, text } | null      (a -1 turns it off)
+ *   toggleSpot(dir, o, idea, id, s) -> { card, text } | null   (leave one spot out, or put it back)
+ *   tryMove(dir, o, idea, id) -> { card, text } | null         (the move at its usual amount, when it's off)
  *   reset(o) -> the card as it came
  *   nudge(dir, o, idea, last) -> { id, pos, line } | null
  *
- * A tweaked card carries o.tw = { base, set: { dialId: value } }, and is
+ * A tweaked card carries o.tw = { base, set: { dialId: value, mv } }, and is
  * always rebuilt from the base, so turns never pile up.
  */
 (function (Odd) {
@@ -11828,18 +12010,22 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if (id === 'range') return mel && mel.shape ? mel.shape.amp : null;
     if (id === 'speed') return base.bpm;
     if (id === 'swing') return base.swing || 0;
+    if (id === 'mv') return normMv(mvOf(dir, base));
     return null;
   }
 
+  // the dials that rebuild the line itself (the rest only set a number on the card)
+  const LINE_DIALS = /^(density|rhythm|accent|mood|range)$/;
+
   /** the card rebuilt from its base with every setting in set, in a fixed order */
   function build(dir, base, set, idea) {
-    const keys = Object.keys(set).filter((id) => set[id] !== own(id, dir, base));
+    const keys = Object.keys(set).filter((id) => (id === 'mv' ? !sameMv(set.mv, own('mv', dir, base)) : set[id] !== own(id, dir, base)));
     if (!keys.length) return base;
     const s = {};
     keys.forEach((id) => { s[id] = set[id]; });
     let o = Object.assign({}, base);
     const r0 = rhythmOf(dir, base);
-    if (r0) {
+    if (r0 && keys.some((id) => LINE_DIALS.test(id))) {
       const m = T.meter(r0.m || null);
       let r = r0, hits = r0.hits;
       if (s.density != null) {
@@ -11886,6 +12072,15 @@ span.sg-rname { cursor: default; color: var(--muted); }
     }
     if (s.speed != null) o.bpm = s.speed;
     if (s.swing != null) o.swing = s.swing;
+    // the moves go on the line as it now stands: its own, or the ones set here
+    const line = dir === 'rrhythm' ? o.r : melOf(dir, o);
+    if (line && MV_DIRS.test(dir)) {
+      const mv = 'mv' in s ? normMv(s.mv) : own('mv', dir, base), t = Object.assign({}, line);
+      if (mv) t.mv = mv;
+      else delete t.mv;
+      if (dir === 'rrhythm') o.r = t;
+      else o.mel = t;
+    }
     o.tw = { base, set: s };
     return o;
   }
@@ -11903,7 +12098,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
    */
   const DIALS = [
     {
-      id: 'range', lo: 'Narrow', hi: 'Wide', up: 'wider', down: 'narrower', dirs: /^seed2$/, still: 'this shape',
+      id: 'range', name: 'Range', line: 'How far the tune travels, same ups and downs.', lo: 'Narrow', hi: 'Wide', up: 'wider', down: 'narrower', dirs: /^seed2$/, still: 'this shape',
       why: () => '',
       stops(c) {
         const mel = c.cur.mel, sh = mel.shape, hits = mel.r.hits, n = hits.length;
@@ -11932,7 +12127,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       say: (c, a, b) => 'it travels ' + plural(b.range, 'step') + ' instead of ' + a.range + ', with the same ups and downs.',
     },
     {
-      id: 'mood', lo: 'Dark', hi: 'Bright', up: 'brighter', down: 'darker', dirs: /^(seed1|seed2)$/, still: 'this tune',
+      id: 'mood', name: 'Mood', line: 'The same steps in a darker or brighter scale.', lo: 'Dark', hi: 'Bright', up: 'brighter', down: 'darker', dirs: /^(seed1|seed2)$/, still: 'this tune',
       why(c) {
         if (A.pathOf(c.idea) !== 'melody') return 'The groove under it set the scale, so the tune keeps it.';
         if (!familyOf(c.cur.mel.scale)) return A.MODE[c.cur.mel.scale].name + ' has no darker or brighter twin with as many notes.';
@@ -11944,7 +12139,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       say: (c, a, b) => A.MODE[b.v].name + ' instead of ' + A.MODE[a.v].name + '. ' + (c.dir === 'seed1' ? 'Same rhythm, walking a ' + (b.pos > a.pos ? 'brighter' : 'darker') + ' scale.' : 'Same rhythm, same ups and downs.'),
     },
     {
-      id: 'density', lo: 'Sparse', hi: 'Busy', up: 'busier', down: 'sparser', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
+      id: 'density', name: 'Density', line: 'Fewer notes or more, grown from the same seed.', lo: 'Sparse', hi: 'Busy', up: 'busier', down: 'sparser', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
       why(c) {
         const r = rhythmOf(c.dir, c.base);
         return r && r.seed != null && r.d != null ? '' : 'This rhythm came without its seed, so it can’t be grown again. Pick it again from the deck to tweak it.';
@@ -11988,7 +12183,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       },
     },
     {
-      id: 'rhythm', lo: 'On the beat', hi: 'Off the beat', up: 'further off the beat', down: 'closer to the beat', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
+      id: 'rhythm', name: 'Push', line: 'Notes just ahead of the beat, or right on it.', lo: 'On the beat', hi: 'Off the beat', up: 'further off the beat', down: 'closer to the beat', dirs: /^(seed1|seed2|hook|rrhythm)$/, still: 'this rhythm',
       why(c) {
         const r = rhythmOf(c.dir, c.base);
         if (r.fam === 'threes') return 'Its accents fall in threes across the beat. Moving notes would undo them.';
@@ -12014,7 +12209,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       },
     },
     {
-      id: 'accent', lo: 'With the count', hi: 'Across the count', up: 'further across the count', down: 'closer to the count', dirs: /^(seed1|hook)$/, still: 'this rhythm',
+      id: 'accent', name: 'Grouping', line: 'Accents with the count, or across it.', lo: 'With the count', hi: 'Across the count', up: 'further across the count', down: 'closer to the count', dirs: /^(seed1|hook)$/, still: 'this rhythm',
       why(c) {
         return this.stops(c).length < 2 ? 'Its notes fall where any accents would, so there’s nothing to move.' : '';
       },
@@ -12033,7 +12228,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       say: (c, a, b) => 'the same notes, accented ' + b.name + '.',
     },
     {
-      id: 'speed', lo: 'Slow', hi: 'Quick', up: 'quicker', down: 'slower', dirs: /^(pocket|sound)$/, still: 'this groove',
+      id: 'speed', name: 'Speed', line: 'The same groove, slower or quicker.', lo: 'Slow', hi: 'Quick', up: 'quicker', down: 'slower', dirs: /^(pocket|sound)$/, still: 'this groove',
       why: () => '',
       stops(c) {
         const v0 = own('speed', c.dir, c.base), cur = c.set.speed != null ? c.set.speed : v0;
@@ -12047,7 +12242,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       say: (c, a, b) => b.v + ' BPM instead of ' + a.v + '.',
     },
     {
-      id: 'swing', lo: 'Tight', hi: 'Swingy', up: 'swingier', down: 'tighter', dirs: /^(pocket|sound)$/, still: 'this groove',
+      id: 'swing', name: 'Swing', line: 'The off-beats later, or back on the grid.', lo: 'Tight', hi: 'Swingy', up: 'swingier', down: 'tighter', dirs: /^(pocket|sound)$/, still: 'this groove',
       why: (c) => (c.m.compound ? 'It moves in threes, so there’s no off-beat to swing.' : ''),
       stops(c) {
         const v0 = own('swing', c.dir, c.base), cur = c.set.swing != null ? c.set.swing : v0;
@@ -12094,7 +12289,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return DIALS.filter((d) => d.dirs.test(dir) && (d.id !== 'range' || (o.mel && o.mel.shape))).map((d) => {
       const c = ctxOf(dir, o, idea, d.id);
       const why = d.why(c);
-      const out = { id: d.id, lo: d.lo, hi: d.hi, pos: 0.5, home: 0.5, stops: [], reach: [0.5, 0.5], fixed: !!why, why };
+      const out = { id: d.id, name: d.name, line: d.line, lo: d.lo, hi: d.hi, pos: 0.5, home: 0.5, stops: [], reach: [0.5, 0.5], fixed: !!why, why };
       if (why) return out;
       const st = d.stops(c), v = valueOf(c, d.id), v0 = own(d.id, dir, c.base);
       const ok = st.filter((x) => x.ok);
@@ -12135,6 +12330,107 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return { card, text, limit };
   }
 
+  // ---------------------------------------------------------------- moves: the small things it can do at one spot
+
+  const MV_DIRS = /^(seed1|seed2|hook|rrhythm)$/;
+  function mvOf(dir, o) { const t = dir === 'rrhythm' ? o && o.r : melOf(dir, o); return (t && t.mv) || null; }
+  /** a line's moves in one form, so two that play the same compare the same (null: none) */
+  function normMv(mv) {
+    if (!mv || !Odd.moves) return null;
+    const ids = Odd.moves.LIST.map((x) => x.id).filter((id) => mv[id]);
+    if (!ids.length) return null;
+    const out = {};
+    ids.forEach((id) => { out[id] = { a: mv[id].a | 0, skip: (mv[id].skip || []).slice().sort((x, y) => x - y) }; });
+    return out;
+  }
+  function sameMv(a, b) { return JSON.stringify(normMv(a)) === JSON.stringify(normMv(b)); }
+  /** the line moves play on: the card with every dial set, before any move */
+  function bareNotes(dir, o) {
+    if (dir === 'rrhythm') return A.riffNotes({ r: Object.assign({}, o.r, { mv: null }) });
+    return A.melodyNotes(Object.assign({}, o.mel, { mv: null }), dir === 'seed1');
+  }
+  function cxOf(dir, o) { return dir === 'rrhythm' ? A.riffCx(o.r) : A.melCx(o.mel); }
+  const unitOf = (dir) => (dir === 'rrhythm' ? 'hit' : 'note');
+  /** a riff's rhythm has hits, not notes */
+  const asHits = (t) => t.replace(/(N|n)ote(s?)/g, (w, c, pl) => (c === 'N' ? 'H' : 'h') + 'it' + pl);
+  function lineFor(L, dir) { return dir !== 'rrhythm' ? L.line : L.hitLine || asHits(L.line); }
+  function stopsFor(L, dir) { return dir !== 'rrhythm' ? L.stops : L.stops.map(asHits); }
+  function canMove(dir, o) { return !!(o && Odd.moves && MV_DIRS.test(dir) && (dir === 'rrhythm' ? o.r : o.mel)); }
+
+  /** every move this card can make, and where: the ones with nowhere to go aren't listed */
+  function movesFor(dir, o) {
+    if (!canMove(dir, o)) return [];
+    const base = o.tw ? o.tw.base : o, cur = normMv(mvOf(dir, o)) || {}, home = normMv(mvOf(dir, base)) || {};
+    const ns = bareNotes(dir, o), cx = cxOf(dir, o);
+    return Odd.moves.LIST.map((L) => {
+      const sp = Odd.moves.spots(L.id, ns, cx);
+      if (!sp.length) return null;
+      const m = cur[L.id], h = home[L.id];
+      return {
+        id: L.id, name: L.name, line: lineFor(L, dir), stops: stopsFor(L, dir), def: L.def, a: m ? m.a : -1, home: h ? h.a : -1,
+        spots: sp.map((s) => ({ s, on: !!m && m.skip.indexOf(s) < 0 })),
+      };
+    }).filter(Boolean);
+  }
+
+  function withMv(dir, o, idea, mv) {
+    const base = o.tw ? o.tw.base : o, set = o.tw ? o.tw.set : {};
+    return build(dir, base, Object.assign({}, set, { mv: Object.keys(mv).length ? mv : null }), idea);
+  }
+  function moveSay(dir, card, id) {
+    const L = Odd.moves.MOVE[id], x = movesFor(dir, card).find((m) => m.id === id);
+    if (!x || x.a < 0) return L.name + ': off.';
+    return L.name + ', ' + x.stops[x.a].toLowerCase() + ', on ' + count(x.spots.filter((p) => p.on).length, unitOf(dir)) + '.';
+  }
+
+  /** a move at amount a (an index into its stops), or off (a -1) */
+  function setMove(dir, o, idea, id, a) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L) return null;
+    const cur = Object.assign({}, normMv(mvOf(dir, o)) || {}), was = cur[id];
+    let off = '';
+    if (a < 0) {
+      if (!was) return null;
+      delete cur[id];
+    } else {
+      const to = Math.max(0, Math.min(L.stops.length - 1, a | 0));
+      if (was && was.a === to) return null;
+      cur[id] = { a: to, skip: was ? was.skip : [] };
+      if (L.not && cur[L.not]) { delete cur[L.not]; off = Odd.moves.MOVE[L.not].name; }
+    }
+    const card = withMv(dir, o, idea, cur);
+    let text = moveSay(dir, card, id);
+    if (off) text += ' ' + off + ' is off: a ' + unitOf(dir) + ' can’t be both.';
+    if (!card.tw) text += ' That’s how it came.';
+    return { card, text };
+  }
+
+  /** leave one spot out of a move, or put it back; leaving out the last turns it off */
+  function toggleSpot(dir, o, idea, id, s) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L) return null;
+    const cur = Object.assign({}, normMv(mvOf(dir, o)) || {}), m = cur[id];
+    if (!m) return null;
+    const sp = Odd.moves.spots(id, bareNotes(dir, o), cxOf(dir, o));
+    if (sp.indexOf(s) < 0) return null;
+    const back = m.skip.indexOf(s) >= 0, skip = back ? m.skip.filter((x) => x !== s) : m.skip.concat([s]);
+    const left = sp.filter((x) => skip.indexOf(x) < 0).length, unit = unitOf(dir);
+    if (left) cur[id] = { a: m.a, skip };
+    else delete cur[id];
+    const card = withMv(dir, o, idea, cur);
+    let text = !left ? L.name + ': off. That was the last ' + unit + ' it was on.'
+      : (back ? 'Back on that ' + unit + '. ' : 'Left that ' + unit + ' out. ') + L.name + ' on ' + left + ' of ' + plural(sp.length, unit) + '.';
+    if (!card.tw) text += ' That’s how it came.';
+    return { card, text };
+  }
+
+  /** a move that's off, tried at its usual amount */
+  function tryMove(dir, o, idea, id) {
+    const L = Odd.moves && Odd.moves.MOVE[id];
+    if (!canMove(dir, o) || !L || (normMv(mvOf(dir, o)) || {})[id]) return null;
+    return setMove(dir, o, idea, id, L.def);
+  }
+
   /** the card as it came, before any dial was turned */
   function reset(o) { return o && o.tw ? o.tw.base : o; }
   function tweaked(o) { return !!(o && o.tw); }
@@ -12168,7 +12464,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return { id: d.id, pos, line };
   }
 
-  Odd.tweak = { DIALS, DIAL, BRIGHT, has, dialsFor, turn, reset, tweaked, nudge, build, shove, regrow };
+  Odd.tweak = { DIALS, DIAL, BRIGHT, has, dialsFor, turn, movesFor, setMove, toggleSpot, tryMove, reset, tweaked, nudge, build, shove, regrow };
 })(globalThis.Odd = globalThis.Odd || {});
 
 /* js/core/booth.js */
@@ -12178,7 +12474,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
  * actually plays (its tempo, notes, range, instrument...), turns a "no"
  * into reasons with the numbers behind them, finds a version of the card
  * changed on those reasons, or filters the deck of cards like it. Tweak
- * turns the card's own dials (Odd.tweak): what if it were brighter, busier?
+ * turns the card's own dials and moves (Odd.tweak): what if it were brighter, busier, with grace notes?
  * It also holds Bobby's encyclopedia: questions a card raises, and his
  * answers, each ending in directions the deck can be steered in.
  *
@@ -12466,6 +12762,10 @@ span.sg-rname { cursor: default; color: var(--muted); }
   /** Bobby's turn of a dial on the card in slot i: { id, pos, line } or null */
   function nudge(S, i, last) { const o = F.options(S)[i]; return o ? Odd.tweak.nudge(S.round.dir, o, S.idea, last) : null; }
   function isTweaked(S, i) { return Odd.tweak.tweaked(F.options(S)[i]); }
+  /** the moves the card in slot i can make (or card, when one is being tried in its place) */
+  function moves(S, i, card) { const o = card || F.options(S)[i]; return o ? Odd.tweak.movesFor(S.round.dir, o, S.idea) : []; }
+  /** the card in slot i with a move tried at its usual amount, without putting it in the slot: { card, text } or null */
+  function tryMove(S, i, id) { const o = F.options(S)[i]; return o ? Odd.tweak.tryMove(S.round.dir, o, S.idea, id) : null; }
   /** a card takes slot i of the batch on screen, and lifts there */
   function swap(S, i, card) {
     const b = F.info(S).batch;
@@ -12503,6 +12803,18 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (!r) return null;
       if (r.same) return { S, same: true, text: r.text, limit: r.limit };
       return { S: swap(S, i, r.card), text: r.text, limit: r.limit };
+    },
+    /** a move at amount a (-1: off) on the card in slot i: { S, text } or null when nothing changes */
+    move(S, i, id, a) {
+      const o = F.options(S)[i];
+      const r = o ? Odd.tweak.setMove(S.round.dir, o, S.idea, id, a) : null;
+      return r ? { S: swap(S, i, r.card), text: r.text } : null;
+    },
+    /** leave the move's spot at onset s out, or put it back: { S, text } or null */
+    spot(S, i, id, s) {
+      const o = F.options(S)[i];
+      const r = o ? Odd.tweak.toggleSpot(S.round.dir, o, S.idea, id, s) : null;
+      return r ? { S: swap(S, i, r.card), text: r.text } : null;
     },
     /** every dial back: the card as it came. { S, text } or null when it wasn't tweaked */
     untweak(S, i) {
@@ -12805,7 +13117,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
   Odd.booth = {
     FACTORS, TOPICS, TOPIC: T, READY, ASK_WHY, OWN,
     measure, reasonsFor, facts, changed, cutsFor, keep, fp, isOut, poolOf,
-    canTweak, dials, nudge, isTweaked,
+    canTweak, dials, nudge, isTweaked, moves, tryMove,
     questions, answer, explain, ready, intervalName, noteName,
     flow,
   };
@@ -19293,9 +19605,11 @@ span.sg-rname { cursor: default; color: var(--muted); }
  *
  * The booth: the card playing lifts, and under it are three answers: ✗ not
  * it (Bobby asks why, says what the card has on each reason, and offers it
- * changed or the deck filtered), Tweak (what if? the card's own dials, from
- * where it sits to as far as it stays itself: Odd.tweak) and ✓ (keep it and
- * build on it). Bobby's bubble holds the questions a card raises (Odd.booth).
+ * changed or the deck filtered), Tweak (what if? everything the card can
+ * do, one slide at a time: its dials, from where it sits to as far as it
+ * stays itself, then its moves, each tried in its place the moment you land
+ * on it and kept when you touch it: Odd.tweak) and ✓ (keep it and build on
+ * it). Bobby's bubble holds the questions a card raises (Odd.booth).
  * A dev menu on the left edge hides what the cards show, one kind at a
  * time; with the piano roll hidden a card shows the sound's EQ instead.
  *
@@ -19367,8 +19681,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
   let talkKey = '';
   // a line that stays with the card it came with (a request's reply, what changed)
   let held = { key: '', text: '' };
-  // tweaking: the panel open (on the card in slot), the panel last drawn, a dial to focus after a turn, the dial Bobby turned last, a drag in progress
-  const TU = { open: false, slot: '', key: '', focus: '', last: '', drag: null, timer: 0 };
+  // tweaking: the panel open (on the card in slot), the panel last drawn, what to focus after a redraw, the dial Bobby turned last,
+  // a drag in progress, the slide on show, a move being tried ({ slot, seq, key, id, def, card }), the lifted card's picture as drawn
+  const TU = { open: false, slot: '', key: '', focus: '', last: '', drag: null, timer: 0, at: '', pv: null, vk: '' };
   let dev = { open: false, hide: {} };
   let devEl = null;
   const EQ = { buf: null, lv: [], pk: [], colors: null };
@@ -19403,7 +19718,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     if ((m = /^x-(\w+)$/.exec(key))) return A.PATHS[m[1]] ? { seq: () => A.example(m[1], P.ex[m[1]] || 0), extra: { peek: m[1] } } : null;
     if ((m = /^c(\d+)-(\d)$/.exec(key))) {
       if (!S.round || Number(m[1]) !== S.seq) return null;
-      const i = Number(m[2]), o = F.options(S)[i];
+      const i = Number(m[2]), o = slotCard(i);
       return o ? { seq: () => A.seq(S.idea, { dir: S.round.dir, spec: o }), extra: { sel: i } } : null;
     }
     if ((m = /^h(\d+)-(\d)$/.exec(key))) {
@@ -19573,6 +19888,12 @@ span.sg-rname { cursor: default; color: var(--muted); }
   function promote(i, own) {
     if (!S.round) return;
     const dir = S.round.dir;
+    // a move being tried goes in with it: keep what you hear
+    if (!own && trying() && i === S.sel) {
+      const r = B.flow.move(S, i, TU.pv.id, TU.pv.def);
+      if (r) S = r.S;
+      TU.pv = null;
+    }
     const busy = P.playing || !!P.pending;
     halt();
     const ns = own ? F.own(S) : F.pick(S, i);
@@ -19654,13 +19975,29 @@ span.sg-rname { cursor: default; color: var(--muted); }
     render();
   }
 
-  // ---------------------------------------------------------------- tweak: the lifted card's own dials
+  // ---------------------------------------------------------------- tweak: everything the lifted card can do, one at a time
 
-  const TWEAK_HELLO = 'What if? Each dial starts where this card already sits. Turn one and you hear this card changed, not another card. The bright part of a track is as far as it goes and stays itself.';
+  const TWEAK_HELLO = 'What if? Go through everything this card can do, one at a time. A move plays the moment you land on it. Touch its slider to keep it. The dials start where the card already sits.';
   /** the slot the panel belongs to: it closes when another card lifts */
   const slotKey = () => (S.round && S.sel >= 0 ? [S.round.dir, F.info(S).batch, S.sel].join('|') : '');
   function tweakOpen() { return TU.open && TU.slot === slotKey() && talking() && !W; }
-  /** Tweak: open the dials on the card that's playing, or close them */
+  /** a move being tried on the lifted card: heard and drawn in its place, but not in the slot until it's kept */
+  function trying() { return !!TU.pv && TU.pv.slot === slotKey() && TU.pv.seq === S.seq && tweakOpen(); }
+  /** the card slot i shows and plays: the one being tried, or the one in the slot */
+  function slotCard(i) { return i === S.sel && trying() ? TU.pv.card : F.options(S)[i]; }
+  /** the lifted card plays on from where it was, as it's now shown */
+  function resound() {
+    if (!P.playing || P.src !== curKey(S.sel) || !Odd.transport) return;
+    Odd.transport.update(A.seq(S.idea, { dir: S.round.dir, spec: slotCard(S.sel) }));
+  }
+  /** the move being tried goes, and the card sounds as it is */
+  function dropTry() {
+    if (!TU.pv) return;
+    const was = trying();
+    TU.pv = null;
+    if (was) resound();
+  }
+  /** Tweak: open everything it can do on the card that's playing, or close it */
   function tweakIt(i) {
     if (!talking() || S.sel !== i) return;
     talk().mode = 'ready';
@@ -19669,60 +20006,180 @@ span.sg-rname { cursor: default; color: var(--muted); }
       render();
       return;
     }
-    TU.open = !tweakOpen();
+    const open = !tweakOpen();
+    if (!open) dropTry();
+    if (TU.slot !== slotKey()) TU.at = '';
+    TU.open = open;
     TU.slot = slotKey();
-    held = TU.open ? { key: curKey(i), text: TWEAK_HELLO } : { key: '', text: '' };
+    held = open ? { key: curKey(i), text: TWEAK_HELLO } : { key: '', text: '' };
     render();
+    if (open) landSlide(TU.at);
   }
 
-  /** the knob at p, the fill from the middle line to it */
-  function faderStyle(p) {
-    return '--p:' + p.toFixed(3) + ';--fb:' + (Math.min(p, 0.5) * 100).toFixed(1) + '%;--fh:' + (Math.abs(p - 0.5) * 100).toFixed(1) + '%';
+  /** the panel's slides: the dials (each where the card sits), then every move it can make */
+  function slides() {
+    if (!S.round || S.sel < 0) return [];
+    const ds = B.dials(S, S.sel).filter((d) => !d.fixed).map((d) => ({ key: 'd:' + d.id, kind: 'dial', id: d.id, d }));
+    const ms = B.moves(S, S.sel, slotCard(S.sel)).map((m) => ({ key: 'm:' + m.id, kind: 'move', id: m.id, m }));
+    return ds.concat(ms);
   }
+  function slideAt(list) { const k = list.findIndex((x) => x.key === TU.at); return k < 0 ? 0 : k; }
+  function curSlide() { const list = slides(); return list.length ? list[slideAt(list)] : null; }
   function leanText(d, p) {
     const a = Math.abs(p - 0.5) * 2, end = (p > 0.5 ? d.hi : d.lo).toLowerCase();
     if (a < 0.12) return 'in the middle';
     return a < 0.55 ? 'a little ' + end : a < 0.95 ? end : 'all the way ' + end;
   }
+  /**
+   * A slide as a track: where the knob sits, the stops, how far it reaches
+   * and where the card came. A dial's middle is neutral; a move starts at Off.
+   */
+  function trackOf(x) {
+    if (x.kind === 'dial') {
+      const d = x.d;
+      return { name: d.name, line: d.line, lo: d.lo, hi: d.hi, pos: d.pos, home: d.home, stops: d.stops, reach: d.reach, value: leanText(d, d.pos) };
+    }
+    const m = x.m, k = m.stops.length, at = (a) => (a + 1) / k;
+    // the ring only when it came with this move: Off is where every move starts
+    return { name: m.name, line: m.line, lo: 'Off', hi: m.stops[k - 1], pos: at(m.a), home: m.home >= 0 ? at(m.home) : at(m.a), stops: [0].concat(m.stops.map((_, j) => at(j))), reach: [0, 1], value: m.a >= 0 ? m.stops[m.a].toLowerCase() : 'off' };
+  }
+  /** the knob at p; a dial fills from its middle, a move from Off */
+  function knobStyle(kind, p) {
+    const l = kind === 'dial' ? Math.min(p, 0.5) : 0, w = kind === 'dial' ? Math.abs(p - 0.5) : p;
+    return '--p:' + p.toFixed(3) + ';--fl:' + (l * 100).toFixed(1) + '%;--fw:' + (w * 100).toFixed(1) + '%';
+  }
+  /** a spot in words: bar 2, beat 3 (or after it) */
+  function spotName(s, m) {
+    const x = mod(s, m.steps), k = m.pulses.filter((p) => p.s <= x).length;
+    return 'Bar ' + (Math.floor(s / m.steps) + 1) + ', ' + (m.pulses.some((p) => p.s === x) ? 'beat ' + k : 'after beat ' + k);
+  }
+  const pc = (p) => (p * 100).toFixed(1) + '%';
+  const CAR_L = '<svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const CAR_R = '<svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4l6 6-6 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   function tuneHtml() {
-    const ds = B.dials(S, S.sel);
-    if (!ds.length) return '';
-    const faders = ds.map((d) => {
-      const stops = d.stops.map((m) => '<i class="b-fmark" style="bottom:' + (m * 100).toFixed(1) + '%"></i>').join('');
-      // the reach: as far as it goes and stays itself; the home mark: where the card came
-      const reach = d.fixed ? '' : '<i class="b-freach" style="bottom:calc(' + (d.reach[0] * 100).toFixed(1) + '% - 7px);height:calc(' + ((d.reach[1] - d.reach[0]) * 100).toFixed(1) + '% + 14px)"></i>';
-      const home = d.fixed || Math.abs(d.home - d.pos) < 1e-6 ? '' : '<i class="b-fhome" style="bottom:' + (d.home * 100).toFixed(1) + '%" title="Where it came"></i>';
-      return '<div class="b-fader' + (d.fixed ? ' fixed' : '') + '" data-f="' + d.id + '" data-p="' + d.pos.toFixed(3) + '" data-start="' + d.pos.toFixed(3) + '" style="' + faderStyle(d.pos) + '">' +
-        '<span class="b-fend hi">' + esc(d.hi) + '</span>' +
-        '<div class="b-ftrack" role="slider" tabindex="0" aria-orientation="vertical" aria-label="' + esc(d.lo + ' to ' + d.hi) + '"' +
-          ' aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(d.pos * 100) + '" aria-valuetext="' + esc(d.fixed ? d.why : leanText(d, d.pos)) + '"' +
-          (d.fixed ? ' aria-disabled="true" title="' + esc(d.why) + '"' : '') + ' data-stops="' + d.stops.join(',') + '">' +
-          reach + stops + home + '<i class="b-ffill"></i><i class="b-fknob"></i>' +
-        '</div>' +
-        '<span class="b-fend lo">' + esc(d.lo) + '</span>' +
-      '</div>';
-    }).join('');
+    const list = slides();
+    if (!list.length) return '';
+    const n = list.length, k = slideAt(list), x = list[k], t = trackOf(x);
+    TU.at = x.key;
+    const o = slotCard(S.sel), m = meterFor(S.round.dir, o, S.idea), steps = 2 * m.steps;
+    const tryNow = trying() && TU.pv.key === x.key;
+    // where a move goes: a mark under each note it plays on, tap one to leave it out
+    const spots = x.kind !== 'move' ? '' : x.m.spots.map((p) => '<button type="button" class="b-spot' + (p.on ? ' on' : '') + '" data-act="spot" data-s="' + p.s + '" style="left:' + r1(xOf(p.s, steps)) + 'px"' +
+      (x.m.a < 0 ? ' disabled' : '') + ' aria-pressed="' + p.on + '" aria-label="' + esc(spotName(p.s, m) + (p.on ? ': on' : ': left out')) + '" title="' + (p.on ? 'Leave this one out' : 'Put it back') + '"></button>').join('');
+    const marks = t.stops.map((p) => '<i class="b-hmark" style="left:' + pc(p) + '"></i>').join('');
+    const reach = x.kind === 'dial' ? '<i class="b-hreach" style="left:calc(' + pc(t.reach[0]) + ' - 7px);width:calc(' + pc(t.reach[1] - t.reach[0]) + ' + 14px)"></i>' : '';
+    const home = Math.abs(t.home - t.pos) < 1e-6 ? '' : '<i class="b-hhome" style="left:' + pc(t.home) + '" title="Where it came"></i>';
+    const turned = (y) => (y.kind === 'move' ? y.m.a >= 0 : Math.abs(y.d.pos - y.d.home) > 1e-6);
+    const ticks = list.map((y, j) => '<button type="button" class="b-ctick' + (j === k ? ' now' : '') + (y.kind === 'move' ? ' mv' : '') + (turned(y) ? ' set' : '') + '" data-act="slideto" data-k="' + j + '" tabindex="-1" aria-label="' + esc(trackOf(y).name) + '"><i></i></button>').join('');
+    const go = (d) => { const y = list[mod(k + d, n)]; return '<button type="button" class="b-car-go" data-act="slide" data-d="' + d + '" data-go="' + d + '" aria-label="' + esc((d < 0 ? 'Before: ' : 'Next: ') + trackOf(y).name) + '" title="' + esc(trackOf(y).name) + '">' + (d < 0 ? CAR_L : CAR_R) + '</button>'; };
     const back = B.isTweaked(S, S.sel) ? '<button type="button" class="b-link" data-act="untweak">Back to how it came</button>' : '';
-    return '<div class="b-faders">' + faders + '</div>' +
-      '<div class="b-tune-do"><button type="button" class="b-link" data-act="nudge">Let Bobby turn one</button>' + back + '</div>';
+    const dial = list.some((y) => y.kind === 'dial') ? '<button type="button" class="b-link" data-act="nudge">Let Bobby turn one</button>' : '<span></span>';
+    return '<div class="b-spots" role="group" aria-label="Where it goes">' + spots + '</div>' +
+      '<div class="b-car" data-kind="' + x.kind + '" data-f="' + x.id + '" role="group" aria-roledescription="carousel" aria-label="What it can do">' +
+        '<div class="b-car-top">' + (n > 1 ? go(-1) : '') +
+          '<div class="b-car-name" aria-live="polite"><b>' + esc(t.name) + '</b><span class="b-car-val">' + esc(tryNow ? t.value + ', trying' : t.value) + '</span></div>' +
+          (n > 1 ? go(1) : '') + '</div>' +
+        '<p class="b-car-line">' + esc(t.line) + '</p>' +
+        '<div class="b-hf' + (tryNow ? ' try' : '') + '" data-p="' + t.pos.toFixed(3) + '" data-start="' + t.pos.toFixed(3) + '" style="' + knobStyle(x.kind, t.pos) + '">' +
+          '<div class="b-htrack" role="slider" tabindex="0" aria-label="' + esc(t.name + ': ' + t.lo + ' to ' + t.hi) + '" aria-valuemin="0" aria-valuemax="100"' +
+            ' aria-valuenow="' + Math.round(t.pos * 100) + '" aria-valuetext="' + esc(t.value) + '" data-stops="' + t.stops.map((p) => p.toFixed(4)).join(',') + '">' +
+            reach + marks + home + '<i class="b-hfill"></i><i class="b-hknob"></i></div>' +
+          '<div class="b-hends"><span>' + esc(t.lo) + '</span><span>' + esc(t.hi) + '</span></div>' +
+        '</div>' +
+        '<div class="b-car-foot"><div class="b-car-strip">' + ticks + '</div><span class="b-car-count">' + (k + 1) + ' of ' + n + '</span></div>' +
+      '</div>' +
+      '<div class="b-tune-do">' + dial + back + '</div>';
   }
-  function setFader(fader, p) {
-    fader.dataset.p = p.toFixed(3);
-    fader.setAttribute('style', faderStyle(p));
-    const tr = fader.querySelector('.b-ftrack');
-    tr.setAttribute('aria-valuenow', String(Math.round(p * 100)));
-    const d = { lo: fader.querySelector('.b-fend.lo').textContent, hi: fader.querySelector('.b-fend.hi').textContent };
-    tr.setAttribute('aria-valuetext', leanText(d, p));
+
+  /** to slide k (round the ends): the move being tried goes, and a move landed on is tried after a moment */
+  function goSlide(k, focus) {
+    const list = slides();
+    if (!list.length || !tweakOpen()) return;
+    const to = list[mod(k, list.length)];
+    if (to.key === TU.at) return;
+    if (trying()) held = { key: '', text: '' };
+    dropTry();
+    TU.at = to.key;
+    TU.focus = focus || '';
+    TU.key = '';
+    render();
+    clearTimeout(TU.timer);
+    TU.timer = setTimeout(() => landSlide(to.key), 280);
   }
-  /** a dial that can't move here: Bobby says why */
-  function dialWhy(fid) {
-    const d = B.dials(S, S.sel).find((x) => x.id === fid);
-    if (!d) return;
-    talk().mode = 'ready';
-    held = { key: curKey(S.sel), text: d.lo + ' to ' + d.hi + ': ' + d.why };
+  /** landing on a move that's off: it's tried at its usual amount, in the card's place */
+  function landSlide(key) {
+    if (!tweakOpen() || trying()) return;
+    const x = curSlide();
+    if (!x || x.key !== key || x.kind !== 'move' || x.m.a >= 0) return;
+    const r = B.tryMove(S, S.sel, x.id);
+    if (!r) return;
+    TU.pv = { slot: slotKey(), seq: S.seq, key, id: x.id, def: x.m.def, card: r.card };
+    held = { key: curKey(S.sel), text: 'Trying it. ' + r.text + ' Touch the slider to keep it.' };
+    TU.key = '';
+    resound();
     render();
   }
-  /** turn a dial: the card itself changes and plays at once */
+  /** the slot's card changed (a dial turned, a move kept): it plays on from where it was */
+  function retune(ns, line) {
+    const was = P.playing && P.src === curKey(S.sel);
+    TU.pv = null;
+    clearTimeout(P.timer);
+    P.pending = '';
+    S = ns;
+    save();
+    TU.slot = slotKey();
+    const key = curKey(S.sel);
+    held = { key, text: line };
+    if (was && Odd.transport) {
+      P.src = key;
+      P.heard = key;
+      Odd.transport.update(A.seq(S.idea, { dir: S.round.dir, spec: F.options(S)[S.sel] }));
+      render();
+      return;
+    }
+    hear(key, line, false);
+  }
+  /** the move being tried, kept as it is */
+  function keepTry() {
+    const pv = trying() ? TU.pv : null;
+    if (!pv) return;
+    const r = B.flow.move(S, S.sel, pv.id, pv.def);
+    if (r) retune(r.S, 'Kept. ' + r.text);
+  }
+  /** the slider let go at p: a dial turns, a move takes the amount nearest (Off at the left) */
+  function setAmount(x, p) {
+    if (x.kind === 'dial') { tuneTo(x.id, p); return; }
+    const a = Math.round(p * x.m.stops.length) - 1;
+    const tried = trying() && TU.pv.key === x.key;
+    if (tried && a === TU.pv.def) { keepTry(); return; }
+    if (tried && a < 0) {
+      dropTry();
+      held = { key: curKey(S.sel), text: x.m.name + ': off.' };
+      TU.key = '';
+      render();
+      return;
+    }
+    const r = B.flow.move(S, S.sel, x.id, a);
+    if (!r) { TU.key = ''; render(); return; }
+    retune(r.S, r.text);
+  }
+  /** a mark tapped: that spot left out of the move, or put back */
+  function spotTap(s) {
+    const x = curSlide();
+    if (!x || x.kind !== 'move' || !tweakOpen()) return;
+    let from = S;
+    if (trying() && TU.pv.key === x.key) {
+      const c = B.flow.move(S, S.sel, x.id, TU.pv.def);
+      if (!c) return;
+      from = c.S;
+    } else if (x.m.a < 0) return;
+    const r = B.flow.spot(from, from.sel, x.id, s);
+    if (!r) return;
+    TU.focus = 'spot:' + s;
+    retune(r.S, r.text);
+  }
+  /** turn a dial: the card itself changes and plays on */
   function tuneTo(fid, pos, by) {
     if (S.phase !== 'round' || !talking()) return;
     const r = B.flow.tune(S, S.sel, fid, pos);
@@ -19734,86 +20191,104 @@ span.sg-rname { cursor: default; color: var(--muted); }
       render();
       return;
     }
-    hearSwap(r.S, (by ? by + ' ' : '') + r.text);
-  }
-  /** the tweaked (or untweaked) card in its slot, heard at once, the panel staying open on it */
-  function hearSwap(ns, line) {
-    halt();
-    set(ns);
-    TU.slot = slotKey();
-    held = { key: curKey(ns.sel), text: line };
-    hear(curKey(ns.sel), line, false);
+    retune(r.S, (by ? by + ' ' : '') + r.text);
   }
   function untweak() {
     if (!talking()) return;
+    TU.pv = null;
     const r = B.flow.untweak(S, S.sel);
-    if (r) hearSwap(r.S, r.text);
+    if (r) retune(r.S, r.text);
   }
+  /** Bobby turns a dial: its slide comes up, the knob travels, then the card changes */
   function nudge() {
     if (!talking()) return;
     const n = B.nudge(S, S.sel, TU.last);
     if (!n) { held = { key: curKey(S.sel), text: 'Every dial here is as far as it goes. Pass on it, or keep it.' }; render(); return; }
     TU.last = n.id;
-    const fader = root.querySelector('.b-card.lifted .b-fader[data-f="' + n.id + '"]');
-    if (fader) setFader(fader, n.pos);
+    dropTry();
+    TU.at = 'd:' + n.id;
+    TU.key = '';
+    render();
     clearTimeout(TU.timer);
-    // long enough to see the knob travel before the card changes
+    requestAnimationFrame(() => {
+      const hf = root.querySelector('.b-card.lifted .b-car[data-f="' + n.id + '"] .b-hf');
+      if (hf) setKnob(hf, n.pos);
+    });
     TU.timer = setTimeout(() => tuneTo(n.id, n.pos, n.line), 450);
   }
+  function setKnob(hf, p) {
+    hf.dataset.p = p.toFixed(3);
+    hf.setAttribute('style', knobStyle(hf.closest('.b-car').dataset.kind, p));
+    hf.querySelector('.b-htrack').setAttribute('aria-valuenow', String(Math.round(p * 100)));
+  }
   function trackAt(e) {
-    const tr = e.target && e.target.closest ? e.target.closest('.b-ftrack') : null;
+    const tr = e.target && e.target.closest ? e.target.closest('.b-htrack') : null;
     return tr && root.contains(tr) && !W ? tr : null;
   }
-  function yPos(tr, y) {
+  function xPos(tr, x) {
     const r = tr.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (r.bottom - y) / r.height));
+    return Math.max(0, Math.min(1, (x - r.left) / r.width));
   }
   function dialDown(e) {
     const tr = trackAt(e);
     if (!tr || (e.button != null && e.button > 0)) return;
-    const fader = tr.closest('.b-fader');
-    if (tr.getAttribute('aria-disabled') === 'true') { dialWhy(fader.dataset.f); return; }
     e.preventDefault();
     try { tr.setPointerCapture(e.pointerId); } catch (x) { /* capture is a nicety */ }
     tr.focus({ preventScroll: true });
     clearTimeout(TU.timer);
-    TU.drag = { id: e.pointerId, fader, fid: fader.dataset.f, start: Number(fader.dataset.start) };
-    fader.classList.add('drag');
-    setFader(fader, yPos(tr, e.clientY));
+    const hf = tr.closest('.b-hf');
+    TU.drag = { id: e.pointerId, hf, tr, start: Number(hf.dataset.start) };
+    hf.classList.add('drag');
+    setKnob(hf, xPos(tr, e.clientX));
   }
   function dialMove(e) {
     const g = TU.drag;
     if (!g || e.pointerId !== g.id) return;
-    setFader(g.fader, yPos(g.fader.querySelector('.b-ftrack'), e.clientY));
+    setKnob(g.hf, xPos(g.tr, e.clientX));
   }
   function dialUp(e) {
     const g = TU.drag;
     if (!g || e.pointerId !== g.id) return;
     TU.drag = null;
-    g.fader.classList.remove('drag');
-    const p = Number(g.fader.dataset.p);
-    // a tap on the knob is not a turn
-    if (e.type === 'pointercancel' || Math.abs(p - g.start) < 0.04) { setFader(g.fader, g.start); return; }
-    TU.focus = g.fid;
-    tuneTo(g.fid, p);
+    g.hf.classList.remove('drag');
+    const p = Number(g.hf.dataset.p), x = curSlide();
+    if (e.type === 'pointercancel' || !x) { setKnob(g.hf, g.start); return; }
+    TU.focus = 'track';
+    // a tap on the knob: a move being tried is kept, anything else stays
+    if (Math.abs(p - g.start) < 0.04) {
+      setKnob(g.hf, g.start);
+      if (x.kind === 'move' && trying() && TU.pv.key === x.key) keepTry();
+      return;
+    }
+    setAmount(x, p);
   }
-  /** ↑ → one step toward the top word, ↓ ← toward the bottom one, Home and End as far as it goes: a step is the next spot it can go */
+  /**
+   * Keys in the panel: on the slider, ← → (or ↓ ↑) a stop either way, Home
+   * and End its ends; anywhere else in it, ← → go through the slides.
+   */
   function dialKey(e) {
-    const tr = trackAt(e);
-    if (!tr) return;
-    const k = e.key, up = k === 'ArrowUp' || k === 'ArrowRight', down = k === 'ArrowDown' || k === 'ArrowLeft';
+    const panel = e.target && e.target.closest ? e.target.closest('.b-tune') : null;
+    if (!panel || !root.contains(panel) || W) return;
+    const k = e.key, tr = e.target.closest('.b-htrack');
+    if (!tr) {
+      if (k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+      e.preventDefault();
+      e.stopPropagation();
+      const go = e.target.dataset && e.target.dataset.go;
+      goSlide(slideAt(slides()) + (k === 'ArrowRight' ? 1 : -1), go ? 'go:' + go : '');
+      return;
+    }
+    const up = k === 'ArrowUp' || k === 'ArrowRight', down = k === 'ArrowDown' || k === 'ArrowLeft';
     if (!up && !down && k !== 'Home' && k !== 'End') return;
     e.preventDefault();
     e.stopPropagation();
-    const fader = tr.closest('.b-fader');
-    if (tr.getAttribute('aria-disabled') === 'true') { dialWhy(fader.dataset.f); return; }
-    const cur = Number(fader.dataset.p), stops = tr.dataset.stops.split(',').map(Number);
+    const hf = tr.closest('.b-hf'), cur = Number(hf.dataset.p), stops = tr.dataset.stops.split(',').map(Number);
     const next = k === 'Home' ? stops[0] : k === 'End' ? stops[stops.length - 1] : up ? stops.find((m) => m > cur + 1e-4) : stops.slice().reverse().find((m) => m < cur - 1e-4);
     if (next == null) return;
-    setFader(fader, next);
+    setKnob(hf, next);
     clearTimeout(TU.timer);
     // a run of presses is one turn
-    TU.timer = setTimeout(() => { TU.focus = fader.dataset.f; tuneTo(fader.dataset.f, next); }, 350);
+    TU.timer = setTimeout(() => { TU.focus = 'track'; const x = curSlide(); if (x) setAmount(x, next); }, 350);
   }
 
   function step(fn) {
@@ -19955,6 +20430,9 @@ span.sg-rname { cursor: default; color: var(--muted); }
     uncut: () => { halt(); P.src = ''; set(B.flow.uncut(S)); },
     untweak: () => untweak(),
     nudge: () => nudge(),
+    slide: (el) => goSlide(slideAt(slides()) + Number(el.dataset.d), 'go:' + el.dataset.d),
+    slideto: (el) => goSlide(Number(el.dataset.k)),
+    spot: (el) => spotTap(Number(el.dataset.s)),
     own: () => promote(-1, true),
     req: (el) => request(Number(el.dataset.i)),
     next: () => slide(F.next),
@@ -20054,6 +20532,21 @@ span.sg-rname { cursor: default; color: var(--muted); }
     return chords.map((c, i) => '<span data-x="chords" class="b-chd ' + (c.colour ? 'col' : c.q === '' ? 'maj' : 'min') + '" style="left:' + r1(xOf(slots[i].s)) + 'px;top:' + top + 'px;width:' + r1(sw(slots[i].len) - 3) + 'px">' + esc(A.chordName(c)) + '</span>').join('');
   }
 
+  /**
+   * A rhythm's hits as blocks standing on bottom, taller the harder they're
+   * played: hits ([s, d, w]) or notes ({ s, d, w, v, orn }) with moves played,
+   * whose loudness sets the height between the weights' (vt their velocities).
+   * What a move added is drawn in its own colour.
+   */
+  function hitBlocks(xs, H, vt, bottom, minW) {
+    return xs.map((x) => {
+      const n = Array.isArray(x) ? { s: x[0], d: x[1], w: x[2] } : x;
+      const hh = n.v == null ? H[n.w] : Math.max(4, Math.min(H[2] + 6, H[0] + (n.v - vt[0]) / (vt[2] - vt[0]) * (H[2] - H[0])));
+      const cls = n.orn ? 'orn' : (n.v == null ? n.w === 2 : n.v >= vt[2] - 4) ? 'acc' : 'soft';
+      return blk(xOf(n.s), bottom - hh, Math.max(n.orn === 'grace' ? 2 : minW, sw(n.d) - 2), hh, '', cls);
+    }).join('');
+  }
+
   /** what makes the option special, drawn on a 272 x 92 screen */
   function vis(dir, o, idea) {
     let h = '';
@@ -20064,7 +20557,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     // what the layer is made against (the melody, the riff, a groove's bass), faintly, under it
     const ghost = (top, hgt) => { if (idea) h += lane(A.refNotes(idea), top, hgt, '', 'ghost', 4); };
     if (dir === 'seed1') {
-      o.mel.r.hits.forEach((x) => { const hh = [12, 20, 30][x[2]]; h += blk(xOf(x[0]), VH - 24 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+      h += hitBlocks(o.mel.mv ? A.melodyNotes(o.mel, true) : o.mel.r.hits, [12, 20, 30], A.MEL_VEL, VH - 24, 4);
       const sc = A.SCALES[o.mel.scale], cw = (VW - 8) / 12;
       for (let pc = 0; pc < 12; pc++) h += '<i data-x="scale" class="b-cell' + (pc === 0 ? ' root' : sc.includes(pc) ? ' on' : '') + '" style="left:' + r1(4 + pc * cw + 1) + 'px;top:' + (VH - 15) + 'px;width:' + r1(cw - 2) + 'px"></i>';
     } else if (dir === 'seed2') {
@@ -20118,13 +20611,13 @@ span.sg-rname { cursor: default; color: var(--muted); }
       h += chordRow(idea.layers.gbass ? idea.layers.gbass.chords : [], m, 4);
     } else if (dir === 'hook') {
       ghost(6, 30);
-      o.mel.r.hits.forEach((x) => { const hh = [10, 16, 24][x[2]]; h += blk(xOf(x[0]), VH - 8 - hh, Math.max(4, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+      h += hitBlocks(o.mel.mv ? A.melodyNotes(o.mel) : o.mel.r.hits, [10, 16, 24], A.MEL_VEL, VH - 8, 4);
     } else if (dir === 'rrhythm') {
       // hard hits tall, plain ones short, muted ones a sliver
-      o.r.hits.forEach((x) => { const hh = [8, 22, 44][x[2]]; h += blk(xOf(x[0]), VH - 10 - hh, Math.max(3, sw(x[1]) - 2), hh, '', x[2] === 2 ? 'acc' : 'soft'); });
+      h += hitBlocks(o.r.mv ? A.riffNotes({ r: o.r }) : o.r.hits, [8, 22, 44], A.RIFF_VEL, VH - 10, 3);
     } else if (dir === 'rnotes') {
-      // drawn at the rhythm's lengths, so muted hits still show
-      const ns = A.riffNotes({ r: idea.riff.r, notes: o }).map((n, i) => Object.assign(n, { d: idea.riff.r.hits[i][1] }));
+      // drawn at the rhythm's lengths, so muted hits still show (with moves, as they play)
+      const r = idea.riff.r, ns = r.mv ? A.riffNotes({ r, notes: o }) : A.riffNotes({ r, notes: o }).map((n, i) => Object.assign(n, { d: r.hits[i][1] }));
       h += lane(ns, 10, 72, '', 'acc', 7);
     } else if (dir === 'weight') {
       // a lane per voice: the bass at the bottom, the doubles above
@@ -20306,7 +20799,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       if (kind === 'prev') { anim = 'b-in-l'; delay = ((opts.length - 1 - i) * 0.05).toFixed(2) + 's'; }
       const style = animate ? 'animation-name:' + anim + ';animation-delay:' + delay : '';
       const prom = dir === 'seed2' && A.pathOf(S.idea) !== 'melody' ? 'Keep it: that’s the hook' : (PROMOTE[dir] || 'Keep it: add it').replace(/^Promote/, 'Keep it');
-      return card(dir, o, S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style, tweak: B.canTweak(S, i) });
+      return card(dir, slotCard(i), S.idea, { key: curKey(i), i, letter: A.ABC.charAt(i), promote: prom, style, tweak: B.canTweak(S, i) });
     }).join('');
     const last = inf.batch >= inf.batches - 1;
     const arrow = (side, act, label, glyph, off) => '<button type="button" class="b-arrow ' + side + '" data-act="' + act + '" aria-label="' + label + '" title="' + label + '"' + (off ? ' disabled' : '') + '>' + glyph + '</button>';
@@ -20330,7 +20823,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
       '<div class="b-actions">' +
         (A.ownLabel(dir) ? '<button type="button" class="b-ghost" data-act="own">' + esc(A.ownLabel(dir)) + '</button>' : '') +
         (A.isOpening(S.idea, dir) ? '' : '<button type="button" class="b-ghost" data-act="skip">' + esc(A.SKIP_LABEL[dir] || 'Not now') + '</button>') +
-        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), the sliders to tweak it, what if it were brighter, busier… (T), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
+        '<span class="b-hint">Click a card to hear it, or press 1, 2, 3. Under the one playing: ✗ not it (X), Tweak to go through what else it could do, one at a time (T), ✓ keep it (Enter). The arrows (or ← →) deal the three before or after; nothing is lost.</span>' +
       '</div>';
   }
 
@@ -20475,6 +20968,7 @@ span.sg-rname { cursor: default; color: var(--muted); }
     lastHid = S.hid;
     talkKey = '';
     TU.key = '';
+    TU.vk = trying() ? TU.pv.key + '@' + TU.pv.seq : '';
     EQ.colors = null;
   }
 
@@ -20513,14 +21007,26 @@ span.sg-rname { cursor: default; color: var(--muted); }
       el.classList.toggle('on', on);
       el.setAttribute('aria-expanded', on ? 'true' : 'false');
     });
+    // a move being tried lasts while its panel is open on its card
+    if (TU.pv && !trying()) TU.pv = null;
+    const vk = trying() ? TU.pv.key + '@' + TU.pv.seq : '';
+    if (vk !== TU.vk) {
+      TU.vk = vk;
+      const el = S.round ? root.querySelector('.b-cards .b-card[data-i="' + S.sel + '"] .b-vis') : null;
+      if (el && slotCard(S.sel)) el.innerHTML = vis(S.round.dir, slotCard(S.sel), S.idea);
+    }
     const tuk = open ? [S.seq, S.sel].join('|') : '';
     if (tuk !== TU.key) {
       TU.key = tuk;
+      // a redraw hands focus back to the same control
+      const ae = typeof document !== 'undefined' ? document.activeElement : null;
+      const was = ae && ae.closest && ae.closest('.b-tune') ? (ae.classList.contains('b-htrack') ? 'track' : ae.dataset.go ? 'go:' + ae.dataset.go : ae.classList.contains('b-spot') ? 'spot:' + ae.dataset.s : '') : '';
       root.querySelectorAll('.b-tune').forEach((el) => { if (el.innerHTML) el.innerHTML = ''; });
       const el = tuk ? root.querySelector('.b-cards .b-card[data-i="' + S.sel + '"] .b-tune') : null;
       if (el) {
         el.innerHTML = tuneHtml();
-        const f = TU.focus && el.querySelector('.b-fader[data-f="' + TU.focus + '"] .b-ftrack');
+        const fk = TU.focus || was, sp = /^spot:(.+)$/.exec(fk), gd = /^go:(.+)$/.exec(fk);
+        const f = !fk ? null : fk === 'track' ? el.querySelector('.b-htrack') : sp ? el.querySelector('.b-spot[data-s="' + sp[1] + '"]') : gd ? el.querySelector('.b-car-go[data-go="' + gd[1] + '"]') : null;
         if (f) f.focus({ preventScroll: true });
         TU.focus = '';
       }
